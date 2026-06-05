@@ -47,4 +47,4 @@ gdown
 plyfile==1.0.3
 tensorboard
 gsplat==1.5.3
-ultralytics==8.3.0
+ultralytics==8.0.0
