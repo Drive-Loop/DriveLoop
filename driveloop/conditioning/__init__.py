@@ -1,4 +1,4 @@
-__all__ = ["LongTailScenarioController", "MultimodalConditioner", "PromptConditioningResult"]
+__all__ = ["LongTailScenarioController", "MultimodalConditioner", "PromptConditioningResult", "MicrophoneRecorder"]
 
 
 def __getattr__(name):
@@ -14,4 +14,8 @@ def __getattr__(name):
             "PromptConditioningResult": PromptConditioningResult,
         }
         return mapping[name]
+    if name == "MicrophoneRecorder":
+        from driveloop.conditioning.audio import MicrophoneRecorder
+
+        return MicrophoneRecorder
     raise AttributeError(f"module 'driveloop.conditioning' has no attribute {name}")
