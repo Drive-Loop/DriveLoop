@@ -1,4 +1,4 @@
-from chatsim.evaluation.evaluator import (
+from driveloop.evaluation.evaluator import (
     EvaluationError,
     EvaluationResult,
     build_evaluator,

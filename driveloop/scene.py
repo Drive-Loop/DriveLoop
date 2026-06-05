@@ -6,7 +6,7 @@ import numpy as np
 import torch.nn as nn
 import open3d as o3d
 
-from chatsim.agents.utils import (check_and_mkdirs, generate_vertices, get_attributes_for_one_car, get_outlines,
+from driveloop.agents.utils import (check_and_mkdirs, generate_vertices, get_attributes_for_one_car, get_outlines,
                     transform_nerf2opencv_convention, get_color, getColorList)
 import datetime
 import shutil

@@ -14,4 +14,4 @@ def __getattr__(name):
             "PromptConditioningResult": PromptConditioningResult,
         }
         return mapping[name]
-    raise AttributeError(f"module 'chatsim.conditioning' has no attribute {name}")
+    raise AttributeError(f"module 'driveloop.conditioning' has no attribute {name}")

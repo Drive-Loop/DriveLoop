@@ -3,7 +3,7 @@ import numpy as np
 from termcolor import colored
 import traceback
 import openai
-from chatsim.background.mcnerf.scripts.inter_poses import inter_poses
+from driveloop.background.mcnerf.scripts.inter_poses import inter_poses
 
 class ViewAdjustAgent:
     def __init__(self, config):

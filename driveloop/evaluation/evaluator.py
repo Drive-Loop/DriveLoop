@@ -246,7 +246,7 @@ def build_evaluator(args):
             pass_key=pass_key,
         )
     if evaluator_type == "perception":
-        from chatsim.evaluation.perception_evaluator import PerceptionEvaluator
+        from driveloop.evaluation.perception_evaluator import PerceptionEvaluator
 
         return PerceptionEvaluator(
             threshold=threshold,

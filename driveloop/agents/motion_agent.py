@@ -5,11 +5,11 @@ import traceback
 import openai
 import random
 from copy import deepcopy
-from chatsim.foreground.motion_tools.placement_and_motion import vehicle_motion
-from chatsim.foreground.motion_tools.placement_iterative import vehicle_placement, vehicle_placement_specific
-from chatsim.foreground.motion_tools.tools import transform_node_to_lane
-from chatsim.foreground.motion_tools.check_collision import check_collision_and_revise_dynamic
-from chatsim.agents.utils import interpolate_uniformly
+from driveloop.foreground.motion_tools.placement_and_motion import vehicle_motion
+from driveloop.foreground.motion_tools.placement_iterative import vehicle_placement, vehicle_placement_specific
+from driveloop.foreground.motion_tools.tools import transform_node_to_lane
+from driveloop.foreground.motion_tools.check_collision import check_collision_and_revise_dynamic
+from driveloop.agents.utils import interpolate_uniformly
 
 
 

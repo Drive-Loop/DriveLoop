@@ -6,10 +6,10 @@ import traceback
 
 from termcolor import colored
 
-from chatsim.agents.prompt_refine_agent import PromptRefineAgent
-from chatsim.agents.utils import check_and_mkdirs, sanitize_filename
-from chatsim.baselines import build_generation_backend
-from chatsim.evaluation.evaluator import build_evaluator
+from driveloop.agents.prompt_refine_agent import PromptRefineAgent
+from driveloop.agents.utils import check_and_mkdirs, sanitize_filename
+from driveloop.baselines import build_generation_backend
+from driveloop.evaluation.evaluator import build_evaluator
 
 
 class ClosedLoopController:

@@ -5,7 +5,7 @@ import os
 import re
 import ast
 import matplotlib.pyplot as plt
-from chatsim.foreground.motion_tools.tools import (
+from driveloop.foreground.motion_tools.tools import (
     transform_node_to_lane,
     generate_vertices,
     visualize,
@@ -20,8 +20,8 @@ from chatsim.foreground.motion_tools.tools import (
     hermite_spline_once,
     hermite_spline_twice,
 )
-from chatsim.foreground.motion_tools.placement_iterative import vehicle_placement
-from chatsim.foreground.motion_tools.check_collision import (
+from driveloop.foreground.motion_tools.placement_iterative import vehicle_placement
+from driveloop.foreground.motion_tools.check_collision import (
     check_collision_and_revise_static
 )
 import numpy as np

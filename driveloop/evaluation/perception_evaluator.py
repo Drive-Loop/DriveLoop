@@ -5,7 +5,7 @@ from collections import Counter, defaultdict
 
 import numpy as np
 
-from chatsim.evaluation.evaluator import BaseEvaluator, EvaluationError, EvaluationResult
+from driveloop.evaluation.evaluator import BaseEvaluator, EvaluationError, EvaluationResult
 
 
 COCO_TRAFFIC_CLASSES = {

@@ -3,7 +3,7 @@ from termcolor import colored
 import imageio.v2 as imageio
 from tqdm import tqdm
 import os
-from chatsim.agents.utils import check_and_mkdirs, transform_nerf2opencv_convention, generate_rays, blending_hdr_sky, srgb_gamma_correction
+from driveloop.agents.utils import check_and_mkdirs, transform_nerf2opencv_convention, generate_rays, blending_hdr_sky, srgb_gamma_correction
 import cv2
 import torch
 import yaml

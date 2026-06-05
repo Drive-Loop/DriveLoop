@@ -8,7 +8,7 @@ import cv2
 import imageio.v2 as imageio
 import copy
 import sys
-from chatsim.agents.utils import check_and_mkdirs, transform_nerf2opencv_convention, generate_vertices, get_outlines
+from driveloop.agents.utils import check_and_mkdirs, transform_nerf2opencv_convention, generate_vertices, get_outlines
 
 class DeletionAgent:
     def __init__(self, config):
