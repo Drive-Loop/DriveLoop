@@ -240,7 +240,7 @@ def render_header():
     with right:
         teaser = ROOT / "img" / "teaser.jpg"
         if teaser.exists():
-            st.image(str(teaser), use_container_width=True)
+            st.image(str(teaser))
 
 
 def render_env_summary(check_payload: Dict[str, object]):
@@ -373,7 +373,7 @@ def render_sidebar():
                 st.caption(f"Environment check unavailable: {check_payload.get('error', 'unknown error')}")
 
         st.markdown("## Evaluation")
-        closed_loop = st.toggle("Closed-loop refinement", value=False)
+        closed_loop = st.checkbox("Closed-loop refinement", value=False)
         target_score = st.slider("Target score", min_value=0.1, max_value=1.0, value=0.8, step=0.05)
         max_attempts = st.slider("Max attempts", min_value=1, max_value=5, value=3, step=1)
         evaluator_type = st.selectbox(
@@ -427,7 +427,6 @@ def render_inputs():
         value="Add a clear vehicle in front of me and make the motion smooth.",
         height=150,
         placeholder="Describe the scene you want to generate.",
-        label_visibility="visible",
     )
 
     audio_input_widget = None
@@ -700,7 +699,7 @@ def _render_history_card(item: Dict, index: int):
 
     button_cols = st.columns([1, 1])
     with button_cols[0]:
-        if st.button("Open", key=f"open-history-{item['run_id']}", use_container_width=True):
+        if st.button("Open", key=f"open-history-{item['run_id']}"):
             st.session_state.active_result = item
             st.rerun()
     with button_cols[1]:
@@ -712,10 +711,10 @@ def _render_history_card(item: Dict, index: int):
                     file_name=Path(video_path).name,
                     mime="video/mp4",
                     key=f"download-history-{item['run_id']}",
-                    use_container_width=True,
+                    use_column_width=True,
                 )
         else:
-            st.button("No video", key=f"no-video-{index}", disabled=True, use_container_width=True)
+            st.button("No video", key=f"no-video-{index}", disabled=True)
 
 
 def render_history():
@@ -756,7 +755,7 @@ def main():
 
     col_action, col_note = st.columns([0.26, 0.74], gap="large")
     with col_action:
-        run_clicked = st.button("Generate video", use_container_width=True, type="primary")
+        run_clicked = st.button("Generate video", type="primary")
     with col_note:
         st.caption("Browser microphone capture is uploaded as a WAV-style audio input so the backend can transcribe it without an extra conversion hop.")
 
