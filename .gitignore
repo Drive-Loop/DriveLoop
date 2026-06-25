@@ -1,3 +1,43 @@
+# Python
+__pycache__/
+*.py[cod]
+*.so
+*.egg-info/
+.pytest_cache/
+.mypy_cache/
 
+# OS/editor
+.DS_Store
+__MACOSX/
+.vscode/
+.idea/
+
+# Logs and outputs
+logs/
+runs/
+outputs/
+output/
+exp/
+checkpoints/
+*.log
+
+# Data and model artifacts
+data/
+datasets/
+nuscenes/
+pretrained_models/
+hf_cache/
+*.bin
+*.safetensors
+*.ckpt
+*.pt
+*.pth
+*.onnx
 *.pkl
-/pretrained_models
+*.mdb
+
+# Secrets
+*.pem
+.env
+.env.*
+huggingface_token*
