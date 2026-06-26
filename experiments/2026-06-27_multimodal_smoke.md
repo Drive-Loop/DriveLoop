@@ -113,3 +113,92 @@ The mock suite verifies that the complete DriveLoop control path is stable acros
 The two DriveDreamer-2 mini smoke runs verify that real video artifacts can be generated from DriveLoop conditions. The second run is the key multimodal validation: placeholder image and voice inputs are converted into structured intent, grounded into scene specification, mapped into DriveDreamer-2 condition trace, and passed through the real mini backend to produce an artifact.
 
 The current mini backend still depends on the fixed DriveDreamer-2 mini baseline structural inputs. Structured intent is recorded and mapped into condition traces, but it is not yet fully converted into tensor-level DriveDreamer-2 controls.
+
+## 2026-06-27 ConditionControlAdapter / DD2ExecutableCondition update
+
+Implemented a first schema-level executable condition trace inside `DriveDreamer2ConditionAdapter`.
+
+New condition trace path:
+`structured_intent -> SceneSpecification -> LongTailConditionPlan -> DriveDreamer2Condition -> executable_condition`
+
+The new `executable_condition` payload includes:
+- `schema_version`: `dd2_executable_condition.v0`
+- `target_backend`: `drivedreamer2_mini`
+- `text_control.prompt`
+- `environment_controls`: weather, lighting, visibility
+- `actor_controls`: actor id, category, attributes, source
+- `relation_controls`
+- `motion_controls`
+- `risk_controls`: long-tail tags and executable controls
+- `trace_metadata`: current structural-control readiness and limitations
+
+Validation:
+- Added `test_condition_adapter_builds_executable_condition_schema`.
+- Full unit test suite result: `35 passed`.
+
+Current limitation:
+This is still schema-level structural control. It does not yet drive DriveDreamer-2 actor boxes, trajectories, or HDMap tensors. The mini backend still depends on mini dataset structural inputs.
+
+## 2026-06-27 Executable Condition Logging Follow-up
+
+Added explicit executable-condition logging for experiment inspection.
+
+Updates:
+- DriveDreamer-2 backend metadata now records:
+  - `dd2_prompt`
+  - `dd2_executable_condition`
+  - `dd2_condition_schema_version`
+  - `dd2_tensor_control_ready`
+- Smoke suite summaries now expose top-level:
+  - `condition_trace`
+  - `executable_condition`
+- Executable actor controls now canonicalize actor labels for backend-facing control:
+  - `cyclist` -> `bicycle`
+  - original category is preserved as `source_category`
+
+Validation:
+- Added DriveDreamer-2 backend metadata coverage.
+- Added smoke-suite summary condition trace coverage.
+- Added executable actor category canonicalization coverage.
+- Full unit test suite result: `38 passed`.
+
+Interpretation:
+The DriveLoop trace is now easier to audit from both API-style summaries and smoke-suite experiment files. The executable condition remains schema-level only; tensor-level actor box, trajectory, and HDMap conditioning are still future work.
+
+## 2026-06-27 Mini Structural Input Plan
+
+Added a plan-only mapping from `executable_condition` to DriveDreamer-2 mini structural inputs.
+
+New field:
+`executable_condition.structural_input_plan`
+
+The plan records:
+- `target_dataset`: `drivedreamer2_mini`
+- `control_level`: `plan_only`
+- `scene_description`: sourced from `text_control.prompt`
+- `labels`: sourced from canonical `actor_controls.category`
+- `image_hdmap`: currently reused from the mini dataset baseline
+- `image_box`: currently reused from the mini dataset baseline
+- `boxes3d`: currently reused from the mini dataset baseline
+
+Validation:
+- Added `test_executable_condition_includes_mini_structural_input_plan`.
+- Full unit test suite result: `39 passed`.
+
+Interpretation:
+This adds an auditable bridge from semantic DriveLoop controls to the concrete structural input names used by the mini DriveDreamer-2 backend. It is still plan-only and does not yet override tensors.
+
+## 2026-06-27 Backend Structural Plan Metadata
+
+Added backend-side metadata for the mini structural input plan.
+
+DriveDreamer-2 backend generation metadata now records:
+- `dd2_structural_input_plan`
+- `dd2_structural_control_level`
+
+Validation:
+- Added `test_drivedreamer2_backend_records_structural_input_plan_metadata`.
+- Full unit test suite result: `40 passed`.
+
+Interpretation:
+The mini backend still does not override structural tensors. This update only makes the plan visible at the backend boundary, so future tensor-control work can compare requested semantic controls against the exact baseline structural inputs being reused.

@@ -10,7 +10,7 @@ _OBJECT_KEYWORDS: Dict[str, List[str]] = {
     "truck": ["truck"],
     "bus": ["bus"],
     "pedestrian": ["pedestrian", "person", "people"],
-    "bicycle": ["bicycle", "bike"],
+    "bicycle": ["bicycle", "bike", "cyclist", "cyclists"],
     "motorcycle": ["motorcycle", "motorbike"],
     "animal": ["animal", "deer", "dog"],
     "traffic_cone": ["traffic cone", "cone"],

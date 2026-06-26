@@ -41,6 +41,21 @@ class DriveDreamer2Backend(GenerationBackend):
 
         dd2_condition = request.condition.get("dd2_condition", {})
         dd2_prompt = dd2_condition.get("text_prompt") if isinstance(dd2_condition, dict) else None
+        executable_condition = (
+            dd2_condition.get("executable_condition", {})
+            if isinstance(dd2_condition, dict)
+            else {}
+        )
+        trace_metadata = (
+            executable_condition.get("trace_metadata", {})
+            if isinstance(executable_condition, dict)
+            else {}
+        )
+        structural_input_plan = (
+            executable_condition.get("structural_input_plan", {})
+            if isinstance(executable_condition, dict)
+            else {}
+        )
         if dd2_prompt:
             env["DRIVELOOP_DD2_PROMPT"] = str(dd2_prompt)
 
@@ -79,5 +94,17 @@ class DriveDreamer2Backend(GenerationBackend):
                 "config_name": self.config_name,
                 "baseline_video": str(baseline_video),
                 "returncode": completed.returncode,
+                "dd2_prompt": str(dd2_prompt) if dd2_prompt else None,
+                "dd2_executable_condition": executable_condition,
+                "dd2_condition_schema_version": executable_condition.get("schema_version")
+                if isinstance(executable_condition, dict)
+                else None,
+                "dd2_tensor_control_ready": trace_metadata.get("tensor_control_ready")
+                if isinstance(trace_metadata, dict)
+                else None,
+                "dd2_structural_input_plan": structural_input_plan,
+                "dd2_structural_control_level": structural_input_plan.get("control_level")
+                if isinstance(structural_input_plan, dict)
+                else None,
             },
         )

@@ -109,6 +109,18 @@ def run_scenario(args: argparse.Namespace, scenario: Dict[str, Any], root: Path)
 
     best_generation = asdict(result.best_generation)
     best_evaluation = asdict(result.best_evaluation)
+    generation_metadata = best_generation.get("metadata", {})
+    dd2_condition = generation_metadata.get("dd2_condition", {})
+    executable_condition = (
+        dd2_condition.get("executable_condition", {})
+        if isinstance(dd2_condition, dict)
+        else {}
+    )
+    condition_trace = {
+        "scene_specification": generation_metadata.get("scene_specification"),
+        "long_tail_condition_plan": generation_metadata.get("long_tail_condition_plan"),
+        "dd2_condition": dd2_condition,
+    }
 
     summary = {
         "scenario_id": scenario["scenario_id"],
@@ -116,6 +128,8 @@ def run_scenario(args: argparse.Namespace, scenario: Dict[str, Any], root: Path)
         "prompt": scenario["prompt"],
         "metadata": scenario["metadata"],
         "structured_intent": structured_intent,
+        "condition_trace": condition_trace,
+        "executable_condition": executable_condition,
         "accepted": best_evaluation["score"] >= args.target_score,
         "best_score": best_evaluation["score"],
         "iterations": len(result.history),
