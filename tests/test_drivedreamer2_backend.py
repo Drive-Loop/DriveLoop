@@ -506,6 +506,15 @@ def test_box_synthesis_plan_includes_draft_box_for_bicycle():
             "projection_finite": None,
             "projected_2d_range": None,
             "requires_projection_validation": True,
+            "image_box_canvas_dry_run": {
+                "control_level": "validator_only",
+                "target_shape": [19, 900, 1600],
+                "class_channel": 5,
+                "projected_box_drawable": None,
+                "projected_2d_range": None,
+                "canvas_rendered": False,
+                "dataset_written": False,
+            },
         }
     ]
     assert validation["projection_control_level"] == "not_run"
@@ -550,6 +559,18 @@ def test_box_synthesis_draft_validator_projects_with_baseline_intrinsic():
     assert entry["projected_2d_range"] == {
         "min": [1336.99, 536.27],
         "max": [1434.68, 660.47],
+    }
+    assert entry["image_box_canvas_dry_run"] == {
+        "control_level": "validator_only",
+        "target_shape": [19, 900, 1600],
+        "class_channel": 5,
+        "projected_box_drawable": True,
+        "projected_2d_range": {
+            "min": [1336.99, 536.27],
+            "max": [1434.68, 660.47],
+        },
+        "canvas_rendered": False,
+        "dataset_written": False,
     }
     assert "projection_validator_uses_axis_aligned_corners" in validation["limitations"]
     assert "dataset_not_written" in validation["limitations"]

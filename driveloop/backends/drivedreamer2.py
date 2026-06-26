@@ -333,9 +333,10 @@ class DriveDreamer2Backend(GenerationBackend):
             if shape_ok and numeric and dims_positive and z_positive and projection_available:
                 projection = self._project_box3d_axis_aligned(numeric_box, cam_intrinsic)
 
+            category = entry.get("category") if isinstance(entry, dict) else None
             entries.append(
                 {
-                    "category": entry.get("category") if isinstance(entry, dict) else None,
+                    "category": category,
                     "shape_ok": shape_ok,
                     "float32_convertible": numeric and shape_ok,
                     "dimensions_positive": dims_positive,
@@ -343,6 +344,10 @@ class DriveDreamer2Backend(GenerationBackend):
                     "projection_finite": projection.get("finite") if projection else None,
                     "projected_2d_range": projection.get("range") if projection else None,
                     "requires_projection_validation": not projection_available,
+                    "image_box_canvas_dry_run": self._build_image_box_canvas_dry_run(
+                        category=category,
+                        projection=projection,
+                    ),
                 }
             )
 
@@ -378,6 +383,40 @@ class DriveDreamer2Backend(GenerationBackend):
             and len(cam_intrinsic) >= 3
             and all(isinstance(row, list) and len(row) >= 3 for row in cam_intrinsic[:3])
         )
+
+    def _build_image_box_canvas_dry_run(
+        self,
+        category: str | None,
+        projection: dict | None,
+    ) -> dict:
+        class_channels = {
+            "animal": 0,
+            "pedestrian": 1,
+            "bicycle": 5,
+            "motorcycle": 6,
+            "car": 8,
+            "truck": 9,
+            "bus": 11,
+            "barrier": 17,
+            "traffic_cone": 18,
+        }
+        class_channel = class_channels.get(category)
+        projected_range = projection.get("range") if projection else None
+        projected_box_drawable = (
+            bool(projection.get("finite"))
+            and projected_range is not None
+            and class_channel is not None
+        ) if projection else None
+
+        return {
+            "control_level": "validator_only",
+            "target_shape": [19, 900, 1600],
+            "class_channel": class_channel,
+            "projected_box_drawable": projected_box_drawable,
+            "projected_2d_range": projected_range,
+            "canvas_rendered": False,
+            "dataset_written": False,
+        }
 
     def _project_box3d_axis_aligned(self, box3d: list, cam_intrinsic: list) -> dict:
         x, y, z, width, height, depth = box3d[:6]
