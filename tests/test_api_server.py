@@ -247,3 +247,12 @@ def test_summary_structured_intent_uses_multimodal_metadata():
     assert "stopped" in intent["motion_primitives"]
     assert "low_visibility" in intent["long_tail_tags"]
     assert intent["multimodal_evidence"]["modalities"] == ["text", "image", "voice"]
+
+    scene_specification = summary_response.json()["condition_trace"]["scene_specification"]
+    assert scene_specification["environment"]["weather"] == "fog"
+    assert scene_specification["environment"]["lighting"] == "night"
+    assert scene_specification["environment"]["visibility"] == "low"
+    assert {"category": "pedestrian", "attributes": {}} in scene_specification["objects"]
+    assert "intersection" in scene_specification["relations"]
+    assert "crossing" in scene_specification["motion_primitives"]
+    assert "stopped" in scene_specification["motion_primitives"]

@@ -49,6 +49,10 @@ class RuleBasedGrounder:
     """
 
     def ground(self, request: DriveLoopRequest) -> SceneSpecification:
+        structured_intent = request.metadata.get("structured_intent")
+        if isinstance(structured_intent, dict):
+            return self._ground_structured_intent(request, structured_intent)
+
         evidence = self._collect_evidence(request)
         text = " ".join(evidence).lower()
 
@@ -81,6 +85,40 @@ class RuleBasedGrounder:
             relations=relations,
             motion_primitives=motion_primitives,
             environment=environment,
+        )
+
+    def _ground_structured_intent(
+        self,
+        request: DriveLoopRequest,
+        structured_intent: Dict[str, object],
+    ) -> SceneSpecification:
+        objects = [
+            SceneObject(
+                category=str(actor.get("category", "unknown")),
+                attributes=dict(actor.get("attributes", {})),
+            )
+            for actor in structured_intent.get("actors", [])
+            if isinstance(actor, dict) and actor.get("category")
+        ]
+
+        weather = str(structured_intent.get("weather") or "unspecified")
+        lighting = str(structured_intent.get("lighting") or "unspecified")
+        visibility = "low" if weather == "fog" or "low_visibility" in structured_intent.get("risk_factors", []) else "normal"
+
+        return SceneSpecification(
+            prompt=request.prompt,
+            objects=objects,
+            attributes={
+                "viewpoint": "panoramic_multi_view",
+                "style": "realistic",
+            },
+            relations=[str(item) for item in structured_intent.get("relations", [])],
+            motion_primitives=[str(item) for item in structured_intent.get("motion_primitives", [])],
+            environment={
+                "weather": weather,
+                "lighting": lighting,
+                "visibility": visibility,
+            },
         )
 
     def _collect_evidence(self, request: DriveLoopRequest) -> List[str]:

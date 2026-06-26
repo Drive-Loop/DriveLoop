@@ -196,11 +196,16 @@ def generate(request: GenerateRequest):
         config=config,
     )
 
+    runner_metadata = {
+        **request.metadata,
+        "structured_intent": structured_intent,
+    }
+
     result = runner.run(
         DriveLoopRequest(
             prompt=request.prompt,
             scenario_id=scenario_id,
-            metadata=request.metadata,
+            metadata=runner_metadata,
         )
     )
 

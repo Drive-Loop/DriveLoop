@@ -858,6 +858,10 @@
         const summary = await generateScenario(prompt);
         pending.remove();
         addResult(summary);
+        imageInput.value = "";
+        renderAttachmentTray();
+        document.querySelector("#voiceTranscript").value = "";
+        speechPanel.classList.remove("open");
       } catch (error) {
         pending.querySelector(".bubble").textContent = `Generation failed: ${error.message}`;
       } finally {
