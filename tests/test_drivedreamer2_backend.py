@@ -137,3 +137,78 @@ def test_drivedreamer2_backend_records_structural_input_plan_metadata(monkeypatc
     assert generation.metadata["dd2_structural_input_plan"] == structural_input_plan
     assert generation.metadata["dd2_structural_control_level"] == "plan_only"
 
+def test_drivedreamer2_backend_records_baseline_structural_snapshot(monkeypatch, tmp_path):
+    baseline_output_dir = tmp_path / "baseline"
+    baseline_output_dir.mkdir()
+    baseline_video = baseline_output_dir / "000000.mp4"
+
+    dataset_root = tmp_path / "mini_dataset"
+    labels_dir = dataset_root / "labels"
+    images_dir = dataset_root / "images"
+    hdmaps_dir = dataset_root / "hdmaps"
+    labels_dir.mkdir(parents=True)
+    images_dir.mkdir()
+    hdmaps_dir.mkdir()
+
+    (dataset_root / "config.json").write_text(
+        '{"_class_name": "Dataset", "config_paths": ["labels/config.json", "images/config.json", "hdmaps/config.json"]}',
+        encoding="utf-8",
+    )
+    (labels_dir / "config.json").write_text(
+        '{"_class_name": "PklDataset", "_key_names": ["boxes3d", "ori_labels3d", "scene_description"], "data_size": 1}',
+        encoding="utf-8",
+    )
+    (images_dir / "config.json").write_text(
+        '{"_class_name": "LmdbDataset", "_key_names": ["image"], "data_size": 1, "data_type": "image", "data_name": "image"}',
+        encoding="utf-8",
+    )
+    (hdmaps_dir / "config.json").write_text(
+        '{"_class_name": "LmdbDataset", "_key_names": ["image_hdmap"], "data_size": 1, "data_type": "image", "data_name": "image_hdmap"}',
+        encoding="utf-8",
+    )
+
+    import pickle
+    import numpy as np
+
+    with (labels_dir / "data.pkl").open("wb") as f:
+        pickle.dump(
+            [
+                {
+                    "scene_description": "Many peds right, cyclist",
+                    "boxes3d": np.zeros((2, 9), dtype=np.float32),
+                    "ori_labels3d": ["human.pedestrian.adult", "vehicle.bicycle"],
+                    "labels3d": [["pedestrian", "adult"], ["vehicle", "bicycle"]],
+                }
+            ],
+            f,
+        )
+
+    def fake_run(cmd, cwd, env, check, text, timeout):
+        baseline_video.write_bytes(b"fake video")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("driveloop.backends.drivedreamer2.subprocess.run", fake_run)
+
+    backend = DriveDreamer2Backend(
+        project_root=tmp_path,
+        baseline_output_dir=baseline_output_dir,
+        baseline_dataset_dir=dataset_root,
+        artifact_dir=tmp_path / "artifacts",
+        python_executable="python",
+        timeout_seconds=123,
+    )
+
+    generation = backend.generate(DriveLoopRequest(prompt="base prompt"), iteration=0)
+    snapshot = generation.metadata["dd2_baseline_structural_snapshot"]
+
+    assert snapshot["dataset_dir"] == str(dataset_root)
+    assert snapshot["dataset_config"]["class_name"] == "Dataset"
+    assert snapshot["labels_config"]["data_size"] == 1
+    assert snapshot["images_config"]["data_name"] == "image"
+    assert snapshot["hdmaps_config"]["data_name"] == "image_hdmap"
+    assert snapshot["sample"]["scene_description"] == "Many peds right, cyclist"
+    assert snapshot["sample"]["boxes3d_shape"] == [2, 9]
+    assert snapshot["sample"]["boxes3d_dtype"] == "float32"
+    assert snapshot["sample"]["ori_labels3d_count"] == 2
+    assert snapshot["sample"]["ori_labels3d_preview"] == ["human.pedestrian.adult", "vehicle.bicycle"]
+

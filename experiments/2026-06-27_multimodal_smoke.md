@@ -202,3 +202,37 @@ Validation:
 
 Interpretation:
 The mini backend still does not override structural tensors. This update only makes the plan visible at the backend boundary, so future tensor-control work can compare requested semantic controls against the exact baseline structural inputs being reused.
+
+## 2026-06-27 Baseline Structural Snapshot
+
+Added a lightweight DriveDreamer-2 mini baseline structural snapshot at the backend boundary.
+
+The backend now records `dd2_baseline_structural_snapshot`, including:
+- mini dataset directory
+- top-level dataset config summary
+- labels config summary
+- images LMDB config summary
+- HDMap LMDB config summary
+- first label sample summary:
+  - `scene_description`
+  - `boxes3d_shape`
+  - `boxes3d_dtype`
+  - `ori_labels3d_count`
+  - `ori_labels3d_preview`
+  - `labels3d_count`
+  - `labels3d_preview`
+
+Observed mini validation snapshot:
+- dataset: `/data/projects/DriveLoop/data/processed/nuscenes/v1.0-mini/cam_all_val/v0.0.2`
+- labels data size: 2820
+- images data size: 2820
+- hdmaps data size: 2820
+- first sample boxes3d shape: `[14, 9]`
+- first sample boxes3d dtype: `float32`
+
+Validation:
+- Added `test_drivedreamer2_backend_records_baseline_structural_snapshot`.
+- Full unit test suite result: `41 passed`.
+
+Interpretation:
+This snapshot does not read or rewrite LMDB image/HDMap payloads. It records enough baseline structure to compare future DriveLoop tensor overrides against the current mini dataset inputs.
