@@ -210,6 +210,7 @@ def test_drivedreamer2_backend_records_baseline_structural_snapshot(monkeypatch,
     assert snapshot["sample"]["boxes3d_shape"] == [2, 9]
     assert snapshot["sample"]["boxes3d_dtype"] == "float32"
     assert snapshot["sample"]["cam_intrinsic_shape"] is None
+    assert snapshot["sample"]["cam_intrinsic"] is None
     assert snapshot["sample"]["ori_labels3d_count"] == 2
     assert snapshot["sample"]["ori_labels3d_preview"] == ["human.pedestrian.adult", "vehicle.bicycle"]
 

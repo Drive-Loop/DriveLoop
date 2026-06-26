@@ -503,4 +503,7 @@ class DriveDreamer2Backend(GenerationBackend):
             "cam_intrinsic_shape": list(cam_intrinsic.shape)
             if hasattr(cam_intrinsic, "shape")
             else None,
+            "cam_intrinsic": cam_intrinsic.tolist()
+            if hasattr(cam_intrinsic, "tolist")
+            else None,
         }
