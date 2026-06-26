@@ -59,6 +59,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--max-iterations", type=int, default=2)
     parser.add_argument("--target-score", type=float, default=0.9)
     parser.add_argument("--config-name", default="drivedreamer2_img_cond_mini_local")
+    parser.add_argument("--scenario-id", default=None, help="Run only one named smoke scenario.")
     return parser.parse_args()
 
 
@@ -134,7 +135,14 @@ def main() -> None:
     root = Path(args.output_dir)
     root.mkdir(parents=True, exist_ok=True)
 
-    summaries = [run_scenario(args, scenario, root) for scenario in SMOKE_SCENARIOS]
+    scenarios = SMOKE_SCENARIOS
+    if args.scenario_id:
+        scenarios = [scenario for scenario in SMOKE_SCENARIOS if scenario["scenario_id"] == args.scenario_id]
+        if not scenarios:
+            available = ", ".join(scenario["scenario_id"] for scenario in SMOKE_SCENARIOS)
+            raise SystemExit(f"Unknown scenario_id: {args.scenario_id}. Available: {available}")
+
+    summaries = [run_scenario(args, scenario, root) for scenario in scenarios]
     suite_summary = {
         "backend": args.backend,
         "num_scenarios": len(summaries),
