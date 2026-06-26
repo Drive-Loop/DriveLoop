@@ -492,5 +492,20 @@ def test_box_synthesis_plan_includes_draft_box_for_bicycle():
             "requires_projection": True,
         }
     ]
+    validation = draft["validation"]
+    assert validation["control_level"] == "validator_only"
+    assert validation["all_entries_valid"] is True
+    assert validation["entries"] == [
+        {
+            "category": "bicycle",
+            "shape_ok": True,
+            "float32_convertible": True,
+            "dimensions_positive": True,
+            "mean_z_positive": True,
+            "projection_finite": None,
+            "requires_projection_validation": True,
+        }
+    ]
+    assert "projection_not_run" in validation["limitations"]
     assert "not_written_to_dataset" in draft["limitations"]
 

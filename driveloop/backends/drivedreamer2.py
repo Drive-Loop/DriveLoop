@@ -272,6 +272,8 @@ class DriveDreamer2Backend(GenerationBackend):
                 }
             )
 
+        validation = self._validate_box_synthesis_draft(draft_boxes3d)
+
         return {
             "available": bool(draft_boxes3d),
             "control_level": "draft_only",
@@ -281,12 +283,66 @@ class DriveDreamer2Backend(GenerationBackend):
             "boxes3d_format": "x_y_z_width_height_depth_rotX_rotY_rotZ",
             "default_dimensions": default_dimensions,
             "draft_boxes3d": draft_boxes3d,
+            "validation": validation,
             "limitations": [
                 "not_written_to_dataset",
                 "3d_position_not_estimated",
                 "camera_projection_not_computed",
             ],
         }
+
+    def _validate_box_synthesis_draft(self, draft_boxes3d: list) -> dict:
+        entries = []
+        for entry in draft_boxes3d:
+            raw_box = entry.get("box3d", []) if isinstance(entry, dict) else []
+            numeric_box = []
+            numeric = True
+            for value in raw_box:
+                try:
+                    numeric_box.append(float(value))
+                except (TypeError, ValueError):
+                    numeric = False
+
+            shape_ok = len(raw_box) == 9
+            dims_positive = (
+                len(numeric_box) == 9
+                and numeric_box[3] > 0
+                and numeric_box[4] > 0
+                and numeric_box[5] > 0
+            )
+            z_positive = len(numeric_box) == 9 and numeric_box[2] > 0
+
+            entries.append(
+                {
+                    "category": entry.get("category") if isinstance(entry, dict) else None,
+                    "shape_ok": shape_ok,
+                    "float32_convertible": numeric and shape_ok,
+                    "dimensions_positive": dims_positive,
+                    "mean_z_positive": z_positive,
+                    "projection_finite": None,
+                    "requires_projection_validation": True,
+                }
+            )
+
+        return {
+            "available": bool(entries),
+            "control_level": "validator_only",
+            "all_entries_valid": bool(entries)
+            and all(
+                item["shape_ok"]
+                and item["float32_convertible"]
+                and item["dimensions_positive"]
+                and item["mean_z_positive"]
+                for item in entries
+            ),
+            "entries": entries,
+            "limitations": [
+                "projection_not_run",
+                "image_box_canvas_not_rendered",
+                "dataset_not_written",
+            ],
+        }
+
 
     def _build_structural_request_diff(
         self,
