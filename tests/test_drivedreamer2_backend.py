@@ -414,3 +414,45 @@ def test_drivedreamer2_backend_records_override_candidate_plan(monkeypatch, tmp_
     assert {"type": "mark_extra_baseline_label", "label": "car"} in plan["actor_label_actions"]
     assert "tensor_override_not_implemented" in plan["limitations"]
 
+def test_override_candidate_plan_includes_box_synthesis_plan_for_missing_actor():
+    backend = DriveDreamer2Backend()
+
+    structural_input_plan = {
+        "image_hdmap": {"source": "mini_dataset_baseline"},
+        "image_box": {"source": "mini_dataset_baseline"},
+        "boxes3d": {"source": "mini_dataset_baseline"},
+    }
+    structural_request_diff = {
+        "available": True,
+        "missing_requested_labels": ["bicycle"],
+        "extra_baseline_labels": ["car"],
+        "requested_scene_description": "rainy night intersection with a bicycle cut in",
+        "baseline_scene_description": "clear road with a car",
+        "scene_description_changed": True,
+    }
+
+    plan = backend._build_override_candidate_plan(
+        structural_input_plan=structural_input_plan,
+        structural_request_diff=structural_request_diff,
+    )
+
+    box_plan = plan["box_synthesis_plan"]
+
+    assert box_plan["available"] is True
+    assert box_plan["control_level"] == "plan_only"
+    assert box_plan["requires_manual_review"] is True
+    assert box_plan["target_tensor"] == "boxes3d"
+    assert box_plan["derived_tensor"] == "image_box"
+    assert box_plan["placement_policy"] == "front_adjacent_lane_cut_in"
+    assert box_plan["box_template_source"] == "class_default_dimensions"
+    assert box_plan["actors_to_synthesize"] == [
+        {
+            "category": "bicycle",
+            "source_action": "add_actor_label",
+            "confidence": "low",
+            "reason": "missing_requested_label",
+        }
+    ]
+    assert "3d_position_not_estimated" in box_plan["limitations"]
+    assert "camera_projection_not_computed" in box_plan["limitations"]
+

@@ -288,3 +288,30 @@ Validation:
 
 Interpretation:
 This is the last audit layer before tensor-level structural control. It identifies what should change without yet writing boxes, image-box canvases, or HDMap tensors.
+
+## 2026-06-27 Box Synthesis Plan
+
+Added a plan-only `box_synthesis_plan` under `dd2_override_candidate_plan`.
+
+The plan records:
+- target tensor: `boxes3d`
+- derived tensor: `image_box`
+- placement policy: `front_adjacent_lane_cut_in`
+- box template source: `class_default_dimensions`
+- actors to synthesize from missing requested labels
+- whether manual review is required
+- current limitations before tensor generation
+
+Observed mini validation plan:
+- actor to synthesize: `bicycle`
+- source action: `add_actor_label`
+- confidence: `low`
+- reason: `missing_requested_label`
+- requires manual review: `true`
+
+Validation:
+- Added `test_override_candidate_plan_includes_box_synthesis_plan_for_missing_actor`.
+- Full unit test suite result: `44 passed`.
+
+Interpretation:
+This is still plan-only. It prepares the exact contract needed before implementing `boxes3d` synthesis and `image_box` canvas rendering.

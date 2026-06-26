@@ -160,14 +160,20 @@ class DriveDreamer2Backend(GenerationBackend):
                 "target_value": structural_request_diff.get("requested_scene_description"),
             }
 
+        requires_box_synthesis = bool(
+            structural_request_diff.get("missing_requested_labels")
+            or structural_request_diff.get("extra_baseline_labels")
+        )
+
         return {
             "available": True,
             "control_level": "candidate_plan_only",
             "scene_description_action": scene_description_action,
             "actor_label_actions": actor_label_actions,
-            "requires_box_synthesis": bool(
-                structural_request_diff.get("missing_requested_labels")
-                or structural_request_diff.get("extra_baseline_labels")
+            "requires_box_synthesis": requires_box_synthesis,
+            "box_synthesis_plan": self._build_box_synthesis_plan(
+                structural_request_diff=structural_request_diff,
+                requires_box_synthesis=requires_box_synthesis,
             ),
             "requires_hdmap_override": structural_input_plan.get("image_hdmap", {}).get("source")
             != "mini_dataset_baseline",
@@ -180,6 +186,43 @@ class DriveDreamer2Backend(GenerationBackend):
                 "tensor_override_not_implemented",
                 "box_synthesis_not_implemented",
                 "hdmap_override_not_implemented",
+            ],
+        }
+
+    def _build_box_synthesis_plan(
+        self,
+        structural_request_diff: dict,
+        requires_box_synthesis: bool,
+    ) -> dict:
+        if not requires_box_synthesis:
+            return {
+                "available": False,
+                "reason": "box_synthesis_not_required",
+            }
+
+        actors_to_synthesize = [
+            {
+                "category": label,
+                "source_action": "add_actor_label",
+                "confidence": "low",
+                "reason": "missing_requested_label",
+            }
+            for label in structural_request_diff.get("missing_requested_labels", [])
+        ]
+
+        return {
+            "available": True,
+            "control_level": "plan_only",
+            "target_tensor": "boxes3d",
+            "derived_tensor": "image_box",
+            "placement_policy": "front_adjacent_lane_cut_in",
+            "box_template_source": "class_default_dimensions",
+            "requires_manual_review": True,
+            "actors_to_synthesize": actors_to_synthesize,
+            "limitations": [
+                "3d_position_not_estimated",
+                "camera_projection_not_computed",
+                "image_box_canvas_not_rendered",
             ],
         }
 
