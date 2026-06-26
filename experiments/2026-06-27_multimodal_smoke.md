@@ -361,3 +361,26 @@ Interpretation:
 The DD2 mini transform consumes `boxes3d` by converting them with `boxes3d_to_corners3d(..., rot_axis=1)`, cropping in 3D, projecting with `cam_intrinsic`, drawing a class-channel box canvas, and feeding the transformed canvas into `box_downsampler_input`.
 
 This supports treating the draft frame as a DD2 processed camera-projection frame, but tensor override is still not connected. The next safe step is a validator-only check for candidate draft boxes before any dataset writing or image-box canvas rendering.
+
+## 2026-06-27 Box Synthesis Draft Validator
+
+Added a validator-only check under `box_synthesis_draft.validation`.
+
+The validator checks:
+- each draft box has 9 scalar values
+- values are convertible to floating point
+- width, height, and depth are positive
+- the depth coordinate is positive
+- projection validation is still pending
+
+Current safety boundary:
+- no dataset write
+- no image-box canvas rendering
+- no DriveDreamer-2 tensor override
+- no projection execution inside the backend validator
+
+Validation:
+- Full unit test suite result: `45 passed`.
+
+Interpretation:
+The draft is now structurally auditable before any tensor-level override work. The next safe step is projection-only validation using the baseline mini sample camera intrinsic, without writing modified boxes into the dataset.
