@@ -427,6 +427,12 @@ class DriveDreamer2Backend(GenerationBackend):
         boxes3d = sample.get("boxes3d")
         ori_labels3d = list(sample.get("ori_labels3d", []))
         labels3d = list(sample.get("labels3d", []))
+        calib = sample.get("calib", {})
+        cam_intrinsic = (
+            calib.get("cam_intrinsic")
+            if isinstance(calib, dict)
+            else None
+        )
 
         return {
             "available": True,
@@ -438,4 +444,7 @@ class DriveDreamer2Backend(GenerationBackend):
             "ori_labels3d_preview": ori_labels3d[:8],
             "labels3d_count": len(labels3d),
             "labels3d_preview": labels3d[:8],
+            "cam_intrinsic_shape": list(cam_intrinsic.shape)
+            if hasattr(cam_intrinsic, "shape")
+            else None,
         }
