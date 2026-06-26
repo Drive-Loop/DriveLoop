@@ -20,6 +20,7 @@ class GenerateRequest(BaseModel):
     max_iterations: int = Field(default=2, ge=1, le=5)
     target_score: float = Field(default=0.9, ge=0.0, le=1.0)
     backend: str = Field(default="mock", pattern="^(mock|drivedreamer2)$")
+    intent_backend: str = Field(default="rule_based", pattern="^rule_based$")
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
@@ -145,6 +146,7 @@ def get_summary(scenario_id: str):
         "best_score": evaluation.get("score", 0.0),
         "accepted": evaluation.get("diagnosis", {}).get("passed", False),
         "backend": metadata.get("backend"),
+        "intent_backend": request_record.get("intent_backend", "rule_based"),
         "prompt": generation.get("prompt"),
         "artifacts": artifact_urls,
         "condition_trace": condition_trace,
@@ -171,6 +173,7 @@ def generate(request: GenerateRequest):
         "scenario_id": scenario_id,
         "prompt": request.prompt,
         "backend": request.backend,
+        "intent_backend": request.intent_backend,
         "metadata": request.metadata,
         "structured_intent": structured_intent,
     }
@@ -200,6 +203,7 @@ def generate(request: GenerateRequest):
 
     runner_metadata = {
         **request.metadata,
+        "intent_backend": request.intent_backend,
         "structured_intent": structured_intent,
     }
 

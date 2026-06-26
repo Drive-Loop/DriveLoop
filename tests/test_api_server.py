@@ -256,3 +256,40 @@ def test_summary_structured_intent_uses_multimodal_metadata():
     assert "intersection" in scene_specification["relations"]
     assert "crossing" in scene_specification["motion_primitives"]
     assert "stopped" in scene_specification["motion_primitives"]
+
+
+def test_generate_and_summary_record_intent_backend():
+    scenario_id = "api_test_intent_backend"
+
+    generate_response = client.post(
+        "/generate",
+        json={
+            "prompt": "foggy road with a pedestrian",
+            "scenario_id": scenario_id,
+            "backend": "mock",
+            "intent_backend": "rule_based",
+            "max_iterations": 1,
+            "target_score": 0.5,
+        },
+    )
+    assert generate_response.status_code == 200
+
+    summary_response = client.get(f"/summary/{scenario_id}")
+    assert summary_response.status_code == 200
+
+    body = summary_response.json()
+    assert body["intent_backend"] == "rule_based"
+
+
+def test_generate_rejects_unknown_intent_backend():
+    response = client.post(
+        "/generate",
+        json={
+            "prompt": "daytime urban driving scene",
+            "scenario_id": "api_test_unknown_intent_backend",
+            "backend": "mock",
+            "intent_backend": "unknown",
+        },
+    )
+
+    assert response.status_code == 422
