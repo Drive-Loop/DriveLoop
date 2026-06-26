@@ -209,20 +209,82 @@ class DriveDreamer2Backend(GenerationBackend):
             }
             for label in structural_request_diff.get("missing_requested_labels", [])
         ]
+        placement_policy = "front_adjacent_lane_cut_in"
+        box_template_source = "class_default_dimensions"
 
         return {
             "available": True,
             "control_level": "plan_only",
             "target_tensor": "boxes3d",
             "derived_tensor": "image_box",
-            "placement_policy": "front_adjacent_lane_cut_in",
-            "box_template_source": "class_default_dimensions",
+            "placement_policy": placement_policy,
+            "box_template_source": box_template_source,
             "requires_manual_review": True,
             "actors_to_synthesize": actors_to_synthesize,
+            "box_synthesis_draft": self._build_box_synthesis_draft(
+                actors_to_synthesize=actors_to_synthesize,
+                placement_policy=placement_policy,
+                box_template_source=box_template_source,
+            ),
             "limitations": [
                 "3d_position_not_estimated",
                 "camera_projection_not_computed",
                 "image_box_canvas_not_rendered",
+            ],
+        }
+
+    def _build_box_synthesis_draft(
+        self,
+        actors_to_synthesize: list,
+        placement_policy: str,
+        box_template_source: str,
+    ) -> dict:
+        default_dimensions = {
+            "bicycle": {"width": 0.6, "height": 1.6, "depth": 1.8},
+            "pedestrian": {"width": 0.6, "height": 1.7, "depth": 0.6},
+            "car": {"width": 1.8, "height": 1.6, "depth": 4.5},
+            "truck": {"width": 2.5, "height": 3.0, "depth": 7.0},
+            "bus": {"width": 2.6, "height": 3.2, "depth": 10.0},
+        }
+
+        draft_boxes3d = []
+        for actor in actors_to_synthesize:
+            category = actor["category"]
+            dims = default_dimensions.get(category)
+            if not dims:
+                continue
+            draft_boxes3d.append(
+                {
+                    "category": category,
+                    "box3d": [
+                        8.0,
+                        1.8,
+                        18.0,
+                        dims["width"],
+                        dims["height"],
+                        dims["depth"],
+                        0.0,
+                        0.0,
+                        -0.25,
+                    ],
+                    "placement_policy": placement_policy,
+                    "source": box_template_source,
+                    "requires_projection": True,
+                }
+            )
+
+        return {
+            "available": bool(draft_boxes3d),
+            "control_level": "draft_only",
+            "coordinate_frame": "camera",
+            "units": "meters",
+            "boxes3d_format": "x_y_z_width_height_depth_rotX_rotY_rotZ",
+            "default_dimensions": default_dimensions,
+            "draft_boxes3d": draft_boxes3d,
+            "limitations": [
+                "not_written_to_dataset",
+                "3d_position_not_estimated",
+                "camera_projection_not_computed",
             ],
         }
 

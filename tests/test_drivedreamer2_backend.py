@@ -456,3 +456,39 @@ def test_override_candidate_plan_includes_box_synthesis_plan_for_missing_actor()
     assert "3d_position_not_estimated" in box_plan["limitations"]
     assert "camera_projection_not_computed" in box_plan["limitations"]
 
+def test_box_synthesis_plan_includes_draft_box_for_bicycle():
+    backend = DriveDreamer2Backend()
+
+    structural_request_diff = {
+        "missing_requested_labels": ["bicycle"],
+        "extra_baseline_labels": [],
+    }
+
+    box_plan = backend._build_box_synthesis_plan(
+        structural_request_diff=structural_request_diff,
+        requires_box_synthesis=True,
+    )
+
+    draft = box_plan["box_synthesis_draft"]
+
+    assert draft["available"] is True
+    assert draft["control_level"] == "draft_only"
+    assert draft["coordinate_frame"] == "camera"
+    assert draft["units"] == "meters"
+    assert draft["boxes3d_format"] == "x_y_z_width_height_depth_rotX_rotY_rotZ"
+    assert draft["default_dimensions"]["bicycle"] == {
+        "width": 0.6,
+        "height": 1.6,
+        "depth": 1.8,
+    }
+    assert draft["draft_boxes3d"] == [
+        {
+            "category": "bicycle",
+            "box3d": [8.0, 1.8, 18.0, 0.6, 1.6, 1.8, 0.0, 0.0, -0.25],
+            "placement_policy": "front_adjacent_lane_cut_in",
+            "source": "class_default_dimensions",
+            "requires_projection": True,
+        }
+    ]
+    assert "not_written_to_dataset" in draft["limitations"]
+

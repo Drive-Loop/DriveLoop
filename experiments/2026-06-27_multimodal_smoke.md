@@ -315,3 +315,29 @@ Validation:
 
 Interpretation:
 This is still plan-only. It prepares the exact contract needed before implementing `boxes3d` synthesis and `image_box` canvas rendering.
+
+## 2026-06-27 Box Synthesis Draft
+
+Added a draft-only `box_synthesis_draft` under `box_synthesis_plan`.
+
+The draft records:
+- coordinate frame: `camera`
+- units: `meters`
+- boxes3d format: `x_y_z_width_height_depth_rotX_rotY_rotZ`
+- class default dimensions for bicycle, pedestrian, car, truck, and bus
+- draft boxes3d entries for actors that need synthesis
+- whether projection into `image_box` is still required
+
+Observed bicycle draft:
+- category: `bicycle`
+- box3d: `[8.0, 1.8, 18.0, 0.6, 1.6, 1.8, 0.0, 0.0, -0.25]`
+- placement policy: `front_adjacent_lane_cut_in`
+- source: `class_default_dimensions`
+- requires projection: `true`
+
+Validation:
+- Added `test_box_synthesis_plan_includes_draft_box_for_bicycle`.
+- Full unit test suite result: `45 passed`.
+
+Interpretation:
+The project now has a concrete, auditable draft for actor-box synthesis, but it still does not write boxes into the mini dataset or render image-box canvases.
