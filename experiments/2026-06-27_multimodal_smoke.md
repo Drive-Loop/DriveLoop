@@ -342,3 +342,22 @@ Validation:
 
 Interpretation:
 The project now has a concrete, auditable draft for actor-box synthesis, but it still does not write boxes into the mini dataset or render image-box canvases.
+
+## 2026-06-27 DD2 Boxes3D Projection Contract Probe
+
+Inspected the first sample from the DriveDreamer-2 mini validation labels.
+
+Observed sample:
+- boxes3d shape: `[14, 9]`
+- boxes3d dtype: `float32`
+- boxes3d format: `x_y_z_width_height_depth_rotX_rotY_rotZ`
+- first box: `[-7.5167, 1.5012, 36.5252, 0.6470, 1.7780, 0.6210, 0.0, 1.7943, 0.0]`
+- cam_intrinsic shape: `[4, 4]`
+- all projected box mean z values are positive: `true`
+- projected 2D corner min: `[181.65, 450.00]`
+- projected 2D corner max: `[1425.06, 606.32]`
+
+Interpretation:
+The DD2 mini transform consumes `boxes3d` by converting them with `boxes3d_to_corners3d(..., rot_axis=1)`, cropping in 3D, projecting with `cam_intrinsic`, drawing a class-channel box canvas, and feeding the transformed canvas into `box_downsampler_input`.
+
+This supports treating the draft frame as a DD2 processed camera-projection frame, but tensor override is still not connected. The next safe step is a validator-only check for candidate draft boxes before any dataset writing or image-box canvas rendering.
