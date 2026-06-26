@@ -308,3 +308,109 @@ def test_drivedreamer2_backend_records_requested_vs_baseline_structural_diff(mon
     assert diff["scene_description_changed"] is True
     assert diff["tensor_override_ready"] is False
 
+def test_drivedreamer2_backend_records_override_candidate_plan(monkeypatch, tmp_path):
+    baseline_output_dir = tmp_path / "baseline"
+    baseline_output_dir.mkdir()
+    baseline_video = baseline_output_dir / "000000.mp4"
+
+    dataset_root = tmp_path / "mini_dataset"
+    labels_dir = dataset_root / "labels"
+    images_dir = dataset_root / "images"
+    hdmaps_dir = dataset_root / "hdmaps"
+    labels_dir.mkdir(parents=True)
+    images_dir.mkdir()
+    hdmaps_dir.mkdir()
+
+    (dataset_root / "config.json").write_text(
+        '{"_class_name": "Dataset", "config_paths": ["labels/config.json", "images/config.json", "hdmaps/config.json"]}',
+        encoding="utf-8",
+    )
+    (labels_dir / "config.json").write_text(
+        '{"_class_name": "PklDataset", "_key_names": ["boxes3d", "ori_labels3d", "scene_description"], "data_size": 1}',
+        encoding="utf-8",
+    )
+    (images_dir / "config.json").write_text(
+        '{"_class_name": "LmdbDataset", "_key_names": ["image"], "data_size": 1, "data_type": "image", "data_name": "image"}',
+        encoding="utf-8",
+    )
+    (hdmaps_dir / "config.json").write_text(
+        '{"_class_name": "LmdbDataset", "_key_names": ["image_hdmap"], "data_size": 1, "data_type": "image", "data_name": "image_hdmap"}',
+        encoding="utf-8",
+    )
+
+    import pickle
+    import numpy as np
+
+    with (labels_dir / "data.pkl").open("wb") as f:
+        pickle.dump(
+            [
+                {
+                    "scene_description": "clear daytime road with a car",
+                    "boxes3d": np.zeros((1, 9), dtype=np.float32),
+                    "ori_labels3d": ["vehicle.car"],
+                    "labels3d": [["vehicle", "car"]],
+                }
+            ],
+            f,
+        )
+
+    def fake_run(cmd, cwd, env, check, text, timeout):
+        baseline_video.write_bytes(b"fake video")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("driveloop.backends.drivedreamer2.subprocess.run", fake_run)
+
+    structural_input_plan = {
+        "scene_description": {
+            "value": "rainy night intersection with a pedestrian crossing and a bicycle cut in"
+        },
+        "labels": {
+            "values": ["pedestrian", "bicycle"],
+        },
+        "image_hdmap": {
+            "source": "mini_dataset_baseline",
+        },
+        "image_box": {
+            "source": "mini_dataset_baseline",
+        },
+        "boxes3d": {
+            "source": "mini_dataset_baseline",
+        },
+    }
+
+    backend = DriveDreamer2Backend(
+        project_root=tmp_path,
+        baseline_output_dir=baseline_output_dir,
+        baseline_dataset_dir=dataset_root,
+        artifact_dir=tmp_path / "artifacts",
+        python_executable="python",
+        timeout_seconds=123,
+    )
+    request = DriveLoopRequest(
+        prompt="base prompt",
+        condition={
+            "dd2_condition": {
+                "text_prompt": "rainy night intersection with a pedestrian crossing and a bicycle cut in",
+                "executable_condition": {
+                    "schema_version": "dd2_executable_condition.v0",
+                    "structural_input_plan": structural_input_plan,
+                    "trace_metadata": {"tensor_control_ready": False},
+                },
+            }
+        },
+    )
+
+    generation = backend.generate(request, iteration=0)
+    plan = generation.metadata["dd2_override_candidate_plan"]
+
+    assert plan["available"] is True
+    assert plan["control_level"] == "candidate_plan_only"
+    assert plan["requires_box_synthesis"] is True
+    assert plan["requires_hdmap_override"] is False
+    assert plan["scene_description_action"]["type"] == "replace_text_prompt"
+    assert plan["scene_description_action"]["target_value"] == structural_input_plan["scene_description"]["value"]
+    assert {"type": "add_actor_label", "label": "bicycle"} in plan["actor_label_actions"]
+    assert {"type": "add_actor_label", "label": "pedestrian"} in plan["actor_label_actions"]
+    assert {"type": "mark_extra_baseline_label", "label": "car"} in plan["actor_label_actions"]
+    assert "tensor_override_not_implemented" in plan["limitations"]
+

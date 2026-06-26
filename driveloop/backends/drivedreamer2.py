@@ -95,6 +95,10 @@ class DriveDreamer2Backend(GenerationBackend):
             baseline_structural_snapshot=baseline_structural_snapshot,
             trace_metadata=trace_metadata,
         )
+        override_candidate_plan = self._build_override_candidate_plan(
+            structural_input_plan=structural_input_plan,
+            structural_request_diff=structural_request_diff,
+        )
 
         return Generation(
             iteration=iteration,
@@ -119,8 +123,65 @@ class DriveDreamer2Backend(GenerationBackend):
                 else None,
                 "dd2_baseline_structural_snapshot": baseline_structural_snapshot,
                 "dd2_structural_request_diff": structural_request_diff,
+                "dd2_override_candidate_plan": override_candidate_plan,
             },
         )
+
+    def _build_override_candidate_plan(
+        self,
+        structural_input_plan: dict,
+        structural_request_diff: dict,
+    ) -> dict:
+        if not structural_request_diff.get("available", False):
+            return {
+                "available": False,
+                "reason": structural_request_diff.get("reason", "missing_structural_request_diff"),
+            }
+
+        actor_label_actions = [
+            {"type": "add_actor_label", "label": label}
+            for label in structural_request_diff.get("missing_requested_labels", [])
+        ]
+        actor_label_actions.extend(
+            {
+                "type": "mark_extra_baseline_label",
+                "label": label,
+            }
+            for label in structural_request_diff.get("extra_baseline_labels", [])
+        )
+
+        scene_description_action = {
+            "type": "keep_baseline_text",
+            "target_value": structural_request_diff.get("baseline_scene_description"),
+        }
+        if structural_request_diff.get("scene_description_changed"):
+            scene_description_action = {
+                "type": "replace_text_prompt",
+                "target_value": structural_request_diff.get("requested_scene_description"),
+            }
+
+        return {
+            "available": True,
+            "control_level": "candidate_plan_only",
+            "scene_description_action": scene_description_action,
+            "actor_label_actions": actor_label_actions,
+            "requires_box_synthesis": bool(
+                structural_request_diff.get("missing_requested_labels")
+                or structural_request_diff.get("extra_baseline_labels")
+            ),
+            "requires_hdmap_override": structural_input_plan.get("image_hdmap", {}).get("source")
+            != "mini_dataset_baseline",
+            "baseline_sources": {
+                "image_hdmap": structural_input_plan.get("image_hdmap", {}).get("source"),
+                "image_box": structural_input_plan.get("image_box", {}).get("source"),
+                "boxes3d": structural_input_plan.get("boxes3d", {}).get("source"),
+            },
+            "limitations": [
+                "tensor_override_not_implemented",
+                "box_synthesis_not_implemented",
+                "hdmap_override_not_implemented",
+            ],
+        }
 
     def _build_structural_request_diff(
         self,

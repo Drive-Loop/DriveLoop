@@ -261,3 +261,30 @@ Validation:
 
 Interpretation:
 This diff makes the gap between DriveLoop semantic intent and the reused mini baseline structural inputs explicit before implementing tensor-level overrides.
+
+## 2026-06-27 Override Candidate Plan
+
+Added a backend-side override candidate plan.
+
+The backend now records `dd2_override_candidate_plan`, translating the requested-vs-baseline structural diff into candidate actions:
+- replace text prompt when scene descriptions differ
+- add requested actor labels missing from the baseline
+- mark extra baseline actor labels
+- decide whether box synthesis is required
+- decide whether HDMap override is required
+- preserve baseline sources for `image_hdmap`, `image_box`, and `boxes3d`
+
+Observed mini validation candidate plan:
+- scene description action: `replace_text_prompt`
+- add actor label: `bicycle`
+- mark extra baseline label: `car`
+- requires box synthesis: `true`
+- requires HDMap override: `false`
+- control level: `candidate_plan_only`
+
+Validation:
+- Added `test_drivedreamer2_backend_records_override_candidate_plan`.
+- Full unit test suite result: `43 passed`.
+
+Interpretation:
+This is the last audit layer before tensor-level structural control. It identifies what should change without yet writing boxes, image-box canvases, or HDMap tensors.
