@@ -162,7 +162,6 @@ class DriveDreamer2Backend(GenerationBackend):
 
         requires_box_synthesis = bool(
             structural_request_diff.get("missing_requested_labels")
-            or structural_request_diff.get("extra_baseline_labels")
         )
 
         return {
@@ -276,7 +275,8 @@ class DriveDreamer2Backend(GenerationBackend):
         return {
             "available": bool(draft_boxes3d),
             "control_level": "draft_only",
-            "coordinate_frame": "camera",
+            "coordinate_frame": "dd2_dataset_frame_unverified",
+            "coordinate_frame_verified": False,
             "units": "meters",
             "boxes3d_format": "x_y_z_width_height_depth_rotX_rotY_rotZ",
             "default_dimensions": default_dimensions,

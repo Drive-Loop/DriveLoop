@@ -321,7 +321,8 @@ This is still plan-only. It prepares the exact contract needed before implementi
 Added a draft-only `box_synthesis_draft` under `box_synthesis_plan`.
 
 The draft records:
-- coordinate frame: `camera`
+- coordinate frame: `dd2_dataset_frame_unverified`
+- coordinate frame verified: `false`
 - units: `meters`
 - boxes3d format: `x_y_z_width_height_depth_rotX_rotY_rotZ`
 - class default dimensions for bicycle, pedestrian, car, truck, and bus

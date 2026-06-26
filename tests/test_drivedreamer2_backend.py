@@ -473,7 +473,8 @@ def test_box_synthesis_plan_includes_draft_box_for_bicycle():
 
     assert draft["available"] is True
     assert draft["control_level"] == "draft_only"
-    assert draft["coordinate_frame"] == "camera"
+    assert draft["coordinate_frame"] == "dd2_dataset_frame_unverified"
+    assert draft["coordinate_frame_verified"] is False
     assert draft["units"] == "meters"
     assert draft["boxes3d_format"] == "x_y_z_width_height_depth_rotX_rotY_rotZ"
     assert draft["default_dimensions"]["bicycle"] == {
