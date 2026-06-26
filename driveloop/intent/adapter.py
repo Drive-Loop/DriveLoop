@@ -3,6 +3,8 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Protocol
 
+from driveloop.intent.providers import MultimodalPreprocessor
+
 
 @dataclass(frozen=True)
 class MultimodalInputBundle:
@@ -48,6 +50,9 @@ class StructuredIntent:
 
 class RuleBasedIntentAdapter:
     """Lightweight prompt-to-structured-intent adapter for reproducible API traces."""
+
+    def __init__(self, preprocessor: MultimodalPreprocessor | None = None) -> None:
+        self.preprocessor = preprocessor or MultimodalPreprocessor()
 
     def parse_bundle(self, bundle: MultimodalInputBundle) -> StructuredIntent:
         return self.parse(bundle.text, metadata=bundle.metadata)
@@ -124,16 +129,7 @@ class RuleBasedIntentAdapter:
 
     def _compose_multimodal_text(self, prompt: str, metadata: Dict[str, Any]) -> str:
         parts = [prompt]
-
-        voice = metadata.get("voice", {})
-        if isinstance(voice, dict) and voice.get("transcript"):
-            parts.append(str(voice["transcript"]))
-
-        image = metadata.get("image", {})
-        if isinstance(image, dict) and image.get("filename"):
-            filename = str(image["filename"]).replace("_", " ").replace("-", " ")
-            parts.append(filename)
-
+        parts.extend(evidence.text for evidence in self.preprocessor.collect_evidence(metadata))
         return " ".join(parts).lower()
 
     def _extract_multimodal_evidence(self, metadata: Dict[str, Any]) -> Dict[str, Any]:
