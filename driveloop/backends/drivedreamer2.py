@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import json
+import math
 import os
 import pickle
 import shutil
@@ -98,6 +99,7 @@ class DriveDreamer2Backend(GenerationBackend):
         override_candidate_plan = self._build_override_candidate_plan(
             structural_input_plan=structural_input_plan,
             structural_request_diff=structural_request_diff,
+            baseline_structural_snapshot=baseline_structural_snapshot,
         )
 
         return Generation(
@@ -131,6 +133,7 @@ class DriveDreamer2Backend(GenerationBackend):
         self,
         structural_input_plan: dict,
         structural_request_diff: dict,
+        baseline_structural_snapshot: dict | None = None,
     ) -> dict:
         if not structural_request_diff.get("available", False):
             return {
@@ -173,6 +176,7 @@ class DriveDreamer2Backend(GenerationBackend):
             "box_synthesis_plan": self._build_box_synthesis_plan(
                 structural_request_diff=structural_request_diff,
                 requires_box_synthesis=requires_box_synthesis,
+                baseline_structural_snapshot=baseline_structural_snapshot,
             ),
             "requires_hdmap_override": structural_input_plan.get("image_hdmap", {}).get("source")
             != "mini_dataset_baseline",
@@ -192,6 +196,7 @@ class DriveDreamer2Backend(GenerationBackend):
         self,
         structural_request_diff: dict,
         requires_box_synthesis: bool,
+        baseline_structural_snapshot: dict | None = None,
     ) -> dict:
         if not requires_box_synthesis:
             return {
@@ -224,6 +229,7 @@ class DriveDreamer2Backend(GenerationBackend):
                 actors_to_synthesize=actors_to_synthesize,
                 placement_policy=placement_policy,
                 box_template_source=box_template_source,
+                baseline_structural_snapshot=baseline_structural_snapshot,
             ),
             "limitations": [
                 "3d_position_not_estimated",
@@ -237,6 +243,7 @@ class DriveDreamer2Backend(GenerationBackend):
         actors_to_synthesize: list,
         placement_policy: str,
         box_template_source: str,
+        baseline_structural_snapshot: dict | None = None,
     ) -> dict:
         default_dimensions = {
             "bicycle": {"width": 0.6, "height": 1.6, "depth": 1.8},
@@ -272,7 +279,12 @@ class DriveDreamer2Backend(GenerationBackend):
                 }
             )
 
-        validation = self._validate_box_synthesis_draft(draft_boxes3d)
+        sample = baseline_structural_snapshot.get("sample", {}) if isinstance(baseline_structural_snapshot, dict) else {}
+        cam_intrinsic = sample.get("cam_intrinsic") if isinstance(sample, dict) else None
+        validation = self._validate_box_synthesis_draft(
+            draft_boxes3d,
+            cam_intrinsic=cam_intrinsic,
+        )
 
         return {
             "available": bool(draft_boxes3d),
@@ -291,8 +303,14 @@ class DriveDreamer2Backend(GenerationBackend):
             ],
         }
 
-    def _validate_box_synthesis_draft(self, draft_boxes3d: list) -> dict:
+    def _validate_box_synthesis_draft(
+        self,
+        draft_boxes3d: list,
+        cam_intrinsic: list | None = None,
+    ) -> dict:
         entries = []
+        projection_available = self._projection_matrix_available(cam_intrinsic)
+
         for entry in draft_boxes3d:
             raw_box = entry.get("box3d", []) if isinstance(entry, dict) else []
             numeric_box = []
@@ -311,6 +329,9 @@ class DriveDreamer2Backend(GenerationBackend):
                 and numeric_box[5] > 0
             )
             z_positive = len(numeric_box) == 9 and numeric_box[2] > 0
+            projection = None
+            if shape_ok and numeric and dims_positive and z_positive and projection_available:
+                projection = self._project_box3d_axis_aligned(numeric_box, cam_intrinsic)
 
             entries.append(
                 {
@@ -319,28 +340,80 @@ class DriveDreamer2Backend(GenerationBackend):
                     "float32_convertible": numeric and shape_ok,
                     "dimensions_positive": dims_positive,
                     "mean_z_positive": z_positive,
-                    "projection_finite": None,
-                    "requires_projection_validation": True,
+                    "projection_finite": projection.get("finite") if projection else None,
+                    "projected_2d_range": projection.get("range") if projection else None,
+                    "requires_projection_validation": not projection_available,
                 }
             )
+
+        limitations = [
+            "image_box_canvas_not_rendered",
+            "dataset_not_written",
+        ]
+        if projection_available:
+            limitations.append("projection_validator_uses_axis_aligned_corners")
+        else:
+            limitations.append("projection_not_run")
 
         return {
             "available": bool(entries),
             "control_level": "validator_only",
+            "projection_control_level": "validator_only" if projection_available else "not_run",
             "all_entries_valid": bool(entries)
             and all(
                 item["shape_ok"]
                 and item["float32_convertible"]
                 and item["dimensions_positive"]
                 and item["mean_z_positive"]
+                and (item["projection_finite"] is not False)
                 for item in entries
             ),
             "entries": entries,
-            "limitations": [
-                "projection_not_run",
-                "image_box_canvas_not_rendered",
-                "dataset_not_written",
-            ],
+            "limitations": limitations,
+        }
+
+    def _projection_matrix_available(self, cam_intrinsic: list | None) -> bool:
+        return (
+            isinstance(cam_intrinsic, list)
+            and len(cam_intrinsic) >= 3
+            and all(isinstance(row, list) and len(row) >= 3 for row in cam_intrinsic[:3])
+        )
+
+    def _project_box3d_axis_aligned(self, box3d: list, cam_intrinsic: list) -> dict:
+        x, y, z, width, height, depth = box3d[:6]
+        half_w, half_h, half_d = width / 2.0, height / 2.0, depth / 2.0
+        corners = [
+            (x + sx * half_w, y + sy * half_h, z + sz * half_d)
+            for sx in (-1.0, 1.0)
+            for sy in (-1.0, 1.0)
+            for sz in (-1.0, 1.0)
+        ]
+
+        projected = []
+        finite = True
+        for cx, cy, cz in corners:
+            px = cam_intrinsic[0][0] * cx + cam_intrinsic[0][1] * cy + cam_intrinsic[0][2] * cz
+            py = cam_intrinsic[1][0] * cx + cam_intrinsic[1][1] * cy + cam_intrinsic[1][2] * cz
+            pz = cam_intrinsic[2][0] * cx + cam_intrinsic[2][1] * cy + cam_intrinsic[2][2] * cz
+            if pz == 0:
+                finite = False
+                continue
+            u = px / pz
+            v = py / pz
+            finite = finite and math.isfinite(u) and math.isfinite(v)
+            projected.append((u, v))
+
+        if not projected:
+            return {"finite": False, "range": None}
+
+        xs = [point[0] for point in projected]
+        ys = [point[1] for point in projected]
+        return {
+            "finite": finite,
+            "range": {
+                "min": [round(min(xs), 2), round(min(ys), 2)],
+                "max": [round(max(xs), 2), round(max(ys), 2)],
+            },
         }
 
 

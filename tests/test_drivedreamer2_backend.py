@@ -504,9 +504,52 @@ def test_box_synthesis_plan_includes_draft_box_for_bicycle():
             "dimensions_positive": True,
             "mean_z_positive": True,
             "projection_finite": None,
+            "projected_2d_range": None,
             "requires_projection_validation": True,
         }
     ]
+    assert validation["projection_control_level"] == "not_run"
     assert "projection_not_run" in validation["limitations"]
     assert "not_written_to_dataset" in draft["limitations"]
 
+
+
+def test_box_synthesis_draft_validator_projects_with_baseline_intrinsic():
+    backend = DriveDreamer2Backend()
+
+    draft = backend._build_box_synthesis_draft(
+        actors_to_synthesize=[
+            {
+                "category": "bicycle",
+                "source_action": "add_actor_label",
+                "confidence": "low",
+                "reason": "missing_requested_label",
+            }
+        ],
+        placement_policy="front_adjacent_lane_cut_in",
+        box_template_source="class_default_dimensions",
+        baseline_structural_snapshot={
+            "sample": {
+                "cam_intrinsic": [
+                    [1252.8131, 0.0, 826.5881, 0.0],
+                    [0.0, 1252.8131, 469.9846, 0.0],
+                    [0.0, 0.0, 1.0, 0.0],
+                    [0.0, 0.0, 0.0, 1.0],
+                ]
+            }
+        },
+    )
+
+    validation = draft["validation"]
+    entry = validation["entries"][0]
+
+    assert validation["projection_control_level"] == "validator_only"
+    assert validation["all_entries_valid"] is True
+    assert entry["projection_finite"] is True
+    assert entry["requires_projection_validation"] is False
+    assert entry["projected_2d_range"] == {
+        "min": [1336.99, 536.27],
+        "max": [1434.68, 660.47],
+    }
+    assert "projection_validator_uses_axis_aligned_corners" in validation["limitations"]
+    assert "dataset_not_written" in validation["limitations"]
