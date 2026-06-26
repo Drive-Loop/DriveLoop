@@ -10,7 +10,7 @@ from pydantic import BaseModel, Field
 from driveloop.backends.drivedreamer2 import DriveDreamer2Backend
 from driveloop.backends.mock import MockGenerationBackend
 from driveloop.evaluators import RuleBasedEvaluator
-from driveloop.intent.adapter import RuleBasedIntentAdapter
+from driveloop.intent.adapter import MultimodalInputBundle, RuleBasedIntentAdapter
 from driveloop.runner import DriveLoopConfig, DriveLoopRequest, DriveLoopRunner
 
 
@@ -160,9 +160,11 @@ def generate(request: GenerateRequest):
     output_dir = Path("outputs/driveloop/api") / scenario_id
     output_dir.mkdir(parents=True, exist_ok=True)
 
-    structured_intent = RuleBasedIntentAdapter().parse(
-        request.prompt,
-        metadata=request.metadata,
+    structured_intent = RuleBasedIntentAdapter().parse_bundle(
+        MultimodalInputBundle(
+            text=request.prompt,
+            metadata=request.metadata,
+        )
     ).to_dict()
 
     request_record = {

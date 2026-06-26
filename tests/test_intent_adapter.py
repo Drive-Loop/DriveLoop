@@ -80,3 +80,33 @@ def test_intent_adapter_uses_voice_transcript_and_image_filename():
     assert "stopped" in intent["motion_primitives"]
     assert "low_visibility" in intent["long_tail_tags"]
     assert intent["multimodal_evidence"]["modalities"] == ["text", "image", "voice"]
+
+
+def test_intent_adapter_parse_bundle_matches_multimodal_contract():
+    from driveloop.intent.adapter import MultimodalInputBundle
+
+    adapter = RuleBasedIntentAdapter()
+    bundle = MultimodalInputBundle(
+        text="urban driving scene",
+        metadata={
+            "modalities": ["text", "image", "voice"],
+            "image": {
+                "filename": "foggy_intersection_reference.jpg",
+                "status": "placeholder",
+            },
+            "voice": {
+                "transcript": "a pedestrian crosses in front of a stopped vehicle at night",
+                "status": "placeholder",
+            },
+        },
+    )
+
+    intent = adapter.parse_bundle(bundle).to_dict()
+
+    assert bundle.modalities == ["text", "image", "voice"]
+    assert intent["weather"] == "fog"
+    assert intent["lighting"] == "night"
+    assert intent["road_environment"] == "urban_intersection"
+    assert {"category": "pedestrian", "attributes": {}} in intent["actors"]
+    assert "crossing" in intent["motion_primitives"]
+    assert "stopped" in intent["motion_primitives"]

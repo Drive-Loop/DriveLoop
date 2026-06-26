@@ -1,7 +1,23 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Protocol
+
+
+@dataclass(frozen=True)
+class MultimodalInputBundle:
+    text: str
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    @property
+    def modalities(self) -> List[str]:
+        values = self.metadata.get("modalities", ["text"])
+        return list(values) if isinstance(values, list) else ["text"]
+
+
+class IntentUnderstandingAdapter(Protocol):
+    def parse_bundle(self, bundle: MultimodalInputBundle) -> "StructuredIntent":
+        ...
 
 
 @dataclass
@@ -32,6 +48,9 @@ class StructuredIntent:
 
 class RuleBasedIntentAdapter:
     """Lightweight prompt-to-structured-intent adapter for reproducible API traces."""
+
+    def parse_bundle(self, bundle: MultimodalInputBundle) -> StructuredIntent:
+        return self.parse(bundle.text, metadata=bundle.metadata)
 
     def parse(self, prompt: str, metadata: Dict[str, Any] | None = None) -> StructuredIntent:
         metadata = metadata or {}
