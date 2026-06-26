@@ -39,6 +39,11 @@ class DriveDreamer2Backend(GenerationBackend):
         env = os.environ.copy()
         env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
 
+        dd2_condition = request.condition.get("dd2_condition", {})
+        dd2_prompt = dd2_condition.get("text_prompt") if isinstance(dd2_condition, dict) else None
+        if dd2_prompt:
+            env["DRIVELOOP_DD2_PROMPT"] = str(dd2_prompt)
+
         cmd = [
             self.python_executable,
             "./dreamer-train/projects/launch.py",

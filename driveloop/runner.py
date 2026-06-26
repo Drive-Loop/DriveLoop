@@ -49,6 +49,13 @@ class DriveLoopRunner:
             )
             dd2_condition = self.condition_adapter.build(scene_spec, condition_plan)
             generation_request = self._with_conditioned_prompt(current_request, condition_plan.prompt_suffixes)
+            generation_request = replace(
+                generation_request,
+                condition={
+                    **generation_request.condition,
+                    "dd2_condition": asdict(dd2_condition),
+                },
+            )
             generation = self.backend.generate(generation_request, iteration)
             generation = replace(
                 generation,

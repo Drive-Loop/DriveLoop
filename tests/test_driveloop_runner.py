@@ -53,3 +53,42 @@ class DriveLoopRunnerTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+
+def test_runner_passes_dd2_condition_to_backend_request():
+    from driveloop.backends.base import GenerationBackend
+    from driveloop.schema import Generation
+
+    class CapturingBackend(GenerationBackend):
+        def __init__(self):
+            self.requests = []
+
+        def generate(self, request, iteration):
+            self.requests.append(request)
+            return Generation(
+                iteration=iteration,
+                prompt=request.prompt,
+                artifacts={},
+                metadata={"backend": "capture"},
+            )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backend = CapturingBackend()
+        config = DriveLoopConfig(
+            max_iterations=1,
+            target_score=0.5,
+            output_dir=Path(tmpdir) / "history",
+        )
+        request = DriveLoopRequest(
+            prompt="rainy night intersection, a pedestrian crosses in front while a car cuts in"
+        )
+
+        DriveLoopRunner(backend=backend, config=config).run(request)
+
+    assert backend.requests
+    dd2_condition = backend.requests[0].condition["dd2_condition"]
+    assert dd2_condition["environment"]["weather"] == "rain"
+    assert dd2_condition["environment"]["lighting"] == "night"
+    assert "crossing" in dd2_condition["motion_primitives"]
+    assert "cut_in" in dd2_condition["motion_primitives"]
+    assert "text_prompt" in dd2_condition

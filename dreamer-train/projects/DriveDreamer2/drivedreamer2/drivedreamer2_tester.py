@@ -139,7 +139,12 @@ class DriveDreamer2_Tester(Tester):
                         'video_cond':img_cond,
                     })
                 
-                prompt_embed = batch_dict.get('prompt_embeds',None)
+                prompt_override = os.environ.get("DRIVELOOP_DD2_PROMPT")
+                if prompt_override:
+                    prompt_embed = self.text_encoder([prompt_override], mode='after_pool', to_numpy=False)[:, None]
+                else:
+                    prompt_embed = batch_dict.get('prompt_embeds', None)
+
                 if prompt_embed is None:
                     videos = []
                     for this_prompt in prompts:
