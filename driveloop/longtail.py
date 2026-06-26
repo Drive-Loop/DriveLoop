@@ -109,7 +109,7 @@ class LongTailController:
 
         categories = {obj.category for obj in spec.objects}
         motions = set(spec.motion_primitives)
-        if "animal" in categories or "crossing" in motions:
+        if "animal" in categories and "crossing" in motions:
             resolved.append("animal_crossing")
         if "obstacle" in categories:
             resolved.append("road_obstacle")

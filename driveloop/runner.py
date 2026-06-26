@@ -4,6 +4,7 @@ from dataclasses import asdict, replace
 from typing import Optional
 
 from driveloop.backends.base import GenerationBackend
+from driveloop.condition_adapter import DriveDreamer2ConditionAdapter
 from driveloop.evaluator import RuleBasedEvaluator
 from driveloop.grounding import RuleBasedGrounder
 from driveloop.logging import HistoryLogger
@@ -20,6 +21,7 @@ class DriveLoopRunner:
         refiner: Optional[RuleBasedRefiner] = None,
         grounder: Optional[RuleBasedGrounder] = None,
         longtail_controller: Optional[LongTailController] = None,
+        condition_adapter: Optional[DriveDreamer2ConditionAdapter] = None,
         config: Optional[DriveLoopConfig] = None,
     ) -> None:
         self.backend = backend
@@ -27,6 +29,7 @@ class DriveLoopRunner:
         self.refiner = refiner or RuleBasedRefiner()
         self.grounder = grounder or RuleBasedGrounder()
         self.longtail_controller = longtail_controller or LongTailController()
+        self.condition_adapter = condition_adapter or DriveDreamer2ConditionAdapter()
         self.config = config or DriveLoopConfig()
         self.history_logger = HistoryLogger(self.config.output_dir)
 
@@ -44,6 +47,7 @@ class DriveLoopRunner:
                 requested_tags=requested_tags,
                 history=history,
             )
+            dd2_condition = self.condition_adapter.build(scene_spec, condition_plan)
             generation_request = self._with_conditioned_prompt(current_request, condition_plan.prompt_suffixes)
             generation = self.backend.generate(generation_request, iteration)
             generation = replace(
@@ -52,6 +56,7 @@ class DriveLoopRunner:
                     **generation.metadata,
                     "scene_specification": asdict(scene_spec),
                     "long_tail_condition_plan": asdict(condition_plan),
+                    "dd2_condition": asdict(dd2_condition),
                 },
             )
 

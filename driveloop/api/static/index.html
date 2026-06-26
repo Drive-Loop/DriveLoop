@@ -1,0 +1,870 @@
+<!doctype html>
+<html lang="en">
+<head>
+  <meta charset="utf-8" />
+  <meta name="viewport" content="width=device-width, initial-scale=1" />
+  <title>DriveLoop</title>
+  <style>
+    :root {
+      color-scheme: light;
+      --bg: #f7f8fb;
+      --panel: #ffffff;
+      --line: #d9dee8;
+      --text: #172033;
+      --muted: #667085;
+      --accent: #2563eb;
+      --accent-dark: #1d4ed8;
+      --ok: #15803d;
+      --warn: #b45309;
+    }
+
+    * {
+      box-sizing: border-box;
+    }
+
+    body {
+      margin: 0;
+      min-height: 100vh;
+      background: var(--bg);
+      color: var(--text);
+      font-family: -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+    }
+
+    .app {
+      display: grid;
+      grid-template-columns: 280px 1fr;
+      min-height: 100vh;
+    }
+
+    aside {
+      border-right: 1px solid var(--line);
+      background: #fbfcff;
+      padding: 20px;
+    }
+
+    .brand {
+      font-size: 20px;
+      font-weight: 700;
+      margin-bottom: 6px;
+    }
+
+    .subtitle {
+      color: var(--muted);
+      font-size: 13px;
+      line-height: 1.5;
+      margin-bottom: 22px;
+    }
+
+    .field {
+      display: grid;
+      gap: 7px;
+      margin-bottom: 16px;
+    }
+
+    label {
+      color: #344054;
+      font-size: 13px;
+      font-weight: 600;
+    }
+
+    select,
+    input,
+    textarea,
+    button {
+      font: inherit;
+    }
+
+    select,
+    input {
+      width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      padding: 10px 11px;
+      color: var(--text);
+    }
+
+    .file-input {
+      position: absolute;
+      inline-size: 1px;
+      block-size: 1px;
+      opacity: 0;
+      pointer-events: none;
+    }
+
+    .file-row {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px;
+      align-items: center;
+    }
+
+    .file-button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      color: var(--text);
+      padding: 10px 12px;
+      font-weight: 700;
+      cursor: pointer;
+      text-align: center;
+    }
+
+    .file-name {
+      min-width: 0;
+      color: var(--muted);
+      font-size: 13px;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      white-space: nowrap;
+    }
+
+    .voice-row {
+      display: grid;
+      grid-template-columns: auto 1fr;
+      gap: 8px;
+      align-items: center;
+      margin-bottom: 8px;
+    }
+
+    .voice-button {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: #eef2f7;
+      color: var(--muted);
+      padding: 10px 12px;
+      font-weight: 700;
+      cursor: not-allowed;
+    }
+
+    .hint {
+      color: var(--muted);
+      font-size: 12px;
+      line-height: 1.45;
+    }
+
+    main {
+      display: grid;
+      grid-template-rows: auto 1fr auto;
+      min-width: 0;
+      height: 100vh;
+    }
+
+    header {
+      border-bottom: 1px solid var(--line);
+      background: rgba(255, 255, 255, 0.86);
+      padding: 16px 24px;
+    }
+
+    header h1 {
+      margin: 0;
+      font-size: 18px;
+      font-weight: 700;
+    }
+
+    header p {
+      margin: 4px 0 0;
+      color: var(--muted);
+      font-size: 13px;
+    }
+
+    .chat {
+      overflow: auto;
+      padding: 24px;
+    }
+
+    .message {
+      max-width: 920px;
+      margin: 0 auto 18px;
+      display: grid;
+      gap: 10px;
+    }
+
+    .bubble {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: var(--panel);
+      padding: 14px 16px;
+      line-height: 1.55;
+      white-space: pre-wrap;
+    }
+
+    .message.user .bubble {
+      margin-left: auto;
+      max-width: 760px;
+      background: #eef4ff;
+      border-color: #c7d7fe;
+    }
+
+    .meta {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
+    .result {
+      display: grid;
+      gap: 12px;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      background: white;
+      padding: 14px;
+    }
+
+    .result-grid {
+      display: grid;
+      grid-template-columns: repeat(4, minmax(0, 1fr));
+      gap: 10px;
+    }
+
+    .metric {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px;
+      background: #fbfcff;
+    }
+
+    .metric span {
+      display: block;
+      color: var(--muted);
+      font-size: 12px;
+      margin-bottom: 4px;
+    }
+
+    .metric strong {
+      font-size: 15px;
+    }
+
+    video {
+      width: 100%;
+      max-height: 420px;
+      border-radius: 8px;
+      background: #111827;
+    }
+
+    details {
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 10px 12px;
+      background: #fbfcff;
+    }
+
+    summary {
+      cursor: pointer;
+      font-weight: 600;
+    }
+
+    pre {
+      overflow: auto;
+      margin: 10px 0 0;
+      color: #1f2937;
+      font-size: 12px;
+      line-height: 1.45;
+      white-space: pre-wrap;
+    }
+
+    .composer {
+      border-top: 1px solid var(--line);
+      background: white;
+      padding: 16px 24px;
+    }
+
+    .composer-inner {
+      max-width: 920px;
+      margin: 0 auto;
+      display: grid;
+      grid-template-columns: 1fr auto;
+      gap: 12px;
+      align-items: end;
+    }
+
+    textarea {
+      min-height: 56px;
+      max-height: 160px;
+      resize: vertical;
+      border: 1px solid var(--line);
+      border-radius: 8px;
+      padding: 12px;
+      line-height: 1.45;
+    }
+
+    button {
+      border: 0;
+      border-radius: 8px;
+      background: var(--accent);
+      color: white;
+      padding: 12px 18px;
+      font-weight: 700;
+      cursor: pointer;
+    }
+
+    button:hover {
+      background: var(--accent-dark);
+    }
+
+    button:disabled {
+      cursor: not-allowed;
+      opacity: 0.6;
+    }
+
+    .composer-box {
+      border: 1px solid var(--line);
+      border-radius: 24px;
+      background: white;
+      padding: 10px;
+      display: grid;
+      gap: 8px;
+    }
+
+    .attachment-tray {
+      display: none;
+      gap: 8px;
+      flex-wrap: wrap;
+      padding: 0 4px;
+    }
+
+    .attachment-pill {
+      display: inline-flex;
+      align-items: center;
+      gap: 8px;
+      max-width: 100%;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #f8fafc;
+      color: var(--text);
+      padding: 6px 10px;
+      font-size: 13px;
+    }
+
+    .remove-attachment {
+      border: 0;
+      border-radius: 999px;
+      background: transparent;
+      color: var(--muted);
+      padding: 0 2px;
+      font-weight: 700;
+    }
+
+    .remove-attachment:hover {
+      background: transparent;
+      color: var(--text);
+    }
+
+    .composer-row {
+      display: grid;
+      grid-template-columns: auto 1fr auto auto;
+      gap: 8px;
+      align-items: end;
+    }
+
+    .icon-button {
+      width: 44px;
+      height: 44px;
+      border: 1px solid var(--line);
+      border-radius: 999px;
+      background: #f8fafc;
+      color: var(--text);
+      padding: 0;
+      font-size: 24px;
+      font-weight: 400;
+      line-height: 1;
+      display: inline-grid;
+      place-items: center;
+    }
+
+    .icon-button:hover {
+      background: #eef2f7;
+    }
+
+    .mic-button {
+      font-size: 20px;
+    }
+
+    .attachment-menu {
+      position: absolute;
+      display: none;
+      width: 230px;
+      border: 1px solid var(--line);
+      border-radius: 18px;
+      background: white;
+      box-shadow: 0 18px 45px rgba(15, 23, 42, 0.14);
+      padding: 8px;
+      transform: translateY(-112%);
+      z-index: 10;
+    }
+
+    .attachment-menu.open {
+      display: grid;
+      gap: 4px;
+    }
+
+    .menu-item {
+      border: 0;
+      border-radius: 12px;
+      background: white;
+      color: var(--text);
+      padding: 11px 12px;
+      text-align: left;
+      font-weight: 600;
+      display: grid;
+      grid-template-columns: 24px 1fr;
+      gap: 10px;
+      align-items: center;
+    }
+
+    .menu-item:hover {
+      background: #f2f4f7;
+      color: var(--text);
+    }
+
+    .speech-panel {
+      display: none;
+      border-top: 1px solid var(--line);
+      padding-top: 8px;
+    }
+
+    .speech-panel.open {
+      display: grid;
+      gap: 6px;
+    }
+
+    .speech-panel input {
+      border-radius: 14px;
+    }
+
+    .tools {
+      max-width: 920px;
+      margin: 8px auto 0;
+      color: var(--muted);
+      font-size: 12px;
+      display: flex;
+      gap: 12px;
+      flex-wrap: wrap;
+    }
+
+    @media (max-width: 820px) {
+      .app {
+        grid-template-columns: 1fr;
+      }
+
+      aside {
+        border-right: 0;
+        border-bottom: 1px solid var(--line);
+      }
+
+      main {
+        height: auto;
+        min-height: 100vh;
+      }
+
+      .result-grid {
+        grid-template-columns: repeat(2, minmax(0, 1fr));
+      }
+
+      .composer-inner {
+        grid-template-columns: 1fr;
+      }
+    }
+  
+    .detail-sections {
+      display: grid;
+      gap: 14px;
+      margin-top: 14px;
+    }
+
+    .detail-section {
+      border: 1px solid #d8dee9;
+      border-radius: 12px;
+      padding: 14px;
+      background: #ffffff;
+    }
+
+    .detail-section h4 {
+      margin: 0 0 10px;
+      font-size: 15px;
+    }
+
+    .detail-kv {
+      display: grid;
+      grid-template-columns: 160px 1fr;
+      gap: 8px 12px;
+      color: #667085;
+      font-size: 14px;
+    }
+
+    .detail-kv strong {
+      color: #111827;
+    }
+
+    .pill-row {
+      display: flex;
+      flex-wrap: wrap;
+      gap: 8px;
+    }
+
+    .pill {
+      border: 1px solid #d8dee9;
+      border-radius: 999px;
+      padding: 5px 10px;
+      background: #f8fafc;
+      color: #111827;
+      font-size: 13px;
+    }
+
+    .raw-trace {
+      max-height: 360px;
+      overflow: auto;
+      border-radius: 10px;
+      background: #f8fafc;
+      padding: 12px;
+    }
+
+  </style>
+</head>
+<body>
+  <div class="app">
+    <aside>
+      <div class="brand">DriveLoop</div>
+      <div class="subtitle">Closed-loop driving scene generation with DriveDreamer-2.</div>
+
+      <div class="field">
+        <label for="backend">Backend</label>
+        <select id="backend">
+          <option value="mock" selected>Mock fast loop</option>
+          <option value="drivedreamer2">DriveDreamer-2 GPU</option>
+        </select>
+        <div class="hint">Use mock for interface testing. DriveDreamer-2 may take several minutes.</div>
+      </div>
+
+      <div class="field">
+        <label for="maxIterations">Max iterations</label>
+        <input id="maxIterations" type="number" min="1" max="5" value="2" />
+      </div>
+
+      <div class="field">
+        <label for="targetScore">Target score</label>
+        <input id="targetScore" type="number" min="0" max="1" step="0.05" value="0.9" />
+      </div>
+
+    </aside>
+
+    <main>
+      <header>
+        <h1>Scenario Chat</h1>
+        <p>Describe a driving scene, then inspect the generated video, score, diagnosis, and condition trace.</p>
+      </header>
+
+      <section id="chat" class="chat">
+        <div class="message assistant">
+          <div class="bubble">Describe the driving scenario you want to generate. For example: rainy night intersection, a pedestrian crosses in front while a car cuts in from the right.</div>
+        </div>
+      </section>
+
+      <form id="composer" class="composer">
+        <div class="composer-inner">
+          <div class="composer-box">
+            <div id="attachmentTray" class="attachment-tray"></div>
+            <div class="composer-row">
+              <div style="position: relative;">
+                <button id="attachButton" class="icon-button" type="button" aria-label="Open attachment menu">+</button>
+                <div id="attachmentMenu" class="attachment-menu">
+                  <button id="addImageButton" class="menu-item" type="button"><span>📎</span><span>Add image</span></button>
+                  <button class="menu-item" type="button" disabled><span>↗</span><span>Recent files</span></button>
+                </div>
+              </div>
+              <textarea id="prompt" placeholder="Describe a driving scenario..." required></textarea>
+              <button id="micButton" class="icon-button mic-button" type="button" aria-label="Speech input">🎙</button>
+              <button id="send" type="submit">Generate</button>
+            </div>
+            <div id="speechPanel" class="speech-panel">
+              <input id="voiceTranscript" type="text" placeholder="Transcript placeholder" />
+              <div class="hint">Speech recognition is coming soon. For now, type transcript text here.</div>
+            </div>
+          </div>
+          <input id="imageInput" class="file-input" type="file" accept="image/*" />
+        </div>
+        <div class="tools">
+          <span>Use + for image metadata. Use the microphone button for transcript placeholder metadata.</span>
+        </div>
+      </form>
+    </main>
+  </div>
+
+  <script>
+    const chat = document.querySelector("#chat");
+    const form = document.querySelector("#composer");
+    const promptInput = document.querySelector("#prompt");
+    const sendButton = document.querySelector("#send");
+
+    function addMessage(role, content) {
+      const message = document.createElement("div");
+      message.className = `message ${role}`;
+      const bubble = document.createElement("div");
+      bubble.className = "bubble";
+      bubble.textContent = content;
+      message.appendChild(bubble);
+      chat.appendChild(message);
+      chat.scrollTop = chat.scrollHeight;
+      return message;
+    }
+
+    function addResult(summary) {
+      const message = document.createElement("div");
+      message.className = "message assistant";
+
+      const result = document.createElement("div");
+      result.className = "result";
+
+      const title = document.createElement("div");
+      title.innerHTML = `<strong>Scenario ${summary.scenario_id}</strong><div class="meta">${summary.prompt || ""}</div>`;
+      result.appendChild(title);
+
+      const grid = document.createElement("div");
+      grid.className = "result-grid";
+      const metrics = [
+        ["Backend", summary.backend || "unknown"],
+        ["Best score", Number(summary.best_score || 0).toFixed(2)],
+        ["Accepted", summary.accepted ? "yes" : "no"],
+        ["Iterations", summary.iterations || 0],
+      ];
+
+      for (const [label, value] of metrics) {
+        const metric = document.createElement("div");
+        metric.className = "metric";
+        metric.innerHTML = `<span>${label}</span><strong>${value}</strong>`;
+        grid.appendChild(metric);
+      }
+      result.appendChild(grid);
+
+      if (summary.artifacts && summary.artifacts.video) {
+        const video = document.createElement("video");
+        video.controls = true;
+        video.src = summary.artifacts.video;
+        result.appendChild(video);
+      }
+
+      const details = renderConditionDetails(summary);
+      result.appendChild(details);
+
+      message.appendChild(result);
+      chat.appendChild(message);
+      chat.scrollTop = chat.scrollHeight;
+    }
+
+
+    function escapeHtml(value) {
+      return String(value ?? "")
+        .replaceAll("&", "&amp;")
+        .replaceAll("<", "&lt;")
+        .replaceAll(">", "&gt;")
+        .replaceAll('"', "&quot;");
+    }
+
+    function normalizeList(values) {
+      if (!values) return [];
+      return Array.isArray(values) ? values : [values];
+    }
+
+    function renderPills(values) {
+      const items = normalizeList(values);
+      if (!items.length) return `<span class="pill">none</span>`;
+      return items.map((item) => `<span class="pill">${escapeHtml(item)}</span>`).join("");
+    }
+
+    function renderConditionDetails(summary) {
+      const intent = summary.structured_intent || {};
+      const trace = summary.condition_trace || {};
+      const dd2 = trace.dd2_condition || {};
+      const diagnosis = summary.diagnosis || {};
+      const multimodal = summary.multimodal_inputs || {};
+      const actors = normalizeList(intent.actors).map((actor) => actor.category || JSON.stringify(actor));
+
+      const details = document.createElement("details");
+      details.open = true;
+      details.innerHTML = `
+        <summary>Condition trace and diagnosis</summary>
+        <div class="detail-sections">
+          <section class="detail-section">
+            <h4>Structured intent</h4>
+            <div class="detail-kv">
+              <span>Weather</span><strong>${escapeHtml(intent.weather || "unspecified")}</strong>
+              <span>Lighting</span><strong>${escapeHtml(intent.lighting || "unspecified")}</strong>
+              <span>Road environment</span><strong>${escapeHtml(intent.road_environment || "unspecified")}</strong>
+            </div>
+          </section>
+
+          <section class="detail-section">
+            <h4>Actors and motions</h4>
+            <div class="pill-row">${renderPills(actors)}</div>
+            <div class="pill-row" style="margin-top: 8px;">${renderPills(intent.motion_primitives)}</div>
+          </section>
+
+          <section class="detail-section">
+            <h4>Long-tail risks</h4>
+            <div class="pill-row">${renderPills(intent.long_tail_tags)}</div>
+            <div class="pill-row" style="margin-top: 8px;">${renderPills(intent.risk_factors)}</div>
+          </section>
+
+          <section class="detail-section">
+            <h4>DriveDreamer-2 condition</h4>
+            <pre class="raw-trace">${escapeHtml(JSON.stringify(dd2, null, 2))}</pre>
+          </section>
+
+          <section class="detail-section">
+            <h4>Trace metadata</h4>
+            <pre class="raw-trace">${escapeHtml(JSON.stringify({
+              multimodal_inputs: multimodal,
+              diagnosis,
+            }, null, 2))}</pre>
+          </section>
+        </div>
+      `;
+      return details;
+    }
+
+    function collectMultimodalMetadata() {
+      const imageInput = document.querySelector("#imageInput");
+      const voiceTranscript = document.querySelector("#voiceTranscript").value.trim();
+      const imageFile = imageInput.files && imageInput.files[0];
+
+      const metadata = {
+        modalities: ["text"],
+      };
+
+      if (imageFile) {
+        metadata.modalities.push("image");
+        metadata.image = {
+          filename: imageFile.name,
+          type: imageFile.type,
+          size: imageFile.size,
+          status: "placeholder",
+        };
+      }
+
+      if (voiceTranscript) {
+        metadata.modalities.push("voice");
+        metadata.voice = {
+          transcript: voiceTranscript,
+          status: "placeholder",
+        };
+      }
+
+      return metadata;
+    }
+
+    async function generateScenario(prompt) {
+      const backend = document.querySelector("#backend").value;
+      const maxIterations = Number(document.querySelector("#maxIterations").value);
+      const targetScore = Number(document.querySelector("#targetScore").value);
+      const scenarioId = `web_${Date.now()}`;
+
+      const response = await fetch("/generate", {
+        method: "POST",
+        headers: {"Content-Type": "application/json"},
+        body: JSON.stringify({
+          prompt,
+          scenario_id: scenarioId,
+          backend,
+          max_iterations: maxIterations,
+          target_score: targetScore,
+          metadata: collectMultimodalMetadata(),
+        }),
+      });
+
+      if (!response.ok) {
+        const error = await response.text();
+        throw new Error(error);
+      }
+
+      const summaryResponse = await fetch(`/summary/${scenarioId}`);
+      if (!summaryResponse.ok) {
+        const error = await summaryResponse.text();
+        throw new Error(error);
+      }
+
+      return summaryResponse.json();
+    }
+
+    const attachButton = document.querySelector("#attachButton");
+    const attachmentMenu = document.querySelector("#attachmentMenu");
+    const addImageButton = document.querySelector("#addImageButton");
+    const imageInput = document.querySelector("#imageInput");
+    const attachmentTray = document.querySelector("#attachmentTray");
+    const micButton = document.querySelector("#micButton");
+    const speechPanel = document.querySelector("#speechPanel");
+
+    attachButton.addEventListener("click", () => {
+      attachmentMenu.classList.toggle("open");
+    });
+
+    addImageButton.addEventListener("click", () => {
+      attachmentMenu.classList.remove("open");
+      imageInput.click();
+    });
+
+    micButton.addEventListener("click", () => {
+      speechPanel.classList.toggle("open");
+      if (speechPanel.classList.contains("open")) {
+        document.querySelector("#voiceTranscript").focus();
+      }
+    });
+
+    document.addEventListener("click", (event) => {
+      if (!attachmentMenu.contains(event.target) && !attachButton.contains(event.target)) {
+        attachmentMenu.classList.remove("open");
+      }
+    });
+
+    function renderAttachmentTray() {
+      const imageFile = imageInput.files && imageInput.files[0];
+      attachmentTray.innerHTML = "";
+
+      if (!imageFile) {
+        attachmentTray.style.display = "none";
+        return;
+      }
+
+      attachmentTray.style.display = "flex";
+      const pill = document.createElement("div");
+      pill.className = "attachment-pill";
+      pill.innerHTML = `<span>Image</span><strong>${imageFile.name}</strong>`;
+
+      const remove = document.createElement("button");
+      remove.className = "remove-attachment";
+      remove.type = "button";
+      remove.textContent = "x";
+      remove.addEventListener("click", () => {
+        imageInput.value = "";
+        renderAttachmentTray();
+      });
+
+      pill.appendChild(remove);
+      attachmentTray.appendChild(pill);
+    }
+
+    imageInput.addEventListener("change", renderAttachmentTray);
+
+    form.addEventListener("submit", async (event) => {
+      event.preventDefault();
+      const prompt = promptInput.value.trim();
+      if (!prompt) return;
+
+      addMessage("user", prompt);
+      promptInput.value = "";
+      sendButton.disabled = true;
+      sendButton.textContent = "Generating...";
+      const pending = addMessage("assistant", "Running DriveLoop...");
+
+      try {
+        const summary = await generateScenario(prompt);
+        pending.remove();
+        addResult(summary);
+      } catch (error) {
+        pending.querySelector(".bubble").textContent = `Generation failed: ${error.message}`;
+      } finally {
+        sendButton.disabled = false;
+        sendButton.textContent = "Generate";
+      }
+    });
+  </script>
+</body>
+</html>

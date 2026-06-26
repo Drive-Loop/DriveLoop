@@ -48,7 +48,9 @@ class DriveDreamer2_Tester(Tester):
                     mv_video=data_config.is_multiview, 
                     view=data_config.view,
                     shuffle=data_config.shuffle,
-                    logger=self.logger),
+                    logger=self.logger,
+                    resample_num_workers=data_config.get('resample_num_workers', 0),
+                    resample_batch_size=data_config.get('resample_batch_size', 8)), 
             collate_fn=VideoCollator(
                 frame_num=self.frame_num,
                 img_mask_type=data_config.img_mask_type,
@@ -153,6 +155,7 @@ class DriveDreamer2_Tester(Tester):
                             max_guidance_scale=self.kwargs.get('max_guidance_scale', 7.5),
                             num_inference_steps=self.num_inf_steps,
                             num_frames=self.frame_num,
+                            decode_chunk_size=1,
                             first_frame=True,
                         )
                         
@@ -175,11 +178,13 @@ class DriveDreamer2_Tester(Tester):
                                 max_guidance_scale=self.kwargs.get('max_guidance_scale', 7.5),
                                 num_inference_steps=self.num_inf_steps,
                                 num_frames=self.frame_num,
+                                decode_chunk_size=1,
                                 first_frame=True,
                             )
                     images=images.frames[0]
                     if save_dir is not None:
                         images = draw_mv_video(images, batch_dict)
                         imageio.mimsave(os.path.join(save_dir, '{:06d}.mp4'.format(idx)), images, fps=self.fps)
-                    idx += 1     
+                    idx += 1
+                    break
         self.accelerator.wait_for_everyone()

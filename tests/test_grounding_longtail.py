@@ -44,3 +44,19 @@ class GroundingLongTailTest(unittest.TestCase):
 
 if __name__ == "__main__":
     unittest.main()
+
+def test_pedestrian_crossing_does_not_trigger_animal_crossing():
+    from driveloop import DriveLoopRequest
+    from driveloop.grounding import RuleBasedGrounder
+    from driveloop.longtail import LongTailController
+
+    request = DriveLoopRequest(
+        prompt="rainy night intersection, a pedestrian crosses in front of the ego vehicle"
+    )
+    spec = RuleBasedGrounder().ground(request)
+    plan = LongTailController().build(spec)
+
+    assert "pedestrian" in {obj.category for obj in spec.objects}
+    assert "crossing" in spec.motion_primitives
+    assert "animal_crossing" not in plan.tags
+    assert all("animal crossing" not in suffix for suffix in plan.prompt_suffixes)
