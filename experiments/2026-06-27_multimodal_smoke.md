@@ -384,3 +384,28 @@ Validation:
 
 Interpretation:
 The draft is now structurally auditable before any tensor-level override work. The next safe step is projection-only validation using the baseline mini sample camera intrinsic, without writing modified boxes into the dataset.
+
+## 2026-06-27 Box Draft Projection Validator
+
+Added projection-only validation for `box_synthesis_draft`.
+
+The validator now propagates the baseline mini sample `cam_intrinsic` into the draft validator and performs a lightweight projection check for draft boxes.
+
+Current validated bicycle draft:
+- projection control level: `validator_only`
+- projection finite: `true`
+- projected 2D range min: `[1336.99, 536.27]`
+- projected 2D range max: `[1434.68, 660.47]`
+- projection method: axis-aligned draft corners with baseline `cam_intrinsic`
+
+Current safety boundary:
+- no dataset write
+- no image-box canvas rendering
+- no DriveDreamer-2 tensor override
+- projection validator only checks geometry feasibility
+
+Validation:
+- Full unit test suite result: `46 passed`.
+
+Interpretation:
+The draft box is now structurally valid and projection-feasible under the baseline mini camera intrinsic. The next safe step is an image-box canvas dry run that renders only an in-memory validation artifact or summary, without replacing DD2 dataset inputs.
