@@ -90,6 +90,11 @@ class DriveDreamer2Backend(GenerationBackend):
         shutil.copy2(baseline_video, artifact_video)
 
         baseline_structural_snapshot = self._build_baseline_structural_snapshot()
+        structural_request_diff = self._build_structural_request_diff(
+            structural_input_plan=structural_input_plan,
+            baseline_structural_snapshot=baseline_structural_snapshot,
+            trace_metadata=trace_metadata,
+        )
 
         return Generation(
             iteration=iteration,
@@ -113,8 +118,88 @@ class DriveDreamer2Backend(GenerationBackend):
                 if isinstance(structural_input_plan, dict)
                 else None,
                 "dd2_baseline_structural_snapshot": baseline_structural_snapshot,
+                "dd2_structural_request_diff": structural_request_diff,
             },
         )
+
+    def _build_structural_request_diff(
+        self,
+        structural_input_plan: dict,
+        baseline_structural_snapshot: dict,
+        trace_metadata: dict,
+    ) -> dict:
+        if not isinstance(structural_input_plan, dict) or not structural_input_plan:
+            return {
+                "available": False,
+                "reason": "missing_structural_input_plan",
+            }
+
+        sample = baseline_structural_snapshot.get("sample", {})
+        if not sample.get("available", False):
+            return {
+                "available": False,
+                "reason": "missing_baseline_sample",
+            }
+
+        requested_labels = list(
+            structural_input_plan.get("labels", {}).get("values", [])
+        )
+        baseline_labels = self._canonicalize_baseline_labels(
+            sample.get("labels3d_preview", [])
+        )
+
+        requested_scene_description = structural_input_plan.get(
+            "scene_description", {}
+        ).get("value")
+        baseline_scene_description = sample.get("scene_description")
+
+        requested_set = set(requested_labels)
+        baseline_set = set(baseline_labels)
+
+        return {
+            "available": True,
+            "requested_labels": requested_labels,
+            "baseline_labels": baseline_labels,
+            "missing_requested_labels": sorted(requested_set - baseline_set),
+            "extra_baseline_labels": sorted(baseline_set - requested_set),
+            "requested_scene_description": requested_scene_description,
+            "baseline_scene_description": baseline_scene_description,
+            "scene_description_changed": requested_scene_description != baseline_scene_description,
+            "tensor_override_ready": trace_metadata.get("tensor_control_ready")
+            if isinstance(trace_metadata, dict)
+            else None,
+        }
+
+    def _canonicalize_baseline_labels(self, labels3d_preview: list) -> list:
+        labels = []
+        aliases = {
+            "vehicle": None,
+            "human": None,
+            "adult": "pedestrian",
+            "child": "pedestrian",
+            "bicycle": "bicycle",
+            "car": "car",
+            "truck": "truck",
+            "bus": "bus",
+            "motorcycle": "motorcycle",
+            "pedestrian": "pedestrian",
+        }
+
+        for label in labels3d_preview:
+            if isinstance(label, str):
+                raw_parts = label.split(".")
+            elif isinstance(label, (list, tuple)):
+                raw_parts = [str(part) for part in label]
+            else:
+                continue
+
+            for part in raw_parts:
+                canonical = aliases.get(part)
+                if canonical:
+                    labels.append(canonical)
+                    break
+
+        return list(dict.fromkeys(labels))
 
     def _build_baseline_structural_snapshot(self) -> dict:
         dataset_dir = self.baseline_dataset_dir

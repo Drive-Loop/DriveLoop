@@ -212,3 +212,99 @@ def test_drivedreamer2_backend_records_baseline_structural_snapshot(monkeypatch,
     assert snapshot["sample"]["ori_labels3d_count"] == 2
     assert snapshot["sample"]["ori_labels3d_preview"] == ["human.pedestrian.adult", "vehicle.bicycle"]
 
+def test_drivedreamer2_backend_records_requested_vs_baseline_structural_diff(monkeypatch, tmp_path):
+    baseline_output_dir = tmp_path / "baseline"
+    baseline_output_dir.mkdir()
+    baseline_video = baseline_output_dir / "000000.mp4"
+
+    dataset_root = tmp_path / "mini_dataset"
+    labels_dir = dataset_root / "labels"
+    images_dir = dataset_root / "images"
+    hdmaps_dir = dataset_root / "hdmaps"
+    labels_dir.mkdir(parents=True)
+    images_dir.mkdir()
+    hdmaps_dir.mkdir()
+
+    (dataset_root / "config.json").write_text(
+        '{"_class_name": "Dataset", "config_paths": ["labels/config.json", "images/config.json", "hdmaps/config.json"]}',
+        encoding="utf-8",
+    )
+    (labels_dir / "config.json").write_text(
+        '{"_class_name": "PklDataset", "_key_names": ["boxes3d", "ori_labels3d", "scene_description"], "data_size": 1}',
+        encoding="utf-8",
+    )
+    (images_dir / "config.json").write_text(
+        '{"_class_name": "LmdbDataset", "_key_names": ["image"], "data_size": 1, "data_type": "image", "data_name": "image"}',
+        encoding="utf-8",
+    )
+    (hdmaps_dir / "config.json").write_text(
+        '{"_class_name": "LmdbDataset", "_key_names": ["image_hdmap"], "data_size": 1, "data_type": "image", "data_name": "image_hdmap"}',
+        encoding="utf-8",
+    )
+
+    import pickle
+    import numpy as np
+
+    with (labels_dir / "data.pkl").open("wb") as f:
+        pickle.dump(
+            [
+                {
+                    "scene_description": "clear daytime road with a car",
+                    "boxes3d": np.zeros((1, 9), dtype=np.float32),
+                    "ori_labels3d": ["vehicle.car"],
+                    "labels3d": [["vehicle", "car"]],
+                }
+            ],
+            f,
+        )
+
+    def fake_run(cmd, cwd, env, check, text, timeout):
+        baseline_video.write_bytes(b"fake video")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("driveloop.backends.drivedreamer2.subprocess.run", fake_run)
+
+    structural_input_plan = {
+        "scene_description": {
+            "value": "rainy night intersection with a pedestrian crossing and a bicycle cut in"
+        },
+        "labels": {
+            "values": ["pedestrian", "bicycle"],
+        },
+    }
+
+    backend = DriveDreamer2Backend(
+        project_root=tmp_path,
+        baseline_output_dir=baseline_output_dir,
+        baseline_dataset_dir=dataset_root,
+        artifact_dir=tmp_path / "artifacts",
+        python_executable="python",
+        timeout_seconds=123,
+    )
+    request = DriveLoopRequest(
+        prompt="base prompt",
+        condition={
+            "dd2_condition": {
+                "text_prompt": "rainy night intersection with a pedestrian crossing and a bicycle cut in",
+                "executable_condition": {
+                    "schema_version": "dd2_executable_condition.v0",
+                    "structural_input_plan": structural_input_plan,
+                    "trace_metadata": {"tensor_control_ready": False},
+                },
+            }
+        },
+    )
+
+    generation = backend.generate(request, iteration=0)
+    diff = generation.metadata["dd2_structural_request_diff"]
+
+    assert diff["available"] is True
+    assert diff["requested_labels"] == ["pedestrian", "bicycle"]
+    assert diff["baseline_labels"] == ["car"]
+    assert diff["missing_requested_labels"] == ["bicycle", "pedestrian"]
+    assert diff["extra_baseline_labels"] == ["car"]
+    assert diff["requested_scene_description"] == structural_input_plan["scene_description"]["value"]
+    assert diff["baseline_scene_description"] == "clear daytime road with a car"
+    assert diff["scene_description_changed"] is True
+    assert diff["tensor_override_ready"] is False
+

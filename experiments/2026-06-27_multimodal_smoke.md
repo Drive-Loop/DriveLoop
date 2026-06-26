@@ -236,3 +236,28 @@ Validation:
 
 Interpretation:
 This snapshot does not read or rewrite LMDB image/HDMap payloads. It records enough baseline structure to compare future DriveLoop tensor overrides against the current mini dataset inputs.
+
+## 2026-06-27 Structural Request Diff
+
+Added a backend-side requested-vs-baseline structural diff.
+
+The backend now records `dd2_structural_request_diff`, comparing:
+- requested labels from `structural_input_plan.labels.values`
+- baseline labels from the mini dataset label snapshot
+- requested scene description from `structural_input_plan.scene_description.value`
+- baseline scene description from the mini dataset label snapshot
+- tensor override readiness from trace metadata
+
+Observed mini validation diff for requested labels `pedestrian, bicycle`:
+- baseline labels: `pedestrian, car`
+- missing requested labels: `bicycle`
+- extra baseline labels: `car`
+- scene description changed: `true`
+- tensor override ready: `false`
+
+Validation:
+- Added `test_drivedreamer2_backend_records_requested_vs_baseline_structural_diff`.
+- Full unit test suite result: `42 passed`.
+
+Interpretation:
+This diff makes the gap between DriveLoop semantic intent and the reused mini baseline structural inputs explicit before implementing tensor-level overrides.
