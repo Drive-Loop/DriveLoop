@@ -293,3 +293,55 @@ def test_generate_rejects_unknown_intent_backend():
     )
 
     assert response.status_code == 422
+
+
+def test_transcribe_endpoint_returns_asr_transcript():
+    from pathlib import Path
+    from driveloop.api.server import set_asr_provider_for_testing
+    from driveloop.intent.providers import TranscriptionResult
+
+    class FakeASRProvider:
+        def transcribe_file(self, audio_path: Path, content_type=None, filename=None):
+            assert audio_path.exists()
+            assert content_type == "audio/webm"
+            assert filename == "voice.webm"
+            return TranscriptionResult(
+                transcript="a cyclist cuts in from the left near an intersection",
+                backend="fake_asr",
+                status="ok",
+                language="en",
+                metadata={
+                    "filename": filename,
+                    "content_type": content_type,
+                },
+            )
+
+    set_asr_provider_for_testing(FakeASRProvider())
+    try:
+        response = client.post(
+            "/transcribe",
+            files={
+                "audio": ("voice.webm", b"fake audio bytes", "audio/webm"),
+            },
+        )
+    finally:
+        set_asr_provider_for_testing(None)
+
+    assert response.status_code == 200
+    body = response.json()
+    assert body["transcript"] == "a cyclist cuts in from the left near an intersection"
+    assert body["backend"] == "fake_asr"
+    assert body["status"] == "ok"
+    assert body["language"] == "en"
+    assert body["metadata"]["filename"] == "voice.webm"
+
+
+def test_transcribe_endpoint_rejects_empty_audio():
+    response = client.post(
+        "/transcribe",
+        files={
+            "audio": ("empty.webm", b"", "audio/webm"),
+        },
+    )
+
+    assert response.status_code == 400

@@ -1,6 +1,8 @@
 from __future__ import annotations
 
+import os
 from dataclasses import dataclass, field
+from pathlib import Path
 from typing import Any, Dict, List, Protocol
 
 
@@ -10,6 +12,85 @@ class ModalityEvidence:
     text: str
     metadata: Dict[str, Any] = field(default_factory=dict)
     status: str = "placeholder"
+
+
+@dataclass(frozen=True)
+class TranscriptionResult:
+    transcript: str
+    backend: str
+    status: str
+    language: str | None = None
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+
+class AudioTranscriptionProvider(Protocol):
+    def transcribe_file(
+        self,
+        audio_path: Path,
+        content_type: str | None = None,
+        filename: str | None = None,
+    ) -> TranscriptionResult:
+        ...
+
+
+class WhisperAudioTranscriptionProvider:
+    """Local ASR provider for uploaded or recorded voice prompts.
+
+    It prefers faster-whisper when installed, then falls back to openai-whisper.
+    Unit tests should inject a fake provider instead of loading a model.
+    """
+
+    def __init__(self, model_name: str | None = None) -> None:
+        self.model_name = model_name or os.environ.get("DRIVELOOP_ASR_MODEL", "base")
+
+    def transcribe_file(
+        self,
+        audio_path: Path,
+        content_type: str | None = None,
+        filename: str | None = None,
+    ) -> TranscriptionResult:
+        try:
+            from faster_whisper import WhisperModel  # type: ignore
+        except ImportError:
+            WhisperModel = None
+
+        if WhisperModel is not None:
+            model = WhisperModel(self.model_name, device=os.environ.get("DRIVELOOP_ASR_DEVICE", "cpu"))
+            segments, info = model.transcribe(str(audio_path))
+            transcript = " ".join(segment.text.strip() for segment in segments).strip()
+            return TranscriptionResult(
+                transcript=transcript,
+                backend="faster_whisper",
+                status="ok",
+                language=getattr(info, "language", None),
+                metadata={
+                    "model": self.model_name,
+                    "filename": filename,
+                    "content_type": content_type,
+                },
+            )
+
+        try:
+            import whisper  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError(
+                "No ASR backend is installed. Install faster-whisper or openai-whisper."
+            ) from exc
+
+        model = whisper.load_model(self.model_name)
+        result = model.transcribe(str(audio_path))
+        return TranscriptionResult(
+            transcript=str(result.get("text", "")).strip(),
+            backend="openai_whisper",
+            status="ok",
+            language=result.get("language"),
+            metadata={
+                "model": self.model_name,
+                "filename": filename,
+                "content_type": content_type,
+            },
+        )
+
 
 
 class ImageUnderstandingProvider(Protocol):

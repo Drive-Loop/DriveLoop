@@ -1,9 +1,10 @@
 import json
+import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
 from uuid import uuid4
 
-from fastapi import FastAPI, HTTPException
+from fastapi import FastAPI, File, HTTPException, UploadFile
 from fastapi.responses import FileResponse
 from pydantic import BaseModel, Field
 
@@ -11,6 +12,7 @@ from driveloop.backends.drivedreamer2 import DriveDreamer2Backend
 from driveloop.backends.mock import MockGenerationBackend
 from driveloop.evaluators import RuleBasedEvaluator
 from driveloop.intent.adapter import MultimodalInputBundle, RuleBasedIntentAdapter
+from driveloop.intent.providers import AudioTranscriptionProvider, WhisperAudioTranscriptionProvider
 from driveloop.runner import DriveLoopConfig, DriveLoopRequest, DriveLoopRunner
 
 
@@ -39,6 +41,27 @@ class GenerateResponse(BaseModel):
     best_generation: Dict[str, Any]
     best_evaluation: Dict[str, Any]
     history: List[HistoryRecord]
+
+
+class TranscribeResponse(BaseModel):
+    transcript: str
+    backend: str
+    status: str
+    language: Optional[str] = None
+    metadata: Dict[str, Any] = Field(default_factory=dict)
+
+
+_asr_provider_override: Optional[AudioTranscriptionProvider] = None
+
+
+def set_asr_provider_for_testing(provider: Optional[AudioTranscriptionProvider]) -> None:
+    global _asr_provider_override
+    _asr_provider_override = provider
+
+
+def _get_asr_provider() -> AudioTranscriptionProvider:
+    return _asr_provider_override or WhisperAudioTranscriptionProvider()
+
 
 
 app = FastAPI(title="DriveLoop API", version="0.1.0")
@@ -154,6 +177,35 @@ def get_summary(scenario_id: str):
         "multimodal_inputs": request_record.get("metadata", {}),
         "structured_intent": request_record.get("structured_intent", {}),
     }
+
+
+@app.post("/transcribe", response_model=TranscribeResponse)
+async def transcribe_voice(audio: UploadFile = File(...)):
+    suffix = Path(audio.filename or "voice_prompt.webm").suffix or ".webm"
+    with tempfile.NamedTemporaryFile(prefix="driveloop_voice_", suffix=suffix, delete=True) as tmp:
+        content = await audio.read()
+        if not content:
+            raise HTTPException(status_code=400, detail="Uploaded audio is empty")
+        tmp.write(content)
+        tmp.flush()
+
+        try:
+            result = _get_asr_provider().transcribe_file(
+                Path(tmp.name),
+                content_type=audio.content_type,
+                filename=audio.filename,
+            )
+        except RuntimeError as exc:
+            raise HTTPException(status_code=503, detail=str(exc)) from exc
+
+    return TranscribeResponse(
+        transcript=result.transcript,
+        backend=result.backend,
+        status=result.status,
+        language=result.language,
+        metadata=result.metadata,
+    )
+
 
 
 @app.post("/generate", response_model=GenerateResponse)
