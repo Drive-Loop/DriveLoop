@@ -917,12 +917,18 @@
 
     startRecordButton.addEventListener("click", async () => {
       if (!navigator.mediaDevices || !window.MediaRecorder) {
-        setTranscriptionStatus("Recording is not supported in this browser");
+        setTranscriptionStatus("Recording is not supported in this browser. Please use Upload audio.");
         return;
       }
 
       try {
-        activeAudioStream = await navigator.mediaDevices.getUserMedia({audio: true});
+        activeAudioStream = await navigator.mediaDevices.getUserMedia({
+          audio: {
+            echoCancellation: false,
+            noiseSuppression: false,
+            autoGainControl: true,
+          },
+        });
         recordedChunks = [];
         const preferredMimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
           ? "audio/webm;codecs=opus"
@@ -930,25 +936,32 @@
         mediaRecorder = preferredMimeType
           ? new MediaRecorder(activeAudioStream, {mimeType: preferredMimeType})
           : new MediaRecorder(activeAudioStream);
+
         mediaRecorder.addEventListener("dataavailable", (event) => {
-          if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+          if (event.data && event.data.size > 0) {
+            recordedChunks.push(event.data);
+          }
         });
+
         mediaRecorder.addEventListener("stop", async () => {
           const blob = new Blob(recordedChunks, {type: mediaRecorder.mimeType || "audio/webm"});
-          activeAudioStream.getTracks().forEach((track) => track.stop());
+          activeAudioStream?.getTracks().forEach((track) => track.stop());
+          activeAudioStream = null;
+          stopRecordButton.disabled = true;
+
           if (!blob.size) {
             setTranscriptionStatus("Recording was empty");
             startRecordButton.disabled = false;
             return;
           }
-          activeAudioStream = null;
-          stopRecordButton.disabled = true;
+
           try {
             await transcribeAudioBlob(blob, "recorded_voice.webm");
           } catch (error) {
             setTranscriptionStatus(`Transcription failed: ${error.message}`);
           }
         });
+
         mediaRecorder.start();
         startRecordButton.disabled = true;
         stopRecordButton.disabled = false;
@@ -960,6 +973,7 @@
 
     stopRecordButton.addEventListener("click", () => {
       if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        setTranscriptionStatus("Transcribing recording...");
         mediaRecorder.stop();
       }
     });

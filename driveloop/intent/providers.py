@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 import os
+import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Protocol
@@ -33,6 +34,33 @@ class AudioTranscriptionProvider(Protocol):
         ...
 
 
+_DRIVING_ASR_NORMALIZATION_RULES = [
+    (re.compile(r"\b4\s*g\s+night\b", re.IGNORECASE), "foggy night"),
+    (re.compile(r"\bfor\s+g\s+night\b", re.IGNORECASE), "foggy night"),
+    (re.compile(r"\bfour\s+g\s+night\b", re.IGNORECASE), "foggy night"),
+    (re.compile(r"\bago\s+bay\s+high\s+court\b", re.IGNORECASE), "ego vehicle"),
+    (re.compile(r"\baegean\s+(?:high\s+court|vehicle|car)\b", re.IGNORECASE), "ego vehicle"),
+    (re.compile(r"\bego\s+bay\s+high\s+court\b", re.IGNORECASE), "ego vehicle"),
+]
+
+
+def normalize_driving_asr_transcript(transcript: str):
+    normalized = transcript
+    applied = []
+    for pattern, replacement in _DRIVING_ASR_NORMALIZATION_RULES:
+        updated, count = pattern.subn(replacement, normalized)
+        if count:
+            applied.append(
+                {
+                    "pattern": pattern.pattern,
+                    "replacement": replacement,
+                    "count": count,
+                }
+            )
+            normalized = updated
+    return normalized, applied
+
+
 class WhisperAudioTranscriptionProvider:
     """Local ASR provider for uploaded or recorded voice prompts.
 
@@ -41,12 +69,10 @@ class WhisperAudioTranscriptionProvider:
     """
 
     def __init__(self, model_name: str | None = None) -> None:
-        self.model_name = model_name or os.environ.get("DRIVELOOP_ASR_MODEL", "base")
+        self.model_name = model_name or os.environ.get("DRIVELOOP_ASR_MODEL", "small")
         self.language = os.environ.get("DRIVELOOP_ASR_LANGUAGE", "en")
-        self.initial_prompt = os.environ.get(
-            "DRIVELOOP_ASR_INITIAL_PROMPT",
-            "Autonomous driving scene prompt with words such as foggy, night, intersection, cyclist, pedestrian, ego vehicle, cut in, left, right, crossing.",
-        )
+        self.initial_prompt = os.environ.get("DRIVELOOP_ASR_INITIAL_PROMPT", "").strip() or None
+        self.vad_filter = os.environ.get("DRIVELOOP_ASR_VAD_FILTER", "0") == "1"
 
     def transcribe_file(
         self,
@@ -66,9 +92,13 @@ class WhisperAudioTranscriptionProvider:
                 str(audio_path),
                 language=language,
                 initial_prompt=self.initial_prompt,
-                vad_filter=True,
+                vad_filter=self.vad_filter,
+                beam_size=5,
             )
-            transcript = " ".join(segment.text.strip() for segment in segments).strip()
+            raw_transcript = " ".join(segment.text.strip() for segment in segments).strip()
+            transcript, normalization_rules = normalize_driving_asr_transcript(
+                raw_transcript
+            )
             return TranscriptionResult(
                 transcript=transcript,
                 backend="faster_whisper",
@@ -76,8 +106,13 @@ class WhisperAudioTranscriptionProvider:
                 language=getattr(info, "language", None),
                 metadata={
                     "model": self.model_name,
+                "vad_filter": self.vad_filter,
+                "initial_prompt_enabled": bool(self.initial_prompt),
                     "filename": filename,
                     "content_type": content_type,
+                    "raw_transcript": raw_transcript,
+                    "normalization_rules": normalization_rules,
+                    "normalized": transcript != raw_transcript,
                 },
             )
 
