@@ -1,7 +1,6 @@
 from __future__ import annotations
 
 import os
-import re
 from dataclasses import dataclass, field
 from pathlib import Path
 from typing import Any, Dict, List, Protocol
@@ -33,32 +32,6 @@ class AudioTranscriptionProvider(Protocol):
     ) -> TranscriptionResult:
         ...
 
-
-_DRIVING_ASR_NORMALIZATION_RULES = [
-    (re.compile(r"\b4\s*g\s+night\b", re.IGNORECASE), "foggy night"),
-    (re.compile(r"\bfor\s+g\s+night\b", re.IGNORECASE), "foggy night"),
-    (re.compile(r"\bfour\s+g\s+night\b", re.IGNORECASE), "foggy night"),
-    (re.compile(r"\bago\s+bay\s+high\s+court\b", re.IGNORECASE), "ego vehicle"),
-    (re.compile(r"\baegean\s+(?:high\s+court|vehicle|car)\b", re.IGNORECASE), "ego vehicle"),
-    (re.compile(r"\bego\s+bay\s+high\s+court\b", re.IGNORECASE), "ego vehicle"),
-]
-
-
-def normalize_driving_asr_transcript(transcript: str):
-    normalized = transcript
-    applied = []
-    for pattern, replacement in _DRIVING_ASR_NORMALIZATION_RULES:
-        updated, count = pattern.subn(replacement, normalized)
-        if count:
-            applied.append(
-                {
-                    "pattern": pattern.pattern,
-                    "replacement": replacement,
-                    "count": count,
-                }
-            )
-            normalized = updated
-    return normalized, applied
 
 
 class WhisperAudioTranscriptionProvider:
@@ -95,10 +68,7 @@ class WhisperAudioTranscriptionProvider:
                 vad_filter=self.vad_filter,
                 beam_size=5,
             )
-            raw_transcript = " ".join(segment.text.strip() for segment in segments).strip()
-            transcript, normalization_rules = normalize_driving_asr_transcript(
-                raw_transcript
-            )
+            transcript = " ".join(segment.text.strip() for segment in segments).strip()
             return TranscriptionResult(
                 transcript=transcript,
                 backend="faster_whisper",
@@ -110,9 +80,6 @@ class WhisperAudioTranscriptionProvider:
                 "initial_prompt_enabled": bool(self.initial_prompt),
                     "filename": filename,
                     "content_type": content_type,
-                    "raw_transcript": raw_transcript,
-                    "normalization_rules": normalization_rules,
-                    "normalized": transcript != raw_transcript,
                 },
             )
 
