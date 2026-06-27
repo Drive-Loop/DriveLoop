@@ -431,6 +431,30 @@
       border-radius: 14px;
     }
 
+    .speech-actions {
+      display: flex;
+      gap: 8px;
+      flex-wrap: wrap;
+      align-items: center;
+    }
+
+    .secondary-button {
+      border: 1px solid var(--line);
+      background: #f8fafc;
+      color: var(--text);
+      padding: 9px 12px;
+    }
+
+    .secondary-button:hover {
+      background: #eef2f7;
+      color: var(--text);
+    }
+
+    .status-text {
+      color: var(--muted);
+      font-size: 12px;
+    }
+
     .tools {
       max-width: 920px;
       margin: 8px auto 0;
@@ -568,6 +592,7 @@
                 <button id="attachButton" class="icon-button" type="button" aria-label="Open attachment menu">+</button>
                 <div id="attachmentMenu" class="attachment-menu">
                   <button id="addImageButton" class="menu-item" type="button"><span>📎</span><span>Add image</span></button>
+                  <button id="addAudioButton" class="menu-item" type="button"><span>🎙</span><span>Add audio</span></button>
                   <button class="menu-item" type="button" disabled><span>↗</span><span>Recent files</span></button>
                 </div>
               </div>
@@ -576,14 +601,21 @@
               <button id="send" type="submit">Generate</button>
             </div>
             <div id="speechPanel" class="speech-panel">
-              <input id="voiceTranscript" type="text" placeholder="Transcript placeholder" />
-              <div class="hint">Speech recognition is coming soon. For now, type transcript text here.</div>
+              <div class="speech-actions">
+                <button id="startRecordButton" class="secondary-button" type="button">Record</button>
+                <button id="stopRecordButton" class="secondary-button" type="button" disabled>Stop</button>
+                <button id="uploadAudioButton" class="secondary-button" type="button">Upload audio</button>
+                <span id="transcriptionStatus" class="status-text"></span>
+              </div>
+              <input id="voiceTranscript" type="text" placeholder="Voice transcript will appear here" />
+              <div class="hint">Record speech or upload an audio file. The transcript is sent as voice evidence for DriveLoop grounding.</div>
             </div>
           </div>
           <input id="imageInput" class="file-input" type="file" accept="image/*" />
+          <input id="audioInput" class="file-input" type="file" accept="audio/*" />
         </div>
         <div class="tools">
-          <span>Use + for image metadata. Use the microphone button for transcript placeholder metadata.</span>
+          <span>Use + for image or audio. Use the microphone button to record speech and transcribe it into voice prompt evidence.</span>
         </div>
       </form>
     </main>
@@ -744,7 +776,11 @@
         metadata.modalities.push("voice");
         metadata.voice = {
           transcript: voiceTranscript,
-          status: "placeholder",
+          status: voiceAsrMetadata ? "asr_transcribed" : "manual_transcript",
+          asr: voiceAsrMetadata || {
+            backend: "manual",
+            status: "manual",
+          },
         };
       }
 
@@ -787,10 +823,21 @@
     const attachButton = document.querySelector("#attachButton");
     const attachmentMenu = document.querySelector("#attachmentMenu");
     const addImageButton = document.querySelector("#addImageButton");
+    const addAudioButton = document.querySelector("#addAudioButton");
     const imageInput = document.querySelector("#imageInput");
+    const audioInput = document.querySelector("#audioInput");
     const attachmentTray = document.querySelector("#attachmentTray");
     const micButton = document.querySelector("#micButton");
     const speechPanel = document.querySelector("#speechPanel");
+    const voiceTranscriptInput = document.querySelector("#voiceTranscript");
+    const startRecordButton = document.querySelector("#startRecordButton");
+    const stopRecordButton = document.querySelector("#stopRecordButton");
+    const uploadAudioButton = document.querySelector("#uploadAudioButton");
+    const transcriptionStatus = document.querySelector("#transcriptionStatus");
+    let voiceAsrMetadata = null;
+    let mediaRecorder = null;
+    let recordedChunks = [];
+    let activeAudioStream = null;
 
     attachButton.addEventListener("click", () => {
       attachmentMenu.classList.toggle("open");
@@ -801,10 +848,113 @@
       imageInput.click();
     });
 
+    addAudioButton.addEventListener("click", () => {
+      attachmentMenu.classList.remove("open");
+      speechPanel.classList.add("open");
+      audioInput.click();
+    });
+
     micButton.addEventListener("click", () => {
       speechPanel.classList.toggle("open");
       if (speechPanel.classList.contains("open")) {
-        document.querySelector("#voiceTranscript").focus();
+        voiceTranscriptInput.focus();
+      }
+    });
+
+    function setTranscriptionStatus(message) {
+      transcriptionStatus.textContent = message || "";
+    }
+
+    async function transcribeAudioBlob(blob, filename) {
+      const formData = new FormData();
+      formData.append("audio", blob, filename);
+      setTranscriptionStatus("Transcribing...");
+      startRecordButton.disabled = true;
+      uploadAudioButton.disabled = true;
+
+      try {
+        const response = await fetch("/transcribe", {
+          method: "POST",
+          body: formData,
+        });
+        if (!response.ok) {
+          const error = await response.text();
+          throw new Error(error);
+        }
+        const result = await response.json();
+        voiceTranscriptInput.value = result.transcript || "";
+        voiceAsrMetadata = {
+          backend: result.backend,
+          status: result.status,
+          language: result.language,
+          metadata: result.metadata || {},
+        };
+        setTranscriptionStatus(result.transcript ? `Transcribed with ${result.backend}` : "No speech detected");
+        speechPanel.classList.add("open");
+        renderAttachmentTray();
+      } finally {
+        startRecordButton.disabled = false;
+        uploadAudioButton.disabled = false;
+      }
+    }
+
+    audioInput.addEventListener("change", async () => {
+      const audioFile = audioInput.files && audioInput.files[0];
+      if (!audioFile) return;
+      try {
+        await transcribeAudioBlob(audioFile, audioFile.name);
+      } catch (error) {
+        setTranscriptionStatus(`Transcription failed: ${error.message}`);
+      }
+    });
+
+    uploadAudioButton.addEventListener("click", () => {
+      audioInput.click();
+    });
+
+    startRecordButton.addEventListener("click", async () => {
+      if (!navigator.mediaDevices || !window.MediaRecorder) {
+        setTranscriptionStatus("Recording is not supported in this browser");
+        return;
+      }
+
+      try {
+        activeAudioStream = await navigator.mediaDevices.getUserMedia({audio: true});
+        recordedChunks = [];
+        mediaRecorder = new MediaRecorder(activeAudioStream);
+        mediaRecorder.addEventListener("dataavailable", (event) => {
+          if (event.data && event.data.size > 0) recordedChunks.push(event.data);
+        });
+        mediaRecorder.addEventListener("stop", async () => {
+          const blob = new Blob(recordedChunks, {type: mediaRecorder.mimeType || "audio/webm"});
+          activeAudioStream.getTracks().forEach((track) => track.stop());
+          activeAudioStream = null;
+          stopRecordButton.disabled = true;
+          try {
+            await transcribeAudioBlob(blob, "recorded_voice.webm");
+          } catch (error) {
+            setTranscriptionStatus(`Transcription failed: ${error.message}`);
+          }
+        });
+        mediaRecorder.start();
+        startRecordButton.disabled = true;
+        stopRecordButton.disabled = false;
+        setTranscriptionStatus("Recording...");
+      } catch (error) {
+        setTranscriptionStatus(`Recording failed: ${error.message}`);
+      }
+    });
+
+    stopRecordButton.addEventListener("click", () => {
+      if (mediaRecorder && mediaRecorder.state !== "inactive") {
+        mediaRecorder.stop();
+      }
+    });
+
+    voiceTranscriptInput.addEventListener("input", () => {
+      if (!voiceTranscriptInput.value.trim()) {
+        voiceAsrMetadata = null;
+        setTranscriptionStatus("");
       }
     });
 
@@ -816,32 +966,58 @@
 
     function renderAttachmentTray() {
       const imageFile = imageInput.files && imageInput.files[0];
+      const audioFile = audioInput.files && audioInput.files[0];
+      const hasVoice = Boolean(voiceTranscriptInput.value.trim());
       attachmentTray.innerHTML = "";
 
-      if (!imageFile) {
+      if (!imageFile && !audioFile && !hasVoice) {
         attachmentTray.style.display = "none";
         return;
       }
 
       attachmentTray.style.display = "flex";
-      const pill = document.createElement("div");
-      pill.className = "attachment-pill";
-      pill.innerHTML = `<span>Image</span><strong>${imageFile.name}</strong>`;
 
-      const remove = document.createElement("button");
-      remove.className = "remove-attachment";
-      remove.type = "button";
-      remove.textContent = "x";
-      remove.addEventListener("click", () => {
-        imageInput.value = "";
-        renderAttachmentTray();
-      });
+      function addPill(kind, label, onRemove) {
+        const pill = document.createElement("div");
+        pill.className = "attachment-pill";
+        pill.innerHTML = `<span>${kind}</span><strong>${label}</strong>`;
 
-      pill.appendChild(remove);
-      attachmentTray.appendChild(pill);
+        const remove = document.createElement("button");
+        remove.className = "remove-attachment";
+        remove.type = "button";
+        remove.textContent = "x";
+        remove.addEventListener("click", onRemove);
+
+        pill.appendChild(remove);
+        attachmentTray.appendChild(pill);
+      }
+
+      if (imageFile) {
+        addPill("Image", imageFile.name, () => {
+          imageInput.value = "";
+          renderAttachmentTray();
+        });
+      }
+
+      if (audioFile) {
+        addPill("Audio", audioFile.name, () => {
+          audioInput.value = "";
+          renderAttachmentTray();
+        });
+      }
+
+      if (hasVoice) {
+        addPill("Voice", voiceTranscriptInput.value.slice(0, 48), () => {
+          voiceTranscriptInput.value = "";
+          voiceAsrMetadata = null;
+          setTranscriptionStatus("");
+          renderAttachmentTray();
+        });
+      }
     }
 
     imageInput.addEventListener("change", renderAttachmentTray);
+    voiceTranscriptInput.addEventListener("input", renderAttachmentTray);
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
@@ -860,7 +1036,10 @@
         addResult(summary);
         imageInput.value = "";
         renderAttachmentTray();
-        document.querySelector("#voiceTranscript").value = "";
+        voiceTranscriptInput.value = "";
+        voiceAsrMetadata = null;
+        audioInput.value = "";
+        setTranscriptionStatus("");
         speechPanel.classList.remove("open");
       } catch (error) {
         pending.querySelector(".bubble").textContent = `Generation failed: ${error.message}`;
