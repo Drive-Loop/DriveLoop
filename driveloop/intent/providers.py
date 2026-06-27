@@ -42,6 +42,11 @@ class WhisperAudioTranscriptionProvider:
 
     def __init__(self, model_name: str | None = None) -> None:
         self.model_name = model_name or os.environ.get("DRIVELOOP_ASR_MODEL", "base")
+        self.language = os.environ.get("DRIVELOOP_ASR_LANGUAGE", "en")
+        self.initial_prompt = os.environ.get(
+            "DRIVELOOP_ASR_INITIAL_PROMPT",
+            "Autonomous driving scene prompt with words such as foggy, night, intersection, cyclist, pedestrian, ego vehicle, cut in, left, right, crossing.",
+        )
 
     def transcribe_file(
         self,
@@ -56,7 +61,13 @@ class WhisperAudioTranscriptionProvider:
 
         if WhisperModel is not None:
             model = WhisperModel(self.model_name, device=os.environ.get("DRIVELOOP_ASR_DEVICE", "cpu"))
-            segments, info = model.transcribe(str(audio_path))
+            language = None if self.language == "auto" else self.language
+            segments, info = model.transcribe(
+                str(audio_path),
+                language=language,
+                initial_prompt=self.initial_prompt,
+                vad_filter=True,
+            )
             transcript = " ".join(segment.text.strip() for segment in segments).strip()
             return TranscriptionResult(
                 transcript=transcript,
@@ -78,7 +89,12 @@ class WhisperAudioTranscriptionProvider:
             ) from exc
 
         model = whisper.load_model(self.model_name)
-        result = model.transcribe(str(audio_path))
+        language = None if self.language == "auto" else self.language
+        result = model.transcribe(
+            str(audio_path),
+            language=language,
+            initial_prompt=self.initial_prompt,
+        )
         return TranscriptionResult(
             transcript=str(result.get("text", "")).strip(),
             backend="openai_whisper",

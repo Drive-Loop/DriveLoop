@@ -596,7 +596,7 @@
                   <button class="menu-item" type="button" disabled><span>↗</span><span>Recent files</span></button>
                 </div>
               </div>
-              <textarea id="prompt" placeholder="Describe a driving scenario..." required></textarea>
+              <textarea id="prompt" placeholder="Describe a driving scenario..."></textarea>
               <button id="micButton" class="icon-button mic-button" type="button" aria-label="Speech input">🎙</button>
               <button id="send" type="submit">Generate</button>
             </div>
@@ -883,6 +883,9 @@
         }
         const result = await response.json();
         voiceTranscriptInput.value = result.transcript || "";
+        if (!promptInput.value.trim() && result.transcript) {
+          promptInput.value = result.transcript;
+        }
         voiceAsrMetadata = {
           backend: result.backend,
           status: result.status,
@@ -921,13 +924,23 @@
       try {
         activeAudioStream = await navigator.mediaDevices.getUserMedia({audio: true});
         recordedChunks = [];
-        mediaRecorder = new MediaRecorder(activeAudioStream);
+        const preferredMimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
+          ? "audio/webm;codecs=opus"
+          : "";
+        mediaRecorder = preferredMimeType
+          ? new MediaRecorder(activeAudioStream, {mimeType: preferredMimeType})
+          : new MediaRecorder(activeAudioStream);
         mediaRecorder.addEventListener("dataavailable", (event) => {
           if (event.data && event.data.size > 0) recordedChunks.push(event.data);
         });
         mediaRecorder.addEventListener("stop", async () => {
           const blob = new Blob(recordedChunks, {type: mediaRecorder.mimeType || "audio/webm"});
           activeAudioStream.getTracks().forEach((track) => track.stop());
+          if (!blob.size) {
+            setTranscriptionStatus("Recording was empty");
+            startRecordButton.disabled = false;
+            return;
+          }
           activeAudioStream = null;
           stopRecordButton.disabled = true;
           try {
@@ -1021,8 +1034,11 @@
 
     form.addEventListener("submit", async (event) => {
       event.preventDefault();
-      const prompt = promptInput.value.trim();
-      if (!prompt) return;
+      const prompt = promptInput.value.trim() || voiceTranscriptInput.value.trim();
+      if (!prompt) {
+        addMessage("assistant", "Please enter a prompt, record speech, or upload audio first.");
+        return;
+      }
 
       addMessage("user", prompt);
       promptInput.value = "";
@@ -1035,12 +1051,12 @@
         pending.remove();
         addResult(summary);
         imageInput.value = "";
-        renderAttachmentTray();
+        audioInput.value = "";
         voiceTranscriptInput.value = "";
         voiceAsrMetadata = null;
-        audioInput.value = "";
         setTranscriptionStatus("");
         speechPanel.classList.remove("open");
+        renderAttachmentTray();
       } catch (error) {
         pending.querySelector(".bubble").textContent = `Generation failed: ${error.message}`;
       } finally {
