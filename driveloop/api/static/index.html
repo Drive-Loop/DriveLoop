@@ -602,20 +602,18 @@
             </div>
             <div id="speechPanel" class="speech-panel">
               <div class="speech-actions">
-                <button id="startRecordButton" class="secondary-button" type="button">Record</button>
-                <button id="stopRecordButton" class="secondary-button" type="button" disabled>Stop</button>
                 <button id="uploadAudioButton" class="secondary-button" type="button">Upload audio</button>
                 <span id="transcriptionStatus" class="status-text"></span>
               </div>
               <input id="voiceTranscript" type="text" placeholder="Voice transcript will appear here" />
-              <div class="hint">Record speech or upload an audio file. The transcript is sent as voice evidence for DriveLoop grounding.</div>
+              <div class="hint">Upload an audio file. Review or edit the transcript before generating.</div>
             </div>
           </div>
           <input id="imageInput" class="file-input" type="file" accept="image/*" />
           <input id="audioInput" class="file-input" type="file" accept="audio/*" />
         </div>
         <div class="tools">
-          <span>Use + for image or audio. Use the microphone button to record speech and transcribe it into voice prompt evidence.</span>
+          <span>Use + for image or audio. Uploaded speech is transcribed into editable voice prompt evidence.</span>
         </div>
       </form>
     </main>
@@ -830,14 +828,9 @@
     const micButton = document.querySelector("#micButton");
     const speechPanel = document.querySelector("#speechPanel");
     const voiceTranscriptInput = document.querySelector("#voiceTranscript");
-    const startRecordButton = document.querySelector("#startRecordButton");
-    const stopRecordButton = document.querySelector("#stopRecordButton");
     const uploadAudioButton = document.querySelector("#uploadAudioButton");
     const transcriptionStatus = document.querySelector("#transcriptionStatus");
     let voiceAsrMetadata = null;
-    let mediaRecorder = null;
-    let recordedChunks = [];
-    let activeAudioStream = null;
 
     attachButton.addEventListener("click", () => {
       attachmentMenu.classList.toggle("open");
@@ -869,7 +862,6 @@
       const formData = new FormData();
       formData.append("audio", blob, filename);
       setTranscriptionStatus("Transcribing...");
-      startRecordButton.disabled = true;
       uploadAudioButton.disabled = true;
 
       try {
@@ -896,7 +888,6 @@
         speechPanel.classList.add("open");
         renderAttachmentTray();
       } finally {
-        startRecordButton.disabled = false;
         uploadAudioButton.disabled = false;
       }
     }
@@ -915,68 +906,7 @@
       audioInput.click();
     });
 
-    startRecordButton.addEventListener("click", async () => {
-      if (!navigator.mediaDevices || !window.MediaRecorder) {
-        setTranscriptionStatus("Recording is not supported in this browser. Please use Upload audio.");
-        return;
-      }
 
-      try {
-        activeAudioStream = await navigator.mediaDevices.getUserMedia({
-          audio: {
-            echoCancellation: false,
-            noiseSuppression: false,
-            autoGainControl: true,
-          },
-        });
-        recordedChunks = [];
-        const preferredMimeType = MediaRecorder.isTypeSupported("audio/webm;codecs=opus")
-          ? "audio/webm;codecs=opus"
-          : "";
-        mediaRecorder = preferredMimeType
-          ? new MediaRecorder(activeAudioStream, {mimeType: preferredMimeType})
-          : new MediaRecorder(activeAudioStream);
-
-        mediaRecorder.addEventListener("dataavailable", (event) => {
-          if (event.data && event.data.size > 0) {
-            recordedChunks.push(event.data);
-          }
-        });
-
-        mediaRecorder.addEventListener("stop", async () => {
-          const blob = new Blob(recordedChunks, {type: mediaRecorder.mimeType || "audio/webm"});
-          activeAudioStream?.getTracks().forEach((track) => track.stop());
-          activeAudioStream = null;
-          stopRecordButton.disabled = true;
-
-          if (!blob.size) {
-            setTranscriptionStatus("Recording was empty");
-            startRecordButton.disabled = false;
-            return;
-          }
-
-          try {
-            await transcribeAudioBlob(blob, "recorded_voice.webm");
-          } catch (error) {
-            setTranscriptionStatus(`Transcription failed: ${error.message}`);
-          }
-        });
-
-        mediaRecorder.start();
-        startRecordButton.disabled = true;
-        stopRecordButton.disabled = false;
-        setTranscriptionStatus("Recording...");
-      } catch (error) {
-        setTranscriptionStatus(`Recording failed: ${error.message}`);
-      }
-    });
-
-    stopRecordButton.addEventListener("click", () => {
-      if (mediaRecorder && mediaRecorder.state !== "inactive") {
-        setTranscriptionStatus("Transcribing recording...");
-        mediaRecorder.stop();
-      }
-    });
 
     voiceTranscriptInput.addEventListener("input", () => {
       if (!voiceTranscriptInput.value.trim()) {
