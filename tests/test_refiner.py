@@ -19,6 +19,8 @@ def test_refiner_keeps_prompt_when_alignment_not_measured_only():
 
     assert refinement.prompt == request.prompt
     assert "run prompt-video alignment review before claiming semantic success" in refinement.notes
+    assert refinement.condition["alignment_feedback"]["status"] == "not_measured"
+    assert refinement.condition["alignment_feedback"]["control_level"] == "text_feedback_only"
 
 
 def test_refiner_adds_text_constraints_for_failed_alignment_checks():
@@ -40,6 +42,14 @@ def test_refiner_adds_text_constraints_for_failed_alignment_checks():
     assert "a motorcycle must be visibly present" in refinement.prompt
     assert "the motorcycle performs a visible lane change from the left" in refinement.prompt
     assert "panoramic multi-view video" in refinement.prompt
+    feedback = refinement.condition["alignment_feedback"]
+    assert feedback["status"] == "measured_failed"
+    assert feedback["control_level"] == "text_feedback_only"
+    assert feedback["failed_checks"] == [
+        "object_presence.motorcycle",
+        "spatial_relation.left_lane_change",
+    ]
+    assert "a motorcycle must be visibly present" in feedback["requested_visual_constraints"]
 
 
 def test_refiner_preserves_existing_prompt_quality_refinement():

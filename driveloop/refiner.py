@@ -37,19 +37,20 @@ class RuleBasedRefiner:
         if additions:
             prompt = prompt.rstrip(".") + ", " + ", ".join(dict.fromkeys(additions)) + "."
 
+        condition = dict(request.condition)
+        alignment_feedback = self._alignment_feedback(evaluation, alignment_additions)
+        if alignment_feedback:
+            condition["alignment_feedback"] = alignment_feedback
+
         return Refinement(
             prompt=prompt,
-            condition=dict(request.condition),
+            condition=condition,
             notes=list(dict.fromkeys(notes)),
         )
 
     def _alignment_prompt_additions(self, evaluation: Evaluation) -> list[str]:
         additions: list[str] = []
-        for reason in evaluation.diagnosis.reasons:
-            if not reason.startswith(self.ALIGNMENT_REASON_PREFIX):
-                continue
-
-            check_name = reason[len(self.ALIGNMENT_REASON_PREFIX):]
+        for check_name in self._failed_alignment_checks(evaluation):
             if check_name == "object_presence.motorcycle":
                 additions.append("a motorcycle must be visibly present")
             elif check_name == "spatial_relation.left_lane_change":
@@ -60,3 +61,34 @@ class RuleBasedRefiner:
                 additions.append("urban road scene")
 
         return additions
+
+    def _alignment_feedback(
+        self,
+        evaluation: Evaluation,
+        requested_visual_constraints: list[str],
+    ) -> dict[str, object]:
+        failed_checks = self._failed_alignment_checks(evaluation)
+        not_measured = "video_alignment_not_measured" in evaluation.diagnosis.reasons
+
+        if not failed_checks and not not_measured:
+            return {}
+
+        return {
+            "schema_version": "driveloop_alignment_feedback.v0",
+            "status": "not_measured" if not_measured else "measured_failed",
+            "control_level": "text_feedback_only",
+            "failed_checks": failed_checks,
+            "requested_visual_constraints": list(dict.fromkeys(requested_visual_constraints)),
+            "diagnosis_reasons": list(evaluation.diagnosis.reasons),
+            "claim_boundary": (
+                "Alignment feedback can refine prompt text, but it is not verified "
+                "tensor-level DD2 control and does not prove video semantic correction."
+            ),
+        }
+
+    def _failed_alignment_checks(self, evaluation: Evaluation) -> list[str]:
+        checks: list[str] = []
+        for reason in evaluation.diagnosis.reasons:
+            if reason.startswith(self.ALIGNMENT_REASON_PREFIX):
+                checks.append(reason[len(self.ALIGNMENT_REASON_PREFIX):])
+        return checks

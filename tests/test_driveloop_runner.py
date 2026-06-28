@@ -138,3 +138,54 @@ def test_runner_refines_prompt_from_alignment_diagnostics():
     assert result.best_evaluation.score == 1.0
     assert "a motorcycle must be visibly present" in result.best_generation.prompt
     assert "the motorcycle performs a visible lane change from the left" in result.best_generation.prompt
+
+def test_runner_carries_alignment_feedback_to_next_backend_request():
+    from driveloop.backends.base import GenerationBackend
+    from driveloop.evaluators import BaseEvaluator
+    from driveloop.schema import Diagnosis, Evaluation, Generation
+
+    class CapturingBackend(GenerationBackend):
+        def __init__(self):
+            self.requests = []
+
+        def generate(self, request, iteration):
+            self.requests.append(request)
+            return Generation(iteration=iteration, prompt=request.prompt, artifacts={}, metadata={})
+
+    class AlignmentThenPassEvaluator(BaseEvaluator):
+        def __init__(self):
+            self.calls = 0
+
+        def evaluate(self, generation):
+            self.calls += 1
+            if self.calls == 1:
+                return Evaluation(
+                    score=0.0,
+                    diagnosis=Diagnosis(
+                        passed=False,
+                        reasons=["alignment_check_failed:object_presence.motorcycle"],
+                        suggested_actions=["inspect failed alignment checks before making semantic claims"],
+                    ),
+                )
+            return Evaluation(score=1.0, diagnosis=Diagnosis(passed=True))
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        backend = CapturingBackend()
+        config = DriveLoopConfig(
+            max_iterations=2,
+            target_score=0.8,
+            output_dir=Path(tmpdir) / "history",
+        )
+        DriveLoopRunner(
+            backend=backend,
+            evaluator=AlignmentThenPassEvaluator(),
+            config=config,
+        ).run(DriveLoopRequest(prompt="daytime urban road"))
+
+    assert len(backend.requests) == 2
+    feedback = backend.requests[1].condition["alignment_feedback"]
+    assert feedback["schema_version"] == "driveloop_alignment_feedback.v0"
+    assert feedback["status"] == "measured_failed"
+    assert feedback["control_level"] == "text_feedback_only"
+    assert feedback["failed_checks"] == ["object_presence.motorcycle"]
+    assert "dd2_condition" in backend.requests[1].condition
