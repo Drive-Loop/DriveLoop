@@ -1,3 +1,3 @@
-from driveloop.evaluators import BaseEvaluator, RuleBasedEvaluator
+from driveloop.evaluators import BaseEvaluator, PromptVideoAlignmentEvaluator, RuleBasedEvaluator
 
-__all__ = ["BaseEvaluator", "RuleBasedEvaluator"]
+__all__ = ["BaseEvaluator", "RuleBasedEvaluator", "PromptVideoAlignmentEvaluator"]

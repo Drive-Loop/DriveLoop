@@ -157,3 +157,120 @@ class PerceptionRuleEvaluator(BaseEvaluator):
                 suggested_actions=actions,
             ),
         )
+
+class PromptVideoAlignmentEvaluator(BaseEvaluator):
+    """Audit-only prompt-video alignment evaluator.
+
+    This evaluator does not inspect pixels by itself and does not infer visual
+    success from prompt text, DD2 tensor hashes, or artifact existence. It only
+    scores an explicit external alignment report stored in generation metadata.
+    """
+
+    REPORT_KEYS = (
+        "prompt_video_alignment",
+        "video_alignment_report",
+        "perception_alignment",
+    )
+
+    def __init__(self, pass_threshold: float = 0.8) -> None:
+        self.pass_threshold = pass_threshold
+
+    def evaluate(self, generation: Generation) -> Evaluation:
+        metrics: Dict[str, float] = {}
+        reasons: List[str] = []
+        actions: List[str] = []
+
+        has_video = "video" in generation.artifacts or "mock_video" in generation.artifacts
+        metrics["video_artifact_available"] = 1.0 if has_video else 0.0
+
+        report = self._find_report(generation.metadata)
+        if not has_video:
+            reasons.append("missing_generation_artifact")
+            actions.append("rerun generation backend and preserve the video artifact")
+
+        if not isinstance(report, dict) or report.get("status") != "measured":
+            metrics["alignment_measured"] = 0.0
+            reasons.append("video_alignment_not_measured")
+            actions.append("run a perception, VLM, or human-review alignment pass and attach an auditable report")
+            return Evaluation(
+                score=0.0,
+                metrics=metrics,
+                diagnosis=Diagnosis(
+                    passed=False,
+                    reasons=list(dict.fromkeys(reasons)),
+                    suggested_actions=list(dict.fromkeys(actions)),
+                ),
+            )
+
+        metrics["alignment_measured"] = 1.0
+        checks = report.get("checks", [])
+        if not isinstance(checks, list) or not checks:
+            reasons.append("video_alignment_report_has_no_checks")
+            actions.append("include required checks with names, pass/fail status, scores, and evidence")
+            return Evaluation(
+                score=0.0,
+                metrics=metrics,
+                diagnosis=Diagnosis(
+                    passed=False,
+                    reasons=list(dict.fromkeys(reasons)),
+                    suggested_actions=list(dict.fromkeys(actions)),
+                ),
+            )
+
+        required_scores: List[float] = []
+        required_count = 0
+        passed_required_count = 0
+
+        for check in checks:
+            if not isinstance(check, dict):
+                continue
+            name = str(check.get("name", "unnamed_check"))
+            required = bool(check.get("required", True))
+            passed = bool(check.get("passed", False))
+            score = self._coerce_score(check.get("score", 1.0 if passed else 0.0))
+
+            metrics[f"alignment_check_{name}"] = score
+            if required:
+                required_count += 1
+                required_scores.append(score)
+                if passed:
+                    passed_required_count += 1
+                else:
+                    reasons.append(f"alignment_check_failed:{name}")
+
+        metrics["alignment_required_check_count"] = float(required_count)
+        metrics["alignment_passed_required_check_count"] = float(passed_required_count)
+
+        if required_count == 0:
+            reasons.append("video_alignment_report_has_no_required_checks")
+            actions.append("mark object, relation, or environment checks as required")
+            score = 0.0
+        else:
+            score = round(sum(required_scores) / required_count, 6)
+
+        if passed_required_count < required_count:
+            actions.append("inspect failed alignment checks before making semantic claims")
+
+        passed = has_video and required_count > 0 and passed_required_count == required_count and score >= self.pass_threshold
+        return Evaluation(
+            score=score,
+            metrics=metrics,
+            diagnosis=Diagnosis(
+                passed=passed,
+                reasons=list(dict.fromkeys(reasons)),
+                suggested_actions=list(dict.fromkeys(actions)),
+            ),
+        )
+
+    def _find_report(self, metadata: Dict[str, object]) -> object:
+        for key in self.REPORT_KEYS:
+            if key in metadata:
+                return metadata[key]
+        return None
+
+    def _coerce_score(self, value: object) -> float:
+        try:
+            score = float(value)
+        except (TypeError, ValueError):
+            return 0.0
+        return max(0.0, min(1.0, score))
