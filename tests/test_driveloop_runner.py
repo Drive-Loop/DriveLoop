@@ -92,3 +92,49 @@ def test_runner_passes_dd2_condition_to_backend_request():
     assert "crossing" in dd2_condition["motion_primitives"]
     assert "cut_in" in dd2_condition["motion_primitives"]
     assert "text_prompt" in dd2_condition
+
+def test_runner_refines_prompt_from_alignment_diagnostics():
+    from driveloop.evaluators import BaseEvaluator
+    from driveloop.schema import Diagnosis, Evaluation
+
+    class AlignmentThenPassEvaluator(BaseEvaluator):
+        def __init__(self):
+            self.calls = 0
+
+        def evaluate(self, generation):
+            self.calls += 1
+            if self.calls == 1:
+                return Evaluation(
+                    score=0.0,
+                    diagnosis=Diagnosis(
+                        passed=False,
+                        reasons=[
+                            "alignment_check_failed:object_presence.motorcycle",
+                            "alignment_check_failed:spatial_relation.left_lane_change",
+                        ],
+                        suggested_actions=["inspect failed alignment checks before making semantic claims"],
+                    ),
+                )
+            return Evaluation(score=1.0, diagnosis=Diagnosis(passed=True))
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        evaluator = AlignmentThenPassEvaluator()
+        backend = MockGenerationBackend(output_dir=root / "artifacts")
+        config = DriveLoopConfig(
+            max_iterations=2,
+            target_score=0.8,
+            output_dir=root / "history",
+        )
+        request = DriveLoopRequest(prompt="daytime urban road")
+
+        result = DriveLoopRunner(
+            backend=backend,
+            evaluator=evaluator,
+            config=config,
+        ).run(request)
+
+    assert len(result.history) == 2
+    assert result.best_evaluation.score == 1.0
+    assert "a motorcycle must be visibly present" in result.best_generation.prompt
+    assert "the motorcycle performs a visible lane change from the left" in result.best_generation.prompt
