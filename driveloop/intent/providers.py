@@ -23,6 +23,28 @@ class TranscriptionResult:
     metadata: Dict[str, Any] = field(default_factory=dict)
 
 
+@dataclass(frozen=True)
+class TranscriptionReview:
+    raw_transcript: str
+    suggested_transcript: str
+    review_reason: str
+    accepted_by_user: bool = False
+    confidence: float | None = None
+    flags: List[str] = field(default_factory=list)
+    metadata: Dict[str, Any] = field(default_factory=dict)
+
+    def to_dict(self) -> Dict[str, Any]:
+        return {
+            "raw_transcript": self.raw_transcript,
+            "suggested_transcript": self.suggested_transcript,
+            "review_reason": self.review_reason,
+            "accepted_by_user": self.accepted_by_user,
+            "confidence": self.confidence,
+            "flags": list(self.flags),
+            "metadata": dict(self.metadata),
+        }
+
+
 class AudioTranscriptionProvider(Protocol):
     def transcribe_file(
         self,
@@ -31,6 +53,47 @@ class AudioTranscriptionProvider(Protocol):
         filename: str | None = None,
     ) -> TranscriptionResult:
         ...
+
+
+class ASRReviewAgent(Protocol):
+    def review(self, result: TranscriptionResult) -> TranscriptionReview:
+        ...
+
+
+class AuditOnlyASRReviewAgent:
+    """Preserve raw ASR output and emit review metadata without rewriting text."""
+
+    def review(self, result: TranscriptionResult) -> TranscriptionReview:
+        raw_transcript = result.transcript.strip()
+        flags: List[str] = []
+        confidence = self._extract_confidence(result.metadata)
+
+        if not raw_transcript:
+            flags.append("empty_transcript")
+            reason = "No ASR text was detected; provide or edit the transcript before generation."
+        else:
+            reason = "Audit-only ASR review retained the raw transcript; no automatic correction was applied."
+
+        return TranscriptionReview(
+            raw_transcript=raw_transcript,
+            suggested_transcript=raw_transcript,
+            review_reason=reason,
+            accepted_by_user=False,
+            confidence=confidence,
+            flags=flags,
+            metadata={
+                "review_backend": "audit_only",
+                "source_backend": result.backend,
+                "source_status": result.status,
+            },
+        )
+
+    def _extract_confidence(self, metadata: Dict[str, Any]) -> float | None:
+        for key in ("confidence", "language_probability"):
+            value = metadata.get(key)
+            if isinstance(value, (int, float)):
+                return float(value)
+        return None
 
 
 
@@ -76,8 +139,9 @@ class WhisperAudioTranscriptionProvider:
                 language=getattr(info, "language", None),
                 metadata={
                     "model": self.model_name,
-                "vad_filter": self.vad_filter,
-                "initial_prompt_enabled": bool(self.initial_prompt),
+                    "vad_filter": self.vad_filter,
+                    "initial_prompt_enabled": bool(self.initial_prompt),
+                    "language_probability": getattr(info, "language_probability", None),
                     "filename": filename,
                     "content_type": content_type,
                 },
@@ -151,6 +215,7 @@ class PlaceholderVoiceUnderstandingProvider:
             text=str(transcript),
             metadata={
                 "transcript": transcript,
+                "asr": voice.get("asr"),
             },
             status=voice.get("status", "placeholder"),
         )

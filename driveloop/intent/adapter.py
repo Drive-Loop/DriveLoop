@@ -78,19 +78,30 @@ class RuleBasedIntentAdapter:
         if any(word in text for word in ["night", "dark", "low light"]):
             intent.lighting = "night"
             intent.risk_factors.append("low_light")
+        elif any(word in text for word in ["dawn", "sunrise", "early morning"]):
+            intent.lighting = "dawn"
+            intent.risk_factors.append("low_angle_light")
         elif any(word in text for word in ["daytime", "daylight", "sunny"]):
             intent.lighting = "daytime"
 
         if "intersection" in text:
             intent.road_environment = "urban_intersection"
             intent.relations.append("intersection")
+        elif "bridge" in text:
+            intent.road_environment = "bridge"
+            intent.relations.append("bridge")
         elif any(word in text for word in ["highway", "freeway"]):
             intent.road_environment = "highway"
+        elif "suburban" in text:
+            intent.road_environment = "suburban_road"
+            intent.relations.append("suburban")
         elif any(word in text for word in ["urban", "city", "street", "road"]):
             intent.road_environment = "urban_road"
 
         actor_keywords = {
             "car": ["car", "vehicle", "vehicles", "sedan", "truck", "bus"],
+            "delivery_van": ["delivery van", "van"],
+            "traffic_barrier": ["traffic barrier", "traffic barrel", "construction sign", "road barrel"],
             "pedestrian": ["pedestrian", "person", "walker"],
             "cyclist": ["cyclist", "bike", "bicycle"],
             "animal": ["animal", "deer", "dog"],
@@ -108,6 +119,15 @@ class RuleBasedIntentAdapter:
         if any(term in text for term in ["parked", "stopped", "stationary"]):
             intent.motion_primitives.append("stopped")
             intent.long_tail_tags.append("stopped_vehicle")
+            intent.risk_factors.append("static_obstacle")
+        if any(term in text for term in ["swerve", "swerves", "avoid", "avoids"]) or (
+            "around" in text and any(term in text for term in ["barrier", "barrel", "obstacle", "sign"])
+        ):
+            intent.motion_primitives.append("avoidance")
+            intent.long_tail_tags.append("road_obstacle")
+            intent.risk_factors.append("obstacle_avoidance")
+        if any(term in text for term in ["fallen traffic barrier", "fallen traffic barrel", "loose construction sign"]):
+            intent.long_tail_tags.append("road_obstacle")
             intent.risk_factors.append("static_obstacle")
         if any(term in text for term in ["accident", "crash", "collision"]):
             intent.long_tail_tags.append("traffic_accident")
@@ -146,6 +166,8 @@ class RuleBasedIntentAdapter:
                 "transcript": metadata["voice"].get("transcript"),
                 "status": metadata["voice"].get("status", "placeholder"),
             }
+            if "asr" in metadata["voice"]:
+                evidence["voice"]["asr"] = metadata["voice"].get("asr")
         return evidence
 
     def _unique(self, values: List[str]) -> List[str]:

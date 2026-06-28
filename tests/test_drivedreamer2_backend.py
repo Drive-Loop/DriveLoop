@@ -406,7 +406,7 @@ def test_drivedreamer2_backend_records_override_candidate_plan(monkeypatch, tmp_
     plan = generation.metadata["dd2_override_candidate_plan"]
 
     assert plan["available"] is True
-    assert plan["control_level"] == "candidate_plan_only"
+    assert plan["control_level"] == "tensor_override_runtime"
     assert plan["requires_box_synthesis"] is True
     assert plan["requires_hdmap_override"] is False
     assert plan["scene_description_action"]["type"] == "replace_text_prompt"
@@ -414,7 +414,7 @@ def test_drivedreamer2_backend_records_override_candidate_plan(monkeypatch, tmp_
     assert {"type": "add_actor_label", "label": "bicycle"} in plan["actor_label_actions"]
     assert {"type": "add_actor_label", "label": "pedestrian"} in plan["actor_label_actions"]
     assert {"type": "mark_extra_baseline_label", "label": "car"} in plan["actor_label_actions"]
-    assert "tensor_override_not_implemented" in plan["limitations"]
+    assert "box_positions_are_draft_until_projection_and_scene_geometry_are_verified" in plan["limitations"]
 
 def test_override_candidate_plan_includes_box_synthesis_plan_for_missing_actor():
     backend = DriveDreamer2Backend()
@@ -441,7 +441,7 @@ def test_override_candidate_plan_includes_box_synthesis_plan_for_missing_actor()
     box_plan = plan["box_synthesis_plan"]
 
     assert box_plan["available"] is True
-    assert box_plan["control_level"] == "plan_only"
+    assert box_plan["control_level"] == "tensor_override_runtime"
     assert box_plan["requires_manual_review"] is True
     assert box_plan["target_tensor"] == "boxes3d"
     assert box_plan["derived_tensor"] == "image_box"
@@ -455,8 +455,7 @@ def test_override_candidate_plan_includes_box_synthesis_plan_for_missing_actor()
             "reason": "missing_requested_label",
         }
     ]
-    assert "3d_position_not_estimated" in box_plan["limitations"]
-    assert "camera_projection_not_computed" in box_plan["limitations"]
+    assert "3d_position_uses_audited_draft_policy" in box_plan["limitations"]
 
 def test_box_synthesis_plan_includes_draft_box_for_bicycle():
     backend = DriveDreamer2Backend()
@@ -519,7 +518,7 @@ def test_box_synthesis_plan_includes_draft_box_for_bicycle():
     ]
     assert validation["projection_control_level"] == "not_run"
     assert "projection_not_run" in validation["limitations"]
-    assert "not_written_to_dataset" in draft["limitations"]
+    assert "written_to_runtime_sample_only" in draft["limitations"]
 
 
 
@@ -574,3 +573,90 @@ def test_box_synthesis_draft_validator_projects_with_baseline_intrinsic():
     }
     assert "projection_validator_uses_axis_aligned_corners" in validation["limitations"]
     assert "dataset_not_written" in validation["limitations"]
+
+
+def test_drivedreamer2_backend_builds_paper_alignment_report_for_plan_only_control():
+    from driveloop.backends.drivedreamer2 import DriveDreamer2Backend
+
+    backend = DriveDreamer2Backend()
+    report = backend._build_paper_alignment_report(
+        dd2_prompt="A delivery van swerves around a fallen traffic barrier.",
+        executable_condition={
+            "actor_controls": [
+                {"category": "car", "source_category": "delivery_van"},
+                {"category": "barrier", "source_category": "traffic_barrier"},
+            ],
+            "environment_controls": {"weather": "snow", "lighting": "dawn"},
+            "risk_controls": {"long_tail_tags": ["snow", "road_obstacle"]},
+        },
+        trace_metadata={
+            "tensor_control_ready": False,
+            "limitations": ["actor_box_tensor_control_not_connected"],
+        },
+        structural_input_plan={"control_level": "plan_only"},
+        structural_request_diff={"missing_requested_labels": ["barrier"]},
+        override_candidate_plan={"requires_box_synthesis": True},
+    )
+
+    assert report["schema_version"] == "driveloop_paper_alignment_report.v0"
+    assert report["stage_1_multimodal_prompt_grounding"]["dd2_text_prompt_available"] is True
+    assert report["stage_2_long_tail_conditioning"]["status"] == "available"
+    assert report["stage_3_scene_consistent_generation"]["status"] == "text_and_plan_only"
+    assert report["stage_3_scene_consistent_generation"]["tensor_control_ready"] is False
+    assert report["experiment_readiness"]["main_experiment_ready"] is False
+    assert report["experiment_readiness"]["allowed_use"] == "prototype_trace_and_ablation_only"
+
+
+def test_drivedreamer2_backend_builds_barrier_box_synthesis_draft():
+    from driveloop.backends.drivedreamer2 import DriveDreamer2Backend
+
+    backend = DriveDreamer2Backend()
+    draft = backend._build_box_synthesis_draft(
+        [{"category": "barrier", "source_action": "add_actor_label"}],
+        "front_adjacent_lane_obstacle",
+        "class_default_dimensions",
+    )
+
+    assert draft["available"] is True
+    assert draft["control_level"] == "draft_only"
+    assert draft["coordinate_frame_verified"] is False
+    assert draft["draft_boxes3d"][0]["category"] == "barrier"
+    assert draft["draft_boxes3d"][0]["requires_projection"] is True
+    assert draft["validation"]["available"] is True
+    assert draft["validation"]["all_entries_valid"] is True
+    assert draft["validation"]["entries"][0]["image_box_canvas_dry_run"]["dataset_written"] is False
+    assert "dataset_not_written" in draft["validation"]["limitations"]
+
+
+def test_box_synthesis_plan_includes_draft_box_for_motorcycle():
+    from driveloop.backends.drivedreamer2 import DriveDreamer2Backend
+
+    backend = DriveDreamer2Backend()
+
+    box_plan = backend._build_box_synthesis_plan(
+        structural_request_diff={
+            "missing_requested_labels": ["motorcycle"],
+            "extra_baseline_labels": [],
+        },
+        requires_box_synthesis=True,
+    )
+
+    draft = box_plan["box_synthesis_draft"]
+
+    assert draft["available"] is True
+    assert draft["default_dimensions"]["motorcycle"] == {
+        "width": 0.8,
+        "height": 1.5,
+        "depth": 2.2,
+    }
+    assert draft["draft_boxes3d"] == [
+        {
+            "category": "motorcycle",
+            "box3d": [8.0, 1.8, 18.0, 0.8, 1.5, 2.2, 0.0, 0.0, -0.25],
+            "placement_policy": "front_adjacent_lane_cut_in",
+            "source": "class_default_dimensions",
+            "requires_projection": True,
+        }
+    ]
+    assert draft["validation"]["all_entries_valid"] is True
+    assert draft["validation"]["entries"][0]["image_box_canvas_dry_run"]["class_channel"] == 6

@@ -1,10 +1,17 @@
 import random
+import json
+import os
 import numpy as np
 from torchvision import transforms  
 from .drivedreamer2_utils import choose_objs,pad_data
 from dreamer_datasets import boxes3d_utils
 import mmengine
 import cv2
+from driveloop.dd2_override import (
+    apply_dd2_override_to_sample,
+    tensor_signature,
+    write_override_audit,
+)
 
 HEIGHT,WIDTH=900,1600
 
@@ -43,6 +50,20 @@ class DriveDreamer2_Transform:
                 transforms.Normalize([0.5], [0.5]),
             ]
         )
+        self.driveloop_override = self._load_driveloop_override()
+        self.driveloop_override_audit_path = os.environ.get("DRIVELOOP_DD2_OVERRIDE_AUDIT_PATH")
+
+    def _load_driveloop_override(self):
+        raw_override = os.environ.get("DRIVELOOP_DD2_OVERRIDE_JSON")
+        if not raw_override:
+            return None
+        try:
+            override = json.loads(raw_override)
+        except json.JSONDecodeError:
+            return None
+        if isinstance(override, dict) and override.get("available", True):
+            return override
+        return None
     
     def init_map(self,embed_map_path):
         self.name_map = {
@@ -148,6 +169,12 @@ class DriveDreamer2_Transform:
         return canvas_box
 
     def __call__(self, data_dict):
+        override_audit = None
+        if self.driveloop_override:
+            data_dict, override_audit = apply_dd2_override_to_sample(
+                data_dict,
+                self.driveloop_override,
+            )
         
         new_data_dict = dict() 
         image = data_dict['image'].convert('RGB')
@@ -187,6 +214,22 @@ class DriveDreamer2_Transform:
             corners = np.zeros((0, 8, 2), dtype=np.float32)
 
         canvas_box = self.generate_canvas_box(corners,idxs,thickness=10)   
+
+        if override_audit is not None:
+            override_audit.update(
+                {
+                    "event": "driveloop_dd2_tensor_override",
+                    "sample_identity": {
+                        "frame_idx": data_dict.get("frame_idx"),
+                        "cam_type": data_dict.get("cam_type"),
+                    },
+                }
+            )
+            override_audit.setdefault("signatures_after", {})["image_box_canvas"] = tensor_signature(canvas_box)
+            override_audit.setdefault("changed", {})["image_box"] = bool(
+                override_audit.get("image_box_expected_changed")
+            )
+            write_override_audit(self.driveloop_override_audit_path, override_audit)
         
         if not self.is_train:
             new_data_dict[self.bd_input_name] = canvas_box.copy()*255

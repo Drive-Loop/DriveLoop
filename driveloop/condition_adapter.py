@@ -24,9 +24,9 @@ class DriveDreamer2Condition:
 class DriveDreamer2ConditionAdapter:
     """Maps DriveLoop scene specifications to a DD2-oriented intermediate condition.
 
-    This first version intentionally does not synthesize DD2 tensors yet.
-    It defines the contract needed before implementing actor boxes, HDMap/lane
-    controls, trajectories, and weather/light conditioning.
+    The adapter emits an executable contract that the DD2 backend can turn into
+    tensor overrides. Box tensors are supported through audited overrides; HDMap
+    control remains explicit-only until a verified map source is available.
     """
 
     def build(
@@ -119,13 +119,12 @@ class DriveDreamer2ConditionAdapter:
                 "executable_controls": dict(executable_controls),
             },
             "trace_metadata": {
-                "structural_control_level": "schema_only",
-                "tensor_control_ready": False,
+                "structural_control_level": "tensor_override_contract",
+                "tensor_control_ready": True,
                 "limitations": [
                     "mini_dataset_structural_inputs_required",
-                    "actor_box_tensor_control_not_connected",
                     "trajectory_tensor_control_not_connected",
-                    "hdmap_tensor_control_not_connected",
+                    "hdmap_tensor_control_requires_explicit_verified_source",
                 ],
             },
         }
@@ -139,7 +138,7 @@ class DriveDreamer2ConditionAdapter:
 
         return {
             "target_dataset": "drivedreamer2_mini",
-            "control_level": "plan_only",
+            "control_level": "tensor_override_contract",
             "scene_description": {
                 "source": "text_control.prompt",
                 "value": text_prompt,
@@ -151,19 +150,19 @@ class DriveDreamer2ConditionAdapter:
             "image_hdmap": {
                 "source": "mini_dataset_baseline",
                 "override_ready": False,
+                "reason": "no_verified_hdmap_override_source",
             },
             "image_box": {
-                "source": "mini_dataset_baseline",
-                "override_ready": False,
+                "source": "derived_from_boxes3d_override",
+                "override_ready": True,
             },
             "boxes3d": {
-                "source": "mini_dataset_baseline",
-                "override_ready": False,
+                "source": "executable_condition_tensor_override",
+                "override_ready": True,
             },
             "limitations": [
-                "actor_box_tensor_override_not_implemented",
                 "trajectory_tensor_override_not_implemented",
-                "hdmap_tensor_override_not_implemented",
+                "hdmap_tensor_override_requires_explicit_verified_source",
             ],
         }
 
@@ -174,6 +173,10 @@ class DriveDreamer2ConditionAdapter:
             "bike": "bicycle",
             "vehicle": "car",
             "vehicles": "car",
+            "delivery_van": "car",
+            "van": "car",
+            "traffic_barrier": "barrier",
+            "traffic_barrel": "barrier",
             "person": "pedestrian",
             "people": "pedestrian",
         }

@@ -21,4 +21,8 @@ def test_smoke_suite_summary_exposes_condition_trace(tmp_path):
     assert "executable_condition" in summary
     assert summary["executable_condition"]["schema_version"] == "dd2_executable_condition.v0"
     assert summary["executable_condition"]["target_backend"] == "drivedreamer2_mini"
-    assert summary["executable_condition"]["trace_metadata"]["tensor_control_ready"] is False
+    assert summary["executable_condition"]["trace_metadata"]["tensor_control_ready"] is True
+    assert (
+        summary["executable_condition"]["trace_metadata"]["structural_control_level"]
+        == "tensor_override_contract"
+    )

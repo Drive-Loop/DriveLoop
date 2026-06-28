@@ -12,7 +12,12 @@ from driveloop.backends.drivedreamer2 import DriveDreamer2Backend
 from driveloop.backends.mock import MockGenerationBackend
 from driveloop.evaluators import RuleBasedEvaluator
 from driveloop.intent.adapter import MultimodalInputBundle, RuleBasedIntentAdapter
-from driveloop.intent.providers import AudioTranscriptionProvider, WhisperAudioTranscriptionProvider
+from driveloop.intent.providers import (
+    ASRReviewAgent,
+    AuditOnlyASRReviewAgent,
+    AudioTranscriptionProvider,
+    WhisperAudioTranscriptionProvider,
+)
 from driveloop.runner import DriveLoopConfig, DriveLoopRequest, DriveLoopRunner
 
 
@@ -45,13 +50,19 @@ class GenerateResponse(BaseModel):
 
 class TranscribeResponse(BaseModel):
     transcript: str
+    raw_transcript: str
+    suggested_transcript: str
+    review_reason: str
+    accepted_by_user: bool
     backend: str
     status: str
     language: Optional[str] = None
+    review: Dict[str, Any] = Field(default_factory=dict)
     metadata: Dict[str, Any] = Field(default_factory=dict)
 
 
 _asr_provider_override: Optional[AudioTranscriptionProvider] = None
+_asr_review_agent_override: Optional[ASRReviewAgent] = None
 
 
 def set_asr_provider_for_testing(provider: Optional[AudioTranscriptionProvider]) -> None:
@@ -59,8 +70,17 @@ def set_asr_provider_for_testing(provider: Optional[AudioTranscriptionProvider])
     _asr_provider_override = provider
 
 
+def set_asr_review_agent_for_testing(provider: Optional[ASRReviewAgent]) -> None:
+    global _asr_review_agent_override
+    _asr_review_agent_override = provider
+
+
 def _get_asr_provider() -> AudioTranscriptionProvider:
     return _asr_provider_override or WhisperAudioTranscriptionProvider()
+
+
+def _get_asr_review_agent() -> ASRReviewAgent:
+    return _asr_review_agent_override or AuditOnlyASRReviewAgent()
 
 
 
@@ -198,12 +218,22 @@ async def transcribe_voice(audio: UploadFile = File(...)):
         except RuntimeError as exc:
             raise HTTPException(status_code=503, detail=str(exc)) from exc
 
+    review = _get_asr_review_agent().review(result)
+    review_dict = review.to_dict()
     return TranscribeResponse(
         transcript=result.transcript,
+        raw_transcript=review.raw_transcript,
+        suggested_transcript=review.suggested_transcript,
+        review_reason=review.review_reason,
+        accepted_by_user=review.accepted_by_user,
         backend=result.backend,
         status=result.status,
         language=result.language,
-        metadata=result.metadata,
+        review=review_dict,
+        metadata={
+            **result.metadata,
+            "asr_review": review_dict,
+        },
     )
 
 

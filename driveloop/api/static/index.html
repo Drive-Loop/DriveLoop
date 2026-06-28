@@ -455,6 +455,43 @@
       font-size: 12px;
     }
 
+    .asr-review-panel {
+      display: none;
+      border: 1px solid var(--line);
+      border-radius: 12px;
+      background: #f8fafc;
+      padding: 9px 10px;
+      gap: 7px;
+      font-size: 12px;
+    }
+
+    .asr-review-panel.open {
+      display: grid;
+    }
+
+    .asr-review-row {
+      display: grid;
+      grid-template-columns: 84px 1fr auto;
+      gap: 8px;
+      align-items: center;
+      min-width: 0;
+    }
+
+    .asr-review-row span {
+      min-width: 0;
+      overflow-wrap: anywhere;
+    }
+
+    .asr-review-label {
+      color: #344054;
+      font-weight: 700;
+    }
+
+    .asr-review-reason {
+      color: var(--muted);
+      line-height: 1.4;
+    }
+
     .tools {
       max-width: 920px;
       margin: 8px auto 0;
@@ -606,6 +643,19 @@
                 <span id="transcriptionStatus" class="status-text"></span>
               </div>
               <input id="voiceTranscript" type="text" placeholder="Voice transcript will appear here" />
+              <div id="asrReviewPanel" class="asr-review-panel">
+                <div class="asr-review-row">
+                  <span class="asr-review-label">Raw ASR</span>
+                  <span id="rawTranscriptText"></span>
+                  <span></span>
+                </div>
+                <div class="asr-review-row">
+                  <span class="asr-review-label">Suggestion</span>
+                  <span id="suggestedTranscriptText"></span>
+                  <button id="acceptTranscriptButton" class="secondary-button" type="button">Use</button>
+                </div>
+                <div id="reviewReasonText" class="asr-review-reason"></div>
+              </div>
               <div class="hint">Upload an audio file. Review or edit the transcript before generating.</div>
             </div>
           </div>
@@ -771,14 +821,23 @@
       }
 
       if (voiceTranscript) {
+        const asrMetadata = voiceAsrMetadata ? {
+          ...voiceAsrMetadata,
+          accepted_by_user: true,
+          accepted_transcript: voiceTranscript,
+          transcript_source: resolveTranscriptSource(voiceTranscript),
+        } : {
+          backend: "manual",
+          status: "manual",
+          accepted_by_user: true,
+          accepted_transcript: voiceTranscript,
+          transcript_source: "manual",
+        };
         metadata.modalities.push("voice");
         metadata.voice = {
           transcript: voiceTranscript,
           status: voiceAsrMetadata ? "asr_transcribed" : "manual_transcript",
-          asr: voiceAsrMetadata || {
-            backend: "manual",
-            status: "manual",
-          },
+          asr: asrMetadata,
         };
       }
 
@@ -830,6 +889,11 @@
     const voiceTranscriptInput = document.querySelector("#voiceTranscript");
     const uploadAudioButton = document.querySelector("#uploadAudioButton");
     const transcriptionStatus = document.querySelector("#transcriptionStatus");
+    const asrReviewPanel = document.querySelector("#asrReviewPanel");
+    const rawTranscriptText = document.querySelector("#rawTranscriptText");
+    const suggestedTranscriptText = document.querySelector("#suggestedTranscriptText");
+    const reviewReasonText = document.querySelector("#reviewReasonText");
+    const acceptTranscriptButton = document.querySelector("#acceptTranscriptButton");
     let voiceAsrMetadata = null;
 
     attachButton.addEventListener("click", () => {
@@ -858,6 +922,36 @@
       transcriptionStatus.textContent = message || "";
     }
 
+    function resolveTranscriptSource(transcript) {
+      if (!voiceAsrMetadata) return "manual";
+      if (transcript === voiceAsrMetadata.suggested_transcript) return "suggested_transcript";
+      if (transcript === voiceAsrMetadata.raw_transcript) return "raw_transcript";
+      return "user_edited_transcript";
+    }
+
+    function renderAsrReview() {
+      if (!voiceAsrMetadata) {
+        asrReviewPanel.classList.remove("open");
+        rawTranscriptText.textContent = "";
+        suggestedTranscriptText.textContent = "";
+        reviewReasonText.textContent = "";
+        acceptTranscriptButton.disabled = true;
+        return;
+      }
+
+      const suggested = voiceAsrMetadata.suggested_transcript || "";
+      asrReviewPanel.classList.add("open");
+      rawTranscriptText.textContent = voiceAsrMetadata.raw_transcript || "";
+      suggestedTranscriptText.textContent = suggested || "No suggestion";
+      reviewReasonText.textContent = voiceAsrMetadata.review_reason || "";
+      acceptTranscriptButton.disabled = !suggested;
+    }
+
+    function clearVoiceAsrMetadata() {
+      voiceAsrMetadata = null;
+      renderAsrReview();
+    }
+
     async function transcribeAudioBlob(blob, filename) {
       const formData = new FormData();
       formData.append("audio", blob, filename);
@@ -874,17 +968,26 @@
           throw new Error(error);
         }
         const result = await response.json();
-        voiceTranscriptInput.value = result.transcript || "";
-        if (!promptInput.value.trim() && result.transcript) {
-          promptInput.value = result.transcript;
+        const rawTranscript = result.raw_transcript || result.transcript || "";
+        const suggestedTranscript = result.suggested_transcript || rawTranscript;
+        voiceTranscriptInput.value = rawTranscript;
+        if (!promptInput.value.trim() && rawTranscript) {
+          promptInput.value = rawTranscript;
         }
         voiceAsrMetadata = {
           backend: result.backend,
           status: result.status,
           language: result.language,
+          raw_transcript: rawTranscript,
+          suggested_transcript: suggestedTranscript,
+          review_reason: result.review_reason || "",
+          accepted_by_user: Boolean(result.accepted_by_user),
+          transcript_source: "raw_transcript",
+          review: result.review || {},
           metadata: result.metadata || {},
         };
-        setTranscriptionStatus(result.transcript ? `Transcribed with ${result.backend}` : "No speech detected");
+        renderAsrReview();
+        setTranscriptionStatus(rawTranscript ? `Transcribed with ${result.backend}` : "No speech detected");
         speechPanel.classList.add("open");
         renderAttachmentTray();
       } finally {
@@ -908,10 +1011,25 @@
 
 
 
+    acceptTranscriptButton.addEventListener("click", () => {
+      if (!voiceAsrMetadata || !voiceAsrMetadata.suggested_transcript) return;
+      voiceTranscriptInput.value = voiceAsrMetadata.suggested_transcript;
+      promptInput.value = voiceAsrMetadata.suggested_transcript;
+      voiceAsrMetadata.accepted_by_user = true;
+      voiceAsrMetadata.transcript_source = "suggested_transcript";
+      setTranscriptionStatus("Suggestion accepted for generation");
+      renderAsrReview();
+      renderAttachmentTray();
+    });
+
     voiceTranscriptInput.addEventListener("input", () => {
       if (!voiceTranscriptInput.value.trim()) {
-        voiceAsrMetadata = null;
+        clearVoiceAsrMetadata();
         setTranscriptionStatus("");
+      } else if (voiceAsrMetadata) {
+        voiceAsrMetadata.accepted_by_user = true;
+        voiceAsrMetadata.transcript_source = resolveTranscriptSource(voiceTranscriptInput.value.trim());
+        renderAsrReview();
       }
     });
 
@@ -966,7 +1084,7 @@
       if (hasVoice) {
         addPill("Voice", voiceTranscriptInput.value.slice(0, 48), () => {
           voiceTranscriptInput.value = "";
-          voiceAsrMetadata = null;
+          clearVoiceAsrMetadata();
           setTranscriptionStatus("");
           renderAttachmentTray();
         });
@@ -997,7 +1115,7 @@
         imageInput.value = "";
         audioInput.value = "";
         voiceTranscriptInput.value = "";
-        voiceAsrMetadata = null;
+        clearVoiceAsrMetadata();
         setTranscriptionStatus("");
         speechPanel.classList.remove("open");
         renderAttachmentTray();

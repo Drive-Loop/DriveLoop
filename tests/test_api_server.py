@@ -306,7 +306,7 @@ def test_transcribe_endpoint_returns_asr_transcript():
             assert content_type == "audio/webm"
             assert filename == "voice.webm"
             return TranscriptionResult(
-                transcript="a cyclist cuts in from the left near an intersection",
+                transcript="Ago Bay High Court",
                 backend="fake_asr",
                 status="ok",
                 language="en",
@@ -329,11 +329,20 @@ def test_transcribe_endpoint_returns_asr_transcript():
 
     assert response.status_code == 200
     body = response.json()
-    assert body["transcript"] == "a cyclist cuts in from the left near an intersection"
+    assert body["transcript"] == "Ago Bay High Court"
+    assert body["raw_transcript"] == "Ago Bay High Court"
+    assert body["suggested_transcript"] == "Ago Bay High Court"
+    assert body["accepted_by_user"] is False
+    assert body["review"]["raw_transcript"] == "Ago Bay High Court"
+    assert body["review"]["accepted_by_user"] is False
+    assert body["review"]["metadata"]["review_backend"] == "audit_only"
     assert body["backend"] == "fake_asr"
     assert body["status"] == "ok"
     assert body["language"] == "en"
     assert body["metadata"]["filename"] == "voice.webm"
+    assert body["metadata"]["asr_review"]["suggested_transcript"] == body["raw_transcript"]
+    assert body["raw_transcript"] != "ego vehicle"
+    assert body["suggested_transcript"] != "ego vehicle"
 
 
 def test_transcribe_endpoint_rejects_empty_audio():

@@ -53,6 +53,32 @@ def test_intent_adapter_preserves_multimodal_evidence():
     assert intent["multimodal_evidence"]["image"]["filename"] == "road.jpg"
     assert intent["multimodal_evidence"]["voice"]["transcript"] == "foggy road with a parked vehicle"
 
+
+def test_intent_adapter_preserves_voice_asr_review_metadata():
+    adapter = RuleBasedIntentAdapter()
+
+    intent = adapter.parse(
+        "urban driving scene",
+        metadata={
+            "modalities": ["text", "voice"],
+            "voice": {
+                "transcript": "a cyclist cuts in from the left",
+                "status": "asr_transcribed",
+                "asr": {
+                    "raw_transcript": "a cyclist cuts in from the left",
+                    "suggested_transcript": "a cyclist cuts in from the left",
+                    "accepted_by_user": True,
+                    "transcript_source": "raw_transcript",
+                },
+            },
+        },
+    ).to_dict()
+
+    voice = intent["multimodal_evidence"]["voice"]
+    assert voice["transcript"] == "a cyclist cuts in from the left"
+    assert voice["asr"]["raw_transcript"] == "a cyclist cuts in from the left"
+    assert voice["asr"]["accepted_by_user"] is True
+
 def test_intent_adapter_uses_voice_transcript_and_image_filename():
     adapter = RuleBasedIntentAdapter()
 
@@ -110,3 +136,21 @@ def test_intent_adapter_parse_bundle_matches_multimodal_contract():
     assert {"category": "pedestrian", "attributes": {}} in intent["actors"]
     assert "crossing" in intent["motion_primitives"]
     assert "stopped" in intent["motion_primitives"]
+
+
+def test_intent_adapter_extracts_delivery_van_barrier_bridge_scene():
+    adapter = RuleBasedIntentAdapter()
+
+    intent = adapter.parse(
+        "A delivery van swerves around a fallen traffic barrier on a snowy suburban bridge at dawn."
+    ).to_dict()
+
+    assert intent["weather"] == "snow"
+    assert intent["lighting"] == "dawn"
+    assert intent["road_environment"] == "bridge"
+    assert {"category": "delivery_van", "attributes": {}} in intent["actors"]
+    assert {"category": "traffic_barrier", "attributes": {}} in intent["actors"]
+    assert "bridge" in intent["relations"]
+    assert "avoidance" in intent["motion_primitives"]
+    assert "road_obstacle" in intent["long_tail_tags"]
+    assert "obstacle_avoidance" in intent["risk_factors"]

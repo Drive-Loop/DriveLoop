@@ -54,6 +54,18 @@ class RuleBasedEvaluator(BaseEvaluator):
             reasons.append("traffic_actor_unspecified")
             actions.append("add explicit traffic actor or maneuver")
 
+        if generation.metadata.get("backend") == "drivedreamer2":
+            tensor_ready = generation.metadata.get("dd2_tensor_control_ready")
+            structural_level = generation.metadata.get("dd2_structural_control_level")
+            metrics["dd2_tensor_control_ready"] = 1.0 if tensor_ready is True else 0.0
+            if tensor_ready is not True:
+                score = min(score, 0.79)
+                reasons.append("dd2_tensor_control_not_ready")
+                actions.append("connect actor, trajectory, and HDMap tensor-level structural overrides")
+            if structural_level in (None, "plan_only", "schema_only"):
+                reasons.append("dd2_structural_control_plan_only")
+                actions.append("do not treat DD2 mini baseline structural inputs as prompt-aligned generation")
+
         passed = score >= 0.8
         return Evaluation(
             score=score,

@@ -55,8 +55,8 @@ def test_condition_adapter_builds_executable_condition_schema():
     assert "low_visibility" in executable["risk_controls"]["long_tail_tags"]
 
     trace = executable["trace_metadata"]
-    assert trace["structural_control_level"] == "schema_only"
-    assert trace["tensor_control_ready"] is False
+    assert trace["structural_control_level"] == "tensor_override_contract"
+    assert trace["tensor_control_ready"] is True
     assert "mini_dataset_structural_inputs_required" in trace["limitations"]
 
 def test_executable_condition_normalizes_cyclist_actor_category():
@@ -96,7 +96,7 @@ def test_executable_condition_includes_mini_structural_input_plan():
     structural_plan = condition.executable_condition["structural_input_plan"]
 
     assert structural_plan["target_dataset"] == "drivedreamer2_mini"
-    assert structural_plan["control_level"] == "plan_only"
+    assert structural_plan["control_level"] == "tensor_override_contract"
 
     assert structural_plan["scene_description"]["source"] == "text_control.prompt"
     assert structural_plan["scene_description"]["value"] == condition.text_prompt
@@ -105,10 +105,11 @@ def test_executable_condition_includes_mini_structural_input_plan():
     assert structural_plan["labels"]["values"] == ["car", "pedestrian"]
 
     assert structural_plan["image_hdmap"]["source"] == "mini_dataset_baseline"
-    assert structural_plan["image_box"]["source"] == "mini_dataset_baseline"
-    assert structural_plan["boxes3d"]["source"] == "mini_dataset_baseline"
+    assert structural_plan["image_box"]["source"] == "derived_from_boxes3d_override"
+    assert structural_plan["image_box"]["override_ready"] is True
+    assert structural_plan["boxes3d"]["source"] == "executable_condition_tensor_override"
+    assert structural_plan["boxes3d"]["override_ready"] is True
 
-    assert "actor_box_tensor_override_not_implemented" in structural_plan["limitations"]
     assert "trajectory_tensor_override_not_implemented" in structural_plan["limitations"]
-    assert "hdmap_tensor_override_not_implemented" in structural_plan["limitations"]
+    assert "hdmap_tensor_override_requires_explicit_verified_source" in structural_plan["limitations"]
 

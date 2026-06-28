@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from driveloop.backends.base import GenerationBackend
+from driveloop.dd2_override import read_override_audit
 from driveloop.schema import DriveLoopRequest, Generation
 
 
@@ -25,6 +26,7 @@ class DriveDreamer2Backend(GenerationBackend):
         artifact_dir: str | Path = "outputs/driveloop/drivedreamer2_backend/artifacts",
         python_executable: str = "python",
         timeout_seconds: Optional[int] = None,
+        audit_only: bool = False,
     ) -> None:
         self.project_root = Path(project_root).resolve()
         self.config_name = config_name
@@ -33,9 +35,13 @@ class DriveDreamer2Backend(GenerationBackend):
         self.artifact_dir = Path(artifact_dir)
         self.python_executable = python_executable
         self.timeout_seconds = timeout_seconds
+        self.audit_only = audit_only
 
     def generate(self, request: DriveLoopRequest, iteration: int) -> Generation:
-        self.artifact_dir.mkdir(parents=True, exist_ok=True)
+        run_artifact_dir = self.artifact_dir
+        if request.scenario_id:
+            run_artifact_dir = run_artifact_dir / request.scenario_id
+        run_artifact_dir.mkdir(parents=True, exist_ok=True)
 
         baseline_video = self.baseline_output_dir / "000000.mp4"
         if baseline_video.exists():
@@ -61,8 +67,33 @@ class DriveDreamer2Backend(GenerationBackend):
             if isinstance(executable_condition, dict)
             else {}
         )
+
+        baseline_structural_snapshot = self._build_baseline_structural_snapshot()
+        structural_request_diff = self._build_structural_request_diff(
+            structural_input_plan=structural_input_plan,
+            baseline_structural_snapshot=baseline_structural_snapshot,
+            trace_metadata=trace_metadata,
+        )
+        override_candidate_plan = self._build_override_candidate_plan(
+            structural_input_plan=structural_input_plan,
+            structural_request_diff=structural_request_diff,
+            baseline_structural_snapshot=baseline_structural_snapshot,
+        )
+        override_json = self._build_override_json(
+            dd2_prompt=dd2_prompt,
+            structural_input_plan=structural_input_plan,
+            override_candidate_plan=override_candidate_plan,
+        )
+        audit_path = run_artifact_dir / f"dd2_runtime_input_audit_{iteration:02d}.json"
+        override_audit_path = run_artifact_dir / f"dd2_override_audit_{iteration:02d}.jsonl"
+        env["DRIVELOOP_DD2_AUDIT_PATH"] = str(audit_path)
         if dd2_prompt:
             env["DRIVELOOP_DD2_PROMPT"] = str(dd2_prompt)
+        if self.audit_only:
+            env["DRIVELOOP_DD2_AUDIT_ONLY"] = "1"
+        if override_json.get("available"):
+            env["DRIVELOOP_DD2_OVERRIDE_JSON"] = json.dumps(override_json, sort_keys=True)
+            env["DRIVELOOP_DD2_OVERRIDE_AUDIT_PATH"] = str(override_audit_path)
 
         cmd = [
             self.python_executable,
@@ -84,33 +115,48 @@ class DriveDreamer2Backend(GenerationBackend):
             timeout=self.timeout_seconds,
         )
 
-        if not baseline_video.exists():
-            raise FileNotFoundError(f"DriveDreamer-2 did not create {baseline_video}")
+        artifact_video = None
+        if not self.audit_only:
+            if not baseline_video.exists():
+                raise FileNotFoundError(f"DriveDreamer-2 did not create {baseline_video}")
 
-        artifact_video = self.artifact_dir / f"iteration_{iteration:02d}.mp4"
-        shutil.copy2(baseline_video, artifact_video)
+            artifact_video = run_artifact_dir / f"iteration_{iteration:02d}.mp4"
+            shutil.copy2(baseline_video, artifact_video)
 
-        baseline_structural_snapshot = self._build_baseline_structural_snapshot()
-        structural_request_diff = self._build_structural_request_diff(
-            structural_input_plan=structural_input_plan,
-            baseline_structural_snapshot=baseline_structural_snapshot,
-            trace_metadata=trace_metadata,
+        override_audit = (
+            read_override_audit(override_audit_path)
+            if override_json.get("available")
+            else {"available": False, "reason": "override_json_not_available"}
         )
-        override_candidate_plan = self._build_override_candidate_plan(
+        dd2_runtime_input_audit = {}
+        if audit_path.exists():
+            dd2_runtime_input_audit = json.loads(audit_path.read_text(encoding="utf-8"))
+
+        paper_alignment_report = self._build_paper_alignment_report(
+            dd2_prompt=dd2_prompt,
+            executable_condition=executable_condition,
+            trace_metadata=trace_metadata,
             structural_input_plan=structural_input_plan,
             structural_request_diff=structural_request_diff,
-            baseline_structural_snapshot=baseline_structural_snapshot,
+            override_candidate_plan=override_candidate_plan,
         )
+        report_path = run_artifact_dir / f"paper_alignment_report_{iteration:02d}.json"
+        report_path.write_text(json.dumps(paper_alignment_report, indent=2), encoding="utf-8")
 
         return Generation(
             iteration=iteration,
             prompt=request.prompt,
-            artifacts={"video": str(artifact_video)},
+            artifacts={
+                **({"video": str(artifact_video)} if artifact_video else {}),
+                "paper_alignment_report": str(report_path),
+                "dd2_runtime_input_audit": str(audit_path),
+            },
             metadata={
                 "backend": "drivedreamer2",
                 "config_name": self.config_name,
                 "baseline_video": str(baseline_video),
                 "returncode": completed.returncode,
+                "dd2_audit_only": self.audit_only,
                 "dd2_prompt": str(dd2_prompt) if dd2_prompt else None,
                 "dd2_executable_condition": executable_condition,
                 "dd2_condition_schema_version": executable_condition.get("schema_version")
@@ -126,8 +172,149 @@ class DriveDreamer2Backend(GenerationBackend):
                 "dd2_baseline_structural_snapshot": baseline_structural_snapshot,
                 "dd2_structural_request_diff": structural_request_diff,
                 "dd2_override_candidate_plan": override_candidate_plan,
+                "dd2_override_json": override_json,
+                "dd2_override_audit_path": str(override_audit_path)
+                if override_json.get("available")
+                else None,
+                "dd2_override_audit": override_audit,
+                "dd2_paper_alignment_report": paper_alignment_report,
+                "dd2_runtime_input_audit": dd2_runtime_input_audit,
             },
         )
+
+    def _build_override_json(
+        self,
+        dd2_prompt: str | None,
+        structural_input_plan: dict,
+        override_candidate_plan: dict,
+    ) -> dict:
+        if not isinstance(structural_input_plan, dict) or not structural_input_plan:
+            return {
+                "available": False,
+                "reason": "missing_structural_input_plan",
+            }
+
+        append_boxes = []
+        box_synthesis_draft = (
+            override_candidate_plan.get("box_synthesis_plan", {})
+            .get("box_synthesis_draft", {})
+            if isinstance(override_candidate_plan, dict)
+            else {}
+        )
+        for entry in box_synthesis_draft.get("draft_boxes3d", []):
+            append_boxes.append(
+                {
+                    "category": entry.get("category"),
+                    "box3d": list(entry.get("box3d", [])),
+                    "source": entry.get("source", "unknown"),
+                    "provenance": "driveloop_executable_condition",
+                    "placement_policy": entry.get("placement_policy"),
+                    "requires_projection": entry.get("requires_projection", True),
+                }
+            )
+
+        scene_description = structural_input_plan.get("scene_description", {})
+        scene_value = scene_description.get("value") if isinstance(scene_description, dict) else dd2_prompt
+
+        return {
+            "available": True,
+            "schema_version": "driveloop_dd2_override.v0",
+            "source": "DriveLoop.executable_condition",
+            "scene_description": {
+                "mode": "replace",
+                "value": scene_value or dd2_prompt,
+                "source": scene_description.get("source", "text_control.prompt")
+                if isinstance(scene_description, dict)
+                else "text_control.prompt",
+            },
+            "boxes3d": {
+                "mode": "append",
+                "append": append_boxes,
+                "source": structural_input_plan.get("boxes3d", {}).get(
+                    "source",
+                    "executable_condition_tensor_override",
+                ),
+            },
+            "image_box": {
+                "mode": "derive_from_boxes3d_after_override",
+                "source": structural_input_plan.get("image_box", {}).get(
+                    "source",
+                    "derived_from_boxes3d_override",
+                ),
+            },
+            "image_hdmap": {
+                "mode": "keep_baseline",
+                "source": structural_input_plan.get("image_hdmap", {}).get(
+                    "source",
+                    "mini_dataset_baseline",
+                ),
+                "reason": structural_input_plan.get("image_hdmap", {}).get(
+                    "reason",
+                    "no_verified_hdmap_override_source",
+                ),
+            },
+            "audit": {
+                "control_level": "tensor_override_runtime",
+                "limitations": [
+                    "box_positions_are_draft_until_projection_and_scene_geometry_are_verified",
+                    "hdmap_kept_baseline_without_explicit_verified_override",
+                ],
+            },
+        }
+
+    def _build_paper_alignment_report(
+        self,
+        dd2_prompt: str | None,
+        executable_condition: dict,
+        trace_metadata: dict,
+        structural_input_plan: dict,
+        structural_request_diff: dict,
+        override_candidate_plan: dict,
+    ) -> dict:
+        tensor_ready = trace_metadata.get("tensor_control_ready") is True
+        structural_level = structural_input_plan.get("control_level")
+        actor_controls = executable_condition.get("actor_controls", [])
+        environment_controls = executable_condition.get("environment_controls", {})
+        risk_controls = executable_condition.get("risk_controls", {})
+
+        stage_3_status = "tensor_control_ready" if tensor_ready else "text_and_plan_only"
+        blockers = []
+        if not tensor_ready:
+            blockers.extend(trace_metadata.get("limitations", []))
+        if structural_level in (None, "plan_only", "schema_only"):
+            blockers.append("dd2_structural_inputs_not_overridden")
+
+        return {
+            "schema_version": "driveloop_paper_alignment_report.v0",
+            "paper_reference": "DriveLoop methodology Section 3",
+            "stage_1_multimodal_prompt_grounding": {
+                "status": "available",
+                "dd2_text_prompt_available": bool(dd2_prompt),
+                "actor_controls": actor_controls,
+                "environment_controls": environment_controls,
+            },
+            "stage_2_long_tail_conditioning": {
+                "status": "available" if risk_controls.get("long_tail_tags") else "no_long_tail_tags",
+                "risk_controls": risk_controls,
+            },
+            "stage_3_scene_consistent_generation": {
+                "status": stage_3_status,
+                "tensor_control_ready": tensor_ready,
+                "structural_control_level": structural_level,
+                "structural_input_plan": structural_input_plan,
+                "structural_request_diff": structural_request_diff,
+                "override_candidate_plan": override_candidate_plan,
+                "blockers": list(dict.fromkeys(blockers)),
+            },
+            "stage_4_perception_evaluation_and_refinement": {
+                "status": "requires_perception_evaluator_for_visual_alignment",
+                "current_guardrail": "dd2_outputs_are_not_accepted_when_tensor_control_ready_is_false",
+            },
+            "experiment_readiness": {
+                "main_experiment_ready": tensor_ready,
+                "allowed_use": "prototype_trace_and_ablation_only" if not tensor_ready else "controlled_generation_candidate",
+            },
+        }
 
     def _build_override_candidate_plan(
         self,
@@ -169,7 +356,7 @@ class DriveDreamer2Backend(GenerationBackend):
 
         return {
             "available": True,
-            "control_level": "candidate_plan_only",
+            "control_level": "tensor_override_runtime",
             "scene_description_action": scene_description_action,
             "actor_label_actions": actor_label_actions,
             "requires_box_synthesis": requires_box_synthesis,
@@ -186,9 +373,8 @@ class DriveDreamer2Backend(GenerationBackend):
                 "boxes3d": structural_input_plan.get("boxes3d", {}).get("source"),
             },
             "limitations": [
-                "tensor_override_not_implemented",
-                "box_synthesis_not_implemented",
-                "hdmap_override_not_implemented",
+                "box_positions_are_draft_until_projection_and_scene_geometry_are_verified",
+                "hdmap_override_requires_explicit_verified_source",
             ],
         }
 
@@ -218,7 +404,7 @@ class DriveDreamer2Backend(GenerationBackend):
 
         return {
             "available": True,
-            "control_level": "plan_only",
+            "control_level": "tensor_override_runtime",
             "target_tensor": "boxes3d",
             "derived_tensor": "image_box",
             "placement_policy": placement_policy,
@@ -232,9 +418,8 @@ class DriveDreamer2Backend(GenerationBackend):
                 baseline_structural_snapshot=baseline_structural_snapshot,
             ),
             "limitations": [
-                "3d_position_not_estimated",
-                "camera_projection_not_computed",
-                "image_box_canvas_not_rendered",
+                "3d_position_uses_audited_draft_policy",
+                "camera_projection_validated_when_baseline_intrinsic_is_available",
             ],
         }
 
@@ -247,10 +432,16 @@ class DriveDreamer2Backend(GenerationBackend):
     ) -> dict:
         default_dimensions = {
             "bicycle": {"width": 0.6, "height": 1.6, "depth": 1.8},
+            "motorcycle": {
+                "width": 0.8,
+                "height": 1.5,
+                "depth": 2.2,
+            },
             "pedestrian": {"width": 0.6, "height": 1.7, "depth": 0.6},
             "car": {"width": 1.8, "height": 1.6, "depth": 4.5},
             "truck": {"width": 2.5, "height": 3.0, "depth": 7.0},
             "bus": {"width": 2.6, "height": 3.2, "depth": 10.0},
+            "barrier": {"width": 1.2, "height": 0.9, "depth": 0.45},
         }
 
         draft_boxes3d = []
@@ -297,9 +488,9 @@ class DriveDreamer2Backend(GenerationBackend):
             "draft_boxes3d": draft_boxes3d,
             "validation": validation,
             "limitations": [
-                "not_written_to_dataset",
-                "3d_position_not_estimated",
-                "camera_projection_not_computed",
+                "written_to_runtime_sample_only",
+                "3d_position_uses_audited_draft_policy",
+                "camera_projection_validated_when_baseline_intrinsic_is_available",
             ],
         }
 

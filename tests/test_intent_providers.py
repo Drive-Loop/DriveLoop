@@ -1,8 +1,10 @@
 from driveloop.intent.adapter import RuleBasedIntentAdapter
 from driveloop.intent.providers import (
+    AuditOnlyASRReviewAgent,
     MultimodalPreprocessor,
     PlaceholderImageUnderstandingProvider,
     PlaceholderVoiceUnderstandingProvider,
+    TranscriptionResult,
 )
 
 
@@ -32,6 +34,11 @@ def test_placeholder_voice_provider_uses_transcript():
         {
             "transcript": "a cyclist cuts in from the left near an intersection",
             "status": "placeholder",
+            "asr": {
+                "raw_transcript": "a cyclist cuts in from the left near an intersection",
+                "suggested_transcript": "a cyclist cuts in from the left near an intersection",
+                "accepted_by_user": True,
+            },
         }
     )
 
@@ -39,6 +46,27 @@ def test_placeholder_voice_provider_uses_transcript():
     assert evidence.modality == "voice"
     assert evidence.text == "a cyclist cuts in from the left near an intersection"
     assert evidence.metadata["transcript"] == "a cyclist cuts in from the left near an intersection"
+    assert evidence.metadata["asr"]["raw_transcript"] == "a cyclist cuts in from the left near an intersection"
+
+
+def test_audit_only_asr_review_agent_preserves_raw_transcript():
+    agent = AuditOnlyASRReviewAgent()
+
+    review = agent.review(
+        TranscriptionResult(
+            transcript="Ago Bay High Court",
+            backend="fake_asr",
+            status="ok",
+            language="en",
+            metadata={"confidence": 0.42},
+        )
+    )
+
+    assert review.raw_transcript == "Ago Bay High Court"
+    assert review.suggested_transcript == "Ago Bay High Court"
+    assert review.accepted_by_user is False
+    assert review.confidence == 0.42
+    assert review.metadata["review_backend"] == "audit_only"
 
 
 def test_multimodal_preprocessor_collects_image_and_voice_evidence():

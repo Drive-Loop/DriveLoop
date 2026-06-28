@@ -1,5 +1,7 @@
 import copy
 import os
+import json
+import hashlib
 import math
 import shutil
 import time
@@ -35,6 +37,21 @@ class DriveDreamer2_Tester(Tester):
         self.frame_num = data_config.frame_num
         batch_size_per_gpu = self.frame_num * self.cam_num
         cam_names = data_config.get('cam_names',None)
+
+        if os.environ.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1":
+            self.logger.info('DRIVELOOP_DD2_AUDIT_ONLY=1: use first contiguous batch without VideoSampler')
+            audit_size = min(len(dataset), batch_size_per_gpu)
+            audit_dataset = torch.utils.data.Subset(dataset, list(range(audit_size)))
+            return torch.utils.data.DataLoader(
+                audit_dataset,
+                collate_fn=VideoCollator(
+                    frame_num=self.frame_num,
+                    img_mask_type=data_config.img_mask_type,
+                    img_mask_num=data_config.img_mask_num,
+                ) if 'Video' in data_config.type else DefaultCollator(),
+                batch_size=audit_size,
+                num_workers=0,
+            )
         
         dataloader = torch.utils.data.DataLoader(
             dataset,
@@ -64,6 +81,20 @@ class DriveDreamer2_Tester(Tester):
     
     def get_models(self, model_config):
         local_files_only = model_config.get('local_files_only', True)
+        if os.environ.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1":
+            text_encoder_pretrained = model_config.get('text_encoder_pretrained', None)
+            if text_encoder_pretrained is None:
+                assert False
+            self.text_encoder = CLIPTextTransform(
+                model_path=text_encoder_pretrained,
+                device=self.device,
+                dtype=self.dtype,
+            )
+            self.mode = model_config.get('mode', 'img_cond')
+            assert self.mode in ['img_cond', 'video_cond', 'wo_img']
+            self.num_inf_steps = model_config.get('num_inf_steps', 50)
+            self.logger.info('DRIVELOOP_DD2_AUDIT_ONLY=1: skip DriveDreamer2Pipeline load')
+            return None
         pipeline_name = model_config.pipeline_name
         text_encoder_pretrained = model_config.get('text_encoder_pretrained',None)
         variant = 'fp16' if self.mixed_precision == 'fp16' else None
@@ -144,6 +175,42 @@ class DriveDreamer2_Tester(Tester):
                     prompt_embed = self.text_encoder([prompt_override], mode='after_pool', to_numpy=False)[:, None]
                 else:
                     prompt_embed = batch_dict.get('prompt_embeds', None)
+
+                audit_path = os.environ.get("DRIVELOOP_DD2_AUDIT_PATH")
+                if audit_path:
+                    def tensor_summary(value):
+                        if value is None:
+                            return {"available": False}
+                        item = value.detach().float().cpu() if hasattr(value, "detach") else torch.tensor(value).float()
+                        array = item.numpy()
+                        contiguous = np.ascontiguousarray(array)
+                        return {
+                            "available": True,
+                            "shape": list(item.shape),
+                            "dtype": str(array.dtype),
+                            "sum": float(item.sum().item()),
+                            "mean": float(item.mean().item()),
+                            "std": float(item.std().item()) if item.numel() > 1 else 0.0,
+                            "nonzero": int(np.count_nonzero(array)),
+                            "sha256": hashlib.sha256(contiguous.tobytes()).hexdigest(),
+                        }
+
+                    audit = {
+                        "schema_version": "dd2_runtime_input_audit.v0",
+                        "audit_only": os.environ.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1",
+                        "prompt_override": prompt_override,
+                        "prompt_embed": tensor_summary(prompt_embed),
+                        "img_cond": tensor_summary(input_dict.get("img_cond")),
+                        "grounding_downsampler_input": tensor_summary(input_dict.get("grounding_downsampler_input")),
+                        "box_downsampler_input": tensor_summary(input_dict.get("box_downsampler_input")),
+                    }
+                    with open(audit_path, "w", encoding="utf-8") as f:
+                        json.dump(audit, f, indent=2)
+
+                if os.environ.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1":
+                    self.logger.info('DRIVELOOP_DD2_AUDIT_ONLY=1: wrote runtime audit and skipped inference')
+                    idx += 1
+                    break
 
                 if prompt_embed is None:
                     videos = []
