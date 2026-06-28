@@ -142,3 +142,21 @@ def test_executable_condition_carries_alignment_feedback_as_audit_trace_only():
     assert feedback["failed_checks"] == ["object_presence.motorcycle"]
     assert "not verified tensor-level DD2 control" in feedback["claim_boundary"]
 
+
+def test_executable_condition_includes_trajectory_control_contract_for_lane_change():
+    request = DriveLoopRequest(prompt="daytime urban road with a motorcycle changing lane from the left")
+
+    spec = RuleBasedGrounder().ground(request)
+    plan = LongTailController().build(spec)
+    condition = DriveDreamer2ConditionAdapter().build(spec, plan)
+
+    contract = condition.executable_condition["trajectory_control_contract"]
+
+    assert contract["schema_version"] == "driveloop_trajectory_control_contract.v0"
+    assert contract["status"] == "not_runtime_connected"
+    assert contract["control_level"] == "contract_only"
+    assert "lane_change" in contract["requested_motions"]
+    assert contract["requested_maneuvers"][0]["type"] == "lane_change_or_cut_in"
+    assert "per_frame_actor_boxes3d" in contract["required_runtime_surfaces"]
+    assert contract["current_runtime_surfaces"]["velocities"] == "dataset_surface_not_dd2_runtime_input"
+    assert "cannot prove lane-change video semantics" in contract["claim_boundary"]

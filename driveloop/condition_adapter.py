@@ -126,6 +126,12 @@ class DriveDreamer2ConditionAdapter:
                 ),
             }
 
+        trajectory_control_contract = self._build_trajectory_control_contract(
+            actor_controls=actor_controls,
+            relations=relations,
+            motion_primitives=motion_primitives,
+        )
+
         return {
             "schema_version": "dd2_executable_condition.v0",
             "target_backend": "drivedreamer2_mini",
@@ -133,6 +139,7 @@ class DriveDreamer2ConditionAdapter:
                 "prompt": text_prompt,
             },
             "structural_input_plan": structural_input_plan,
+            "trajectory_control_contract": trajectory_control_contract,
             "environment_controls": {
                 "weather": environment.get("weather", "unspecified"),
                 "lighting": environment.get("lighting", "unspecified"),
@@ -146,6 +153,57 @@ class DriveDreamer2ConditionAdapter:
                 "executable_controls": dict(executable_controls),
             },
             "trace_metadata": trace_metadata,
+        }
+
+    def _build_trajectory_control_contract(
+        self,
+        actor_controls: List[Dict[str, Any]],
+        relations: List[str],
+        motion_primitives: List[str],
+    ) -> Dict[str, Any]:
+        requested_motions = list(dict.fromkeys(motion_primitives))
+        requested_relations = list(dict.fromkeys(relations))
+        requested_maneuvers = []
+        if "lane_change" in requested_motions or "cut_in" in requested_motions:
+            requested_maneuvers.append(
+                {
+                    "type": "lane_change_or_cut_in",
+                    "source": "motion_primitives",
+                    "required_evidence": [
+                        "per_frame_actor_identity",
+                        "per_frame_actor_boxes3d",
+                        "lateral_displacement_across_frames",
+                        "lane_geometry_or_hdmap_reference",
+                    ],
+                }
+            )
+
+        return {
+            "schema_version": "driveloop_trajectory_control_contract.v0",
+            "status": "not_runtime_connected",
+            "control_level": "contract_only",
+            "actor_refs": [actor["actor_id"] for actor in actor_controls],
+            "requested_motions": requested_motions,
+            "requested_relations": requested_relations,
+            "requested_maneuvers": requested_maneuvers,
+            "required_runtime_surfaces": [
+                "actor_track_identity",
+                "per_frame_actor_boxes3d",
+                "velocity_or_displacement_tensor",
+                "hdmap_lane_geometry",
+                "temporal_consistency_audit",
+            ],
+            "current_runtime_surfaces": {
+                "boxes3d": "static_sample_level_override",
+                "image_box": "derived_from_boxes3d",
+                "velocities": "dataset_surface_not_dd2_runtime_input",
+                "actor_track_identity": "not_observed",
+                "hdmap_lane_geometry": "mini_dataset_baseline",
+            },
+            "claim_boundary": (
+                "This contract records the evidence required for trajectory control; "
+                "it is not connected to DD2 runtime tensors and cannot prove lane-change video semantics."
+            ),
         }
 
     def _build_mini_structural_input_plan(

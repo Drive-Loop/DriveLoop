@@ -20,7 +20,7 @@ _OBJECT_KEYWORDS: Dict[str, List[str]] = {
 
 _MOTION_KEYWORDS: Dict[str, List[str]] = {
     "cut_in": ["cut in", "cut-in", "cuts in"],
-    "lane_change": ["lane change", "lane-change", "changes lane"],
+    "lane_change": ["lane change", "lane-change", "changes lane", "changing lane"],
     "crossing": ["crossing", "crosses", "cross the road"],
     "stopped": ["stopped", "parked", "stationary"],
     "turning": ["left turn", "right turn", "turning"],
