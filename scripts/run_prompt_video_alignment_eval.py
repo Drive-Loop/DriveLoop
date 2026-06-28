@@ -57,12 +57,19 @@ def build_generation(args: argparse.Namespace) -> Generation:
 def evaluate_generation(generation: Generation, pass_threshold: float) -> Dict[str, Any]:
     evaluation = PromptVideoAlignmentEvaluator(pass_threshold=pass_threshold).evaluate(generation)
     measured = evaluation.metrics.get("alignment_measured") == 1.0
+    if not measured:
+        video_semantic_claim = "not_measured"
+    elif evaluation.diagnosis.passed:
+        video_semantic_claim = "measured_passed"
+    else:
+        video_semantic_claim = "measured_failed"
+
     return {
         "generation": asdict(generation),
         "evaluation": asdict(evaluation),
         "interpretation": {
             "tensor_audit_claim": "not_evaluated_by_this_script",
-            "video_semantic_claim": "measured_by_external_report" if measured else "not_measured",
+            "video_semantic_claim": video_semantic_claim,
             "claim_boundary": (
                 "This script does not inspect video pixels. It only scores an explicit "
                 "perception, VLM, or human-review report attached to generation metadata."

@@ -61,7 +61,7 @@ def test_script_evaluation_scores_external_alignment_report(tmp_path: Path):
 
     assert payload["evaluation"]["score"] == 0.85
     assert payload["evaluation"]["diagnosis"]["passed"] is True
-    assert payload["interpretation"]["video_semantic_claim"] == "measured_by_external_report"
+    assert payload["interpretation"]["video_semantic_claim"] == "measured_passed"
 
 
 def test_script_accepts_wrapped_alignment_report(tmp_path: Path):
@@ -98,3 +98,35 @@ def test_script_rejects_missing_video_artifact(tmp_path: Path):
                 alignment_report=None,
             )
         )
+
+def test_script_evaluation_marks_failed_external_alignment_report(tmp_path: Path):
+    video_path = tmp_path / "iteration_00.mp4"
+    video_path.write_bytes(b"fake video bytes")
+    report_path = tmp_path / "alignment_report_failed.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "status": "measured",
+                "source": "manual_review_v0",
+                "checks": [
+                    {"name": "object_presence.motorcycle", "required": True, "passed": False, "score": 0.0},
+                    {"name": "lighting.daytime", "required": True, "passed": True, "score": 0.9},
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    generation = build_generation(
+        Namespace(
+            prompt="daytime urban road with a motorcycle changing lane from the left",
+            scenario_id="unit_measured_failed",
+            video_path=str(video_path),
+            alignment_report=str(report_path),
+        )
+    )
+
+    payload = evaluate_generation(generation, pass_threshold=0.8)
+
+    assert payload["evaluation"]["diagnosis"]["passed"] is False
+    assert payload["interpretation"]["video_semantic_claim"] == "measured_failed"
