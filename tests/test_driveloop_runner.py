@@ -189,3 +189,8 @@ def test_runner_carries_alignment_feedback_to_next_backend_request():
     assert feedback["control_level"] == "text_feedback_only"
     assert feedback["failed_checks"] == ["object_presence.motorcycle"]
     assert "dd2_condition" in backend.requests[1].condition
+
+    trace = backend.requests[1].condition["dd2_condition"]["executable_condition"]["trace_metadata"]
+    assert trace["alignment_feedback"]["status"] == "measured_failed"
+    assert trace["alignment_feedback"]["control_level"] == "text_feedback_only"
+    assert trace["tensor_control_ready"] is True

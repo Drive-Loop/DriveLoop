@@ -1,7 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import dataclass, field
-from typing import Any, Dict, List
+from typing import Any, Dict, List, Optional
 
 from driveloop.schema import LongTailConditionPlan, SceneSpecification
 
@@ -33,6 +33,7 @@ class DriveDreamer2ConditionAdapter:
         self,
         spec: SceneSpecification,
         condition_plan: LongTailConditionPlan,
+        alignment_feedback: Optional[Dict[str, Any]] = None,
     ) -> DriveDreamer2Condition:
         text_parts = [spec.prompt]
         text_parts.extend(condition_plan.prompt_suffixes)
@@ -59,6 +60,7 @@ class DriveDreamer2ConditionAdapter:
             motion_primitives=motion_primitives,
             long_tail_tags=long_tail_tags,
             executable_controls=executable_controls,
+            alignment_feedback=alignment_feedback,
         )
 
         return DriveDreamer2Condition(
@@ -82,6 +84,7 @@ class DriveDreamer2ConditionAdapter:
         motion_primitives: List[str],
         long_tail_tags: List[str],
         executable_controls: Dict[str, Any],
+        alignment_feedback: Optional[Dict[str, Any]] = None,
     ) -> Dict[str, Any]:
         actor_controls = [
             {
@@ -98,6 +101,30 @@ class DriveDreamer2ConditionAdapter:
             text_prompt=text_prompt,
             actor_controls=actor_controls,
         )
+
+        trace_metadata: Dict[str, Any] = {
+            "structural_control_level": "tensor_override_contract",
+            "tensor_control_ready": True,
+            "limitations": [
+                "mini_dataset_structural_inputs_required",
+                "trajectory_tensor_control_not_connected",
+                "hdmap_tensor_control_requires_explicit_verified_source",
+            ],
+        }
+        if isinstance(alignment_feedback, dict) and alignment_feedback:
+            trace_metadata["alignment_feedback"] = {
+                "schema_version": alignment_feedback.get("schema_version"),
+                "status": alignment_feedback.get("status"),
+                "control_level": alignment_feedback.get("control_level", "text_feedback_only"),
+                "failed_checks": list(alignment_feedback.get("failed_checks", [])),
+                "requested_visual_constraints": list(
+                    alignment_feedback.get("requested_visual_constraints", [])
+                ),
+                "claim_boundary": (
+                    "Alignment feedback is carried for audit and text refinement only; "
+                    "it is not verified tensor-level DD2 control."
+                ),
+            }
 
         return {
             "schema_version": "dd2_executable_condition.v0",
@@ -118,15 +145,7 @@ class DriveDreamer2ConditionAdapter:
                 "long_tail_tags": list(long_tail_tags),
                 "executable_controls": dict(executable_controls),
             },
-            "trace_metadata": {
-                "structural_control_level": "tensor_override_contract",
-                "tensor_control_ready": True,
-                "limitations": [
-                    "mini_dataset_structural_inputs_required",
-                    "trajectory_tensor_control_not_connected",
-                    "hdmap_tensor_control_requires_explicit_verified_source",
-                ],
-            },
+            "trace_metadata": trace_metadata,
         }
 
     def _build_mini_structural_input_plan(

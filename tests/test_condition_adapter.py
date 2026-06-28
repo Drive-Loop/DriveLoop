@@ -113,3 +113,32 @@ def test_executable_condition_includes_mini_structural_input_plan():
     assert "trajectory_tensor_override_not_implemented" in structural_plan["limitations"]
     assert "hdmap_tensor_override_requires_explicit_verified_source" in structural_plan["limitations"]
 
+def test_executable_condition_carries_alignment_feedback_as_audit_trace_only():
+    request = DriveLoopRequest(prompt="daytime urban road with a motorcycle changing lane from the left")
+    alignment_feedback = {
+        "schema_version": "driveloop_alignment_feedback.v0",
+        "status": "measured_failed",
+        "control_level": "text_feedback_only",
+        "failed_checks": ["object_presence.motorcycle"],
+        "requested_visual_constraints": ["a motorcycle must be visibly present"],
+    }
+
+    spec = RuleBasedGrounder().ground(request)
+    plan = LongTailController().build(spec)
+    condition = DriveDreamer2ConditionAdapter().build(
+        spec,
+        plan,
+        alignment_feedback=alignment_feedback,
+    )
+
+    trace = condition.executable_condition["trace_metadata"]
+    feedback = trace["alignment_feedback"]
+
+    assert trace["tensor_control_ready"] is True
+    assert trace["structural_control_level"] == "tensor_override_contract"
+    assert feedback["schema_version"] == "driveloop_alignment_feedback.v0"
+    assert feedback["status"] == "measured_failed"
+    assert feedback["control_level"] == "text_feedback_only"
+    assert feedback["failed_checks"] == ["object_presence.motorcycle"]
+    assert "not verified tensor-level DD2 control" in feedback["claim_boundary"]
+

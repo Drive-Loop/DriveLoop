@@ -47,7 +47,11 @@ class DriveLoopRunner:
                 requested_tags=requested_tags,
                 history=history,
             )
-            dd2_condition = self.condition_adapter.build(scene_spec, condition_plan)
+            dd2_condition = self.condition_adapter.build(
+                scene_spec,
+                condition_plan,
+                alignment_feedback=current_request.condition.get("alignment_feedback"),
+            )
             generation_request = self._with_conditioned_prompt(current_request, condition_plan.prompt_suffixes)
             generation_request = replace(
                 generation_request,
