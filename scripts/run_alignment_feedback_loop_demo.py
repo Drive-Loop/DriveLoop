@@ -4,7 +4,7 @@ import argparse
 from dataclasses import asdict
 import json
 from pathlib import Path
-from typing import Any, Dict
+from typing import Any, Dict, List
 
 from driveloop import DriveLoopConfig, DriveLoopRequest, DriveLoopRunner
 from driveloop.backends.mock import MockGenerationBackend
@@ -15,8 +15,12 @@ from driveloop.schema import Diagnosis, Evaluation, Generation
 class AlignmentFeedbackDemoEvaluator(BaseEvaluator):
     """Deterministic evaluator for demonstrating feedback control flow only."""
 
-    def __init__(self) -> None:
+    def __init__(self, failed_checks: List[str] | None = None) -> None:
         self.calls = 0
+        self.failed_checks = failed_checks or [
+            "object_presence.motorcycle",
+            "spatial_relation.left_lane_change",
+        ]
 
     def evaluate(self, generation: Generation) -> Evaluation:
         self.calls += 1
@@ -25,14 +29,43 @@ class AlignmentFeedbackDemoEvaluator(BaseEvaluator):
                 score=0.0,
                 diagnosis=Diagnosis(
                     passed=False,
-                    reasons=[
-                        "alignment_check_failed:object_presence.motorcycle",
-                        "alignment_check_failed:spatial_relation.left_lane_change",
-                    ],
+                    reasons=[f"alignment_check_failed:{check}" for check in self.failed_checks],
                     suggested_actions=["inspect failed alignment checks before making semantic claims"],
                 ),
             )
         return Evaluation(score=1.0, diagnosis=Diagnosis(passed=True))
+
+
+def failed_checks_from_alignment_report(path: str | None) -> List[str] | None:
+    if path is None:
+        return None
+
+    data = json.loads(Path(path).read_text(encoding="utf-8"))
+    if not isinstance(data, dict):
+        raise ValueError("alignment report must be a JSON object")
+
+    report = data
+    for key in ("prompt_video_alignment", "video_alignment_report", "perception_alignment"):
+        value = data.get(key)
+        if isinstance(value, dict):
+            report = value
+            break
+
+    checks = report.get("checks", [])
+    if not isinstance(checks, list):
+        raise ValueError("alignment report checks must be a list")
+
+    failed: List[str] = []
+    for check in checks:
+        if not isinstance(check, dict):
+            continue
+        required = bool(check.get("required", True))
+        passed = bool(check.get("passed", False))
+        name = check.get("name")
+        if required and not passed and isinstance(name, str):
+            failed.append(name)
+
+    return failed
 
 
 def parse_args() -> argparse.Namespace:
@@ -47,6 +80,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--scenario-id", default="alignment_feedback_loop_demo")
     parser.add_argument("--output-dir", default="outputs/driveloop/alignment_feedback_loop_demo")
     parser.add_argument("--target-score", type=float, default=0.8)
+    parser.add_argument(
+        "--alignment-report",
+        default=None,
+        help="Optional external alignment report whose failed required checks seed the demo evaluator.",
+    )
     return parser.parse_args()
 
 
@@ -70,9 +108,10 @@ def _alignment_trace_from_generation(generation: Generation) -> Dict[str, Any]:
 def run_demo(args: argparse.Namespace) -> Dict[str, Any]:
     output_dir = Path(args.output_dir) / args.scenario_id
     backend = MockGenerationBackend(output_dir=output_dir / "artifacts")
+    failed_checks = failed_checks_from_alignment_report(getattr(args, "alignment_report", None))
     runner = DriveLoopRunner(
         backend=backend,
-        evaluator=AlignmentFeedbackDemoEvaluator(),
+        evaluator=AlignmentFeedbackDemoEvaluator(failed_checks=failed_checks),
         config=DriveLoopConfig(
             max_iterations=2,
             target_score=args.target_score,
@@ -105,6 +144,7 @@ def run_demo(args: argparse.Namespace) -> Dict[str, Any]:
         ),
         "iterations": len(result.history),
         "alignment_feedback_trace_present": bool(alignment_trace),
+        "alignment_report_source": getattr(args, "alignment_report", None),
         "alignment_feedback_trace": alignment_trace,
         "initial_prompt": result.request.prompt,
         "final_prompt": result.best_generation.prompt,
