@@ -742,3 +742,10 @@ def test_dd2_tester_batch_skip_uses_targeted_subset_before_gpu_transfer():
     assert '"selected_batch_index": sampler_selected_batch_index if sampler_selected_batch_index is not None else batch_i' in script
     assert "if batch_i < batch_skip:" in script
 
+
+
+def test_drivedreamer2_runner_exposes_baseline_dataset_dir():
+    script = Path("scripts/run_driveloop_drivedreamer2.py").read_text(encoding="utf-8")
+
+    assert 'parser.add_argument("--baseline-dataset-dir", default=None)' in script
+    assert "baseline_dataset_dir=args.baseline_dataset_dir or" in script
