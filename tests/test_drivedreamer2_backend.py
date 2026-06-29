@@ -705,3 +705,18 @@ def test_backend_passes_batch_skip_to_dd2_environment(tmp_path, monkeypatch):
 
     assert captured["env"]["DRIVELOOP_DD2_BATCH_SKIP"] == "3"
     assert generation.metadata["dd2_batch_skip"] == 3
+
+
+def test_drivedreamer2_runner_exposes_audit_only_and_batch_skip():
+    import subprocess
+    import sys
+
+    result = subprocess.run(
+        [sys.executable, "scripts/run_driveloop_drivedreamer2.py", "--help"],
+        check=True,
+        text=True,
+        capture_output=True,
+    )
+
+    assert "--audit-only" in result.stdout
+    assert "--dd2-batch-skip" in result.stdout

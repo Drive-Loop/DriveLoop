@@ -17,6 +17,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default="outputs/driveloop/drivedreamer2_backend_demo")
     parser.add_argument("--config-name", default="drivedreamer2_img_cond_mini_local")
     parser.add_argument("--dd2-batch-skip", type=int, default=0)
+    parser.add_argument("--audit-only", action="store_true")
     return parser.parse_args()
 
 
