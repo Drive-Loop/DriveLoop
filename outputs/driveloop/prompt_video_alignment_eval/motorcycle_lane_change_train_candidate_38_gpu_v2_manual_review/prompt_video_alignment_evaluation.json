@@ -3,7 +3,7 @@
   "candidate_id": "motorcycle_lane_change_train_candidate_38_gpu_v2",
   "video_path": "/data/projects/DriveLoop/outputs/drivedreamer2_img_cond_mini_train/000000.mp4",
   "review_type": "manual_human_review",
-  "review_timestamp_utc": "2026-06-29T22:49:11.382698+00:00",
+  "review_timestamp_utc": "2026-06-29T22:55:29.267520+00:00",
   "prompt": "daytime urban multi-lane road with dashed lane markings, a motorcycle or scooter in the left adjacent lane performs a visible lane change into the ego lane while cars overtake nearby, panoramic multi-view video.",
   "source_evidence": {
     "config_name": "drivedreamer2_img_cond_mini_train_local",
@@ -27,14 +27,21 @@
     "single candidate result; not evidence of broad prompt generalization"
   ],
   "manual_review_notes": [
-    "Human review correction: generated candidate is visibly different and road/daytime conditions pass, but no clear motorcycle target is visible in the generated video.",
-    "Source visibility audit indicates the selected source candidate contains a rider on a motorcycle, so the failure is not caused by complete absence of source motorcycle material.",
-    "Interpretation: DD2/DriveLoop conditioning did not preserve or synthesize the visible motorcycle target clearly enough for prompt-video semantic success.",
+    "Human review: generated video and source contact sheet are the same source material.",
+    "Source material contains a rider on a motorcycle.",
+    "Generated video does not clearly preserve the motorcycle target.",
+    "Road/daytime/modern scene differ from prior val candidate and pass, but target actor and lane-change semantics fail.",
     "Do not claim prompt-to-video semantic success for this candidate."
   ],
   "source_visibility_review": {
     "source_motorcycle_material_present": true,
     "source_review_summary": "A rider on a motorcycle is visible in the selected source candidate.",
     "failure_interpretation": "generated_video_does_not_preserve_clear_motorcycle_target"
+  },
+  "source_generation_consistency_review": {
+    "same_source_material_confirmed_by_human": true,
+    "source_contains_rider_on_motorcycle": true,
+    "generated_video_preserves_clear_motorcycle": false,
+    "failure_interpretation": "DD2 generation did not preserve the visible motorcycle target from the selected source candidate."
   }
 }
