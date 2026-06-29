@@ -729,11 +729,16 @@ def test_drivedreamer2_runner_passes_audit_only_and_batch_skip_to_backend():
     assert "batch_skip=args.dd2_batch_skip" in script
 
 
-def test_dd2_tester_audit_batch_skip_uses_video_sampler_path():
+def test_dd2_tester_batch_skip_uses_targeted_subset_before_gpu_transfer():
     script = Path("dreamer-train/projects/DriveDreamer2/drivedreamer2/drivedreamer2_tester.py").read_text(
         encoding="utf-8"
     )
 
-    assert 'audit_batch_skip = int(os.environ.get("DRIVELOOP_DD2_BATCH_SKIP", "0"))' in script
-    assert 'DRIVELOOP_DD2_AUDIT_ONLY") == "1" and audit_batch_skip == 0' in script
-    assert "use VideoSampler to match generation path" in script
+    assert "def _driveloop_selected_video_indices" in script
+    assert '"DRIVELOOP_DD2_BATCH_SKIP" in os.environ' in script
+    assert "selected_dataset = torch.utils.data.Subset(dataset, selected_indices)" in script
+    assert "self.dd2_sampler_selected_batch_index = target_batch_skip" in script
+    assert "batch_skip = 0 if sampler_selected_batch_index is not None else" in script
+    assert '"selected_batch_index": sampler_selected_batch_index if sampler_selected_batch_index is not None else batch_i' in script
+    assert "if batch_i < batch_skip:" in script
+
