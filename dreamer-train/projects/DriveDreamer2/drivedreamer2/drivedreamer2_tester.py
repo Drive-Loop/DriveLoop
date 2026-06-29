@@ -145,12 +145,15 @@ class DriveDreamer2_Tester(Tester):
             generator = torch.Generator(device=self.device)
             generator.manual_seed(self.seed)
             idx = 0
+            batch_skip = int(os.environ.get("DRIVELOOP_DD2_BATCH_SKIP", "0"))
             prompts = [
                 ['realistic autonomous driving scene, panoramic videos from different perspectives.' ],
                 ['rainy, realistic autonomous driving scene, panoramic videos from different perspectives.'],
                 ['night, realistic autonomous driving scene, panoramic videos from different perspectives.'],
             ]
-            for batch_dict in self.dataloader:
+            for batch_i, batch_dict in enumerate(self.dataloader):
+                if batch_i < batch_skip:
+                    continue
                 grounding_downsampler_input = batch_dict.get('grounding_downsampler_input', None)
                 grounding_downsampler_input = grounding_downsampler_input.reshape(self.cam_num,self.frame_num,*grounding_downsampler_input.shape[1:]).permute(1,2,3,0,4).flatten(3,4)
                 box_downsampler_input = batch_dict.get('box_downsampler_input',None)
@@ -199,6 +202,8 @@ class DriveDreamer2_Tester(Tester):
                         "schema_version": "dd2_runtime_input_audit.v0",
                         "audit_only": os.environ.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1",
                         "prompt_override": prompt_override,
+                        "batch_skip": batch_skip,
+                        "selected_batch_index": batch_i,
                         "prompt_embed": tensor_summary(prompt_embed),
                         "img_cond": tensor_summary(input_dict.get("img_cond")),
                         "grounding_downsampler_input": tensor_summary(input_dict.get("grounding_downsampler_input")),

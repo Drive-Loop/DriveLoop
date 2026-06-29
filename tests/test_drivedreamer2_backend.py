@@ -660,3 +660,48 @@ def test_box_synthesis_plan_includes_draft_box_for_motorcycle():
     ]
     assert draft["validation"]["all_entries_valid"] is True
     assert draft["validation"]["entries"][0]["image_box_canvas_dry_run"]["class_channel"] == 6
+
+
+def test_backend_passes_batch_skip_to_dd2_environment(tmp_path, monkeypatch):
+    import json
+    import subprocess
+
+    from driveloop.backends.drivedreamer2 import DriveDreamer2Backend
+    from driveloop.schema import DriveLoopRequest
+
+    captured = {}
+
+    def fake_run(cmd, cwd, env, check, text, timeout):
+        captured["env"] = env
+        baseline = tmp_path / "baseline" / "000000.mp4"
+        baseline.parent.mkdir(parents=True, exist_ok=True)
+        baseline.write_bytes(b"video")
+        audit_path = env.get("DRIVELOOP_DD2_AUDIT_PATH")
+        if audit_path:
+            Path(audit_path).write_text(
+                json.dumps({"schema_version": "dd2_runtime_input_audit.v0"}),
+                encoding="utf-8",
+            )
+        return subprocess.CompletedProcess(cmd, 0)
+
+    monkeypatch.setattr(subprocess, "run", fake_run)
+
+    backend = DriveDreamer2Backend(
+        project_root=tmp_path,
+        baseline_output_dir=tmp_path / "baseline",
+        baseline_dataset_dir=tmp_path / "missing_dataset",
+        artifact_dir=tmp_path / "artifacts",
+        batch_skip=3,
+    )
+
+    generation = backend.generate(
+        DriveLoopRequest(
+            prompt="daytime urban multi-lane road with a motorcycle lane change",
+            scenario_id="case",
+            condition={},
+        ),
+        iteration=0,
+    )
+
+    assert captured["env"]["DRIVELOOP_DD2_BATCH_SKIP"] == "3"
+    assert generation.metadata["dd2_batch_skip"] == 3

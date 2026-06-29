@@ -27,6 +27,7 @@ class DriveDreamer2Backend(GenerationBackend):
         python_executable: str = "python",
         timeout_seconds: Optional[int] = None,
         audit_only: bool = False,
+        batch_skip: int = 0,
     ) -> None:
         self.project_root = Path(project_root).resolve()
         self.config_name = config_name
@@ -36,6 +37,7 @@ class DriveDreamer2Backend(GenerationBackend):
         self.python_executable = python_executable
         self.timeout_seconds = timeout_seconds
         self.audit_only = audit_only
+        self.batch_skip = batch_skip
 
     def generate(self, request: DriveLoopRequest, iteration: int) -> Generation:
         run_artifact_dir = self.artifact_dir
@@ -91,6 +93,8 @@ class DriveDreamer2Backend(GenerationBackend):
             env["DRIVELOOP_DD2_PROMPT"] = str(dd2_prompt)
         if self.audit_only:
             env["DRIVELOOP_DD2_AUDIT_ONLY"] = "1"
+        if self.batch_skip:
+            env["DRIVELOOP_DD2_BATCH_SKIP"] = str(self.batch_skip)
         if override_json.get("available"):
             env["DRIVELOOP_DD2_OVERRIDE_JSON"] = json.dumps(override_json, sort_keys=True)
             env["DRIVELOOP_DD2_OVERRIDE_AUDIT_PATH"] = str(override_audit_path)
@@ -157,6 +161,7 @@ class DriveDreamer2Backend(GenerationBackend):
                 "baseline_video": str(baseline_video),
                 "returncode": completed.returncode,
                 "dd2_audit_only": self.audit_only,
+                "dd2_batch_skip": self.batch_skip,
                 "dd2_prompt": str(dd2_prompt) if dd2_prompt else None,
                 "dd2_executable_condition": executable_condition,
                 "dd2_condition_schema_version": executable_condition.get("schema_version")
