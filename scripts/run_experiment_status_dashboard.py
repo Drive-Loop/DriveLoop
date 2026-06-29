@@ -9,6 +9,7 @@ from typing import Any
 DEFAULT_READINESS = Path("outputs/driveloop/gpu_smoke_readiness/motorcycle_refined_candidate_gate.json")
 DEFAULT_MANIFEST = Path("outputs/driveloop/candidate_artifact_manifest/motorcycle_refined_candidate_manifest.json")
 DEFAULT_BUNDLE_VALIDATION = Path("outputs/driveloop/candidate_bundle_validation/motorcycle_refined_candidate_validation.json")
+DEFAULT_ALIGNMENT_EVAL = Path("outputs/driveloop/prompt_video_alignment_eval/motorcycle_refined_candidate_gpu_smoke_manual_review/prompt_video_alignment_evaluation.json")
 DEFAULT_RUNTIME_COMPARE = Path("outputs/driveloop/dd2_runtime_hash_compare/motorcycle_earlier_vs_refined.json")
 DEFAULT_MOTION_GAP = Path("outputs/driveloop/motion_control_gap_audit/motorcycle_manual_feedback_motion_gap.json")
 DEFAULT_VELOCITY_AUDIT = Path("outputs/driveloop/dd2_velocity_surface_audit/mini_velocity_surface.json")
@@ -32,6 +33,7 @@ def build_dashboard(
     readiness_path: Path = DEFAULT_READINESS,
     manifest_path: Path = DEFAULT_MANIFEST,
     bundle_validation_path: Path = DEFAULT_BUNDLE_VALIDATION,
+    alignment_eval_path: Path = DEFAULT_ALIGNMENT_EVAL,
     runtime_compare_path: Path = DEFAULT_RUNTIME_COMPARE,
     motion_gap_path: Path = DEFAULT_MOTION_GAP,
     velocity_audit_path: Path = DEFAULT_VELOCITY_AUDIT,
@@ -41,6 +43,7 @@ def build_dashboard(
     readiness = load_json(readiness_path)
     manifest = load_json(manifest_path)
     bundle_validation = load_json(bundle_validation_path)
+    alignment_eval = load_json(alignment_eval_path)
     runtime_compare = load_json(runtime_compare_path)
     motion_gap = load_json(motion_gap_path)
     velocity_audit = load_json(velocity_audit_path)
@@ -48,7 +51,10 @@ def build_dashboard(
     gpu_smoke_allowed = readiness.get("gpu_smoke_allowed") is True
     semantic_claim_allowed_by_readiness = readiness.get("semantic_claim_allowed") is True
     candidate_status = manifest.get("candidate_status", "unknown")
-    video_semantic_claim = manifest.get("video_semantic_claim", "unknown")
+    alignment_interpretation = alignment_eval.get("interpretation", {})
+    video_semantic_claim = alignment_interpretation.get(
+        "video_semantic_claim", manifest.get("video_semantic_claim", "unknown")
+    )
     bundle_status = bundle_validation.get("bundle_status", "unknown")
 
     runtime_changed = runtime_compare.get("runtime_tensor_hash_changed", {})
@@ -91,6 +97,7 @@ def build_dashboard(
             "readiness": source_entry(readiness_path),
             "manifest": source_entry(manifest_path),
             "bundle_validation": source_entry(bundle_validation_path),
+            "alignment_eval": source_entry(alignment_eval_path),
             "runtime_compare": source_entry(runtime_compare_path),
             "motion_gap": source_entry(motion_gap_path),
             "velocity_audit": source_entry(velocity_audit_path),
@@ -124,6 +131,7 @@ def main() -> None:
     parser.add_argument("--readiness", type=Path, default=DEFAULT_READINESS)
     parser.add_argument("--manifest", type=Path, default=DEFAULT_MANIFEST)
     parser.add_argument("--bundle-validation", type=Path, default=DEFAULT_BUNDLE_VALIDATION)
+    parser.add_argument("--alignment-eval", type=Path, default=DEFAULT_ALIGNMENT_EVAL)
     parser.add_argument("--runtime-compare", type=Path, default=DEFAULT_RUNTIME_COMPARE)
     parser.add_argument("--motion-gap", type=Path, default=DEFAULT_MOTION_GAP)
     parser.add_argument("--velocity-audit", type=Path, default=DEFAULT_VELOCITY_AUDIT)
@@ -136,6 +144,7 @@ def main() -> None:
         readiness_path=args.readiness,
         manifest_path=args.manifest,
         bundle_validation_path=args.bundle_validation,
+        alignment_eval_path=args.alignment_eval,
         runtime_compare_path=args.runtime_compare,
         motion_gap_path=args.motion_gap,
         velocity_audit_path=args.velocity_audit,

@@ -89,3 +89,33 @@ def test_dashboard_surfaces_audit_signals(tmp_path):
     assert dashboard["audit_signals"]["lane_change_motion_tensor_control"] == "not_verified"
     assert dashboard["audit_signals"]["velocity_consumed_by_dd2_runtime"] is False
     assert dashboard["audit_signals"]["trajectory_or_temporal_motion_verified"] is False
+
+
+def test_dashboard_surfaces_measured_failed_alignment_eval(tmp_path):
+    readiness = write_json(tmp_path / "readiness.json", {"gpu_smoke_allowed": True})
+    manifest = write_json(
+        tmp_path / "manifest.json",
+        {"candidate_status": "candidate_video_only", "video_semantic_claim": "not_measured"},
+    )
+    bundle = write_json(tmp_path / "bundle.json", {"bundle_status": "measured_ready"})
+    alignment = write_json(
+        tmp_path / "alignment.json",
+        {"interpretation": {"video_semantic_claim": "measured_failed"}},
+    )
+
+    dashboard = build_dashboard(
+        readiness_path=readiness,
+        manifest_path=manifest,
+        bundle_validation_path=bundle,
+        alignment_eval_path=alignment,
+        runtime_compare_path=tmp_path / "runtime.json",
+        motion_gap_path=tmp_path / "motion.json",
+        velocity_audit_path=tmp_path / "velocity.json",
+        evidence_index_path=tmp_path / "index.md",
+        claim_table_path=tmp_path / "claim.md",
+    )
+
+    assert dashboard["dashboard_status"] == "measured_ready"
+    assert dashboard["summary"]["video_semantic_claim"] == "measured_failed"
+    assert dashboard["summary"]["semantic_success_claim_allowed"] is False
+    assert dashboard["sources"]["alignment_eval"]["exists"] is True
