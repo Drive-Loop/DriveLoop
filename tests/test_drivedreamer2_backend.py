@@ -720,3 +720,10 @@ def test_drivedreamer2_runner_exposes_audit_only_and_batch_skip():
 
     assert "--audit-only" in result.stdout
     assert "--dd2-batch-skip" in result.stdout
+
+
+def test_drivedreamer2_runner_passes_audit_only_and_batch_skip_to_backend():
+    script = Path("scripts/run_driveloop_drivedreamer2.py").read_text(encoding="utf-8")
+
+    assert "audit_only=args.audit_only" in script
+    assert "batch_skip=args.dd2_batch_skip" in script

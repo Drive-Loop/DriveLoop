@@ -37,6 +37,8 @@ def main() -> None:
         project_root=".",
         config_name=args.config_name,
         artifact_dir=f"{args.output_dir}/artifacts",
+        audit_only=args.audit_only,
+        batch_skip=args.dd2_batch_skip,
     )
 
     result = DriveLoopRunner(backend=backend, config=config).run(request)
