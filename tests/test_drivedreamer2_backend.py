@@ -749,3 +749,10 @@ def test_drivedreamer2_runner_exposes_baseline_dataset_dir():
 
     assert 'parser.add_argument("--baseline-dataset-dir", default=None)' in script
     assert "baseline_dataset_dir=args.baseline_dataset_dir or" in script
+
+
+def test_drivedreamer2_runner_exposes_baseline_output_dir():
+    script = Path("scripts/run_driveloop_drivedreamer2.py").read_text(encoding="utf-8")
+
+    assert 'parser.add_argument("--baseline-output-dir", default=None)' in script
+    assert "baseline_output_dir=args.baseline_output_dir or" in script

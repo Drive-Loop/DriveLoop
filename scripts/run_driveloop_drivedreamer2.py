@@ -18,6 +18,7 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--config-name", default="drivedreamer2_img_cond_mini_local")
     parser.add_argument("--dd2-batch-skip", type=int, default=0)
     parser.add_argument("--baseline-dataset-dir", default=None)
+    parser.add_argument("--baseline-output-dir", default=None)
     parser.add_argument("--audit-only", action="store_true")
     return parser.parse_args()
 
@@ -38,6 +39,7 @@ def main() -> None:
         project_root=".",
         config_name=args.config_name,
         artifact_dir=f"{args.output_dir}/artifacts",
+        baseline_output_dir=args.baseline_output_dir or "/data/projects/DriveLoop/outputs/drivedreamer2_img_cond_mini",
         baseline_dataset_dir=args.baseline_dataset_dir or "/data/projects/DriveLoop/data/processed/nuscenes/v1.0-mini/cam_all_val/v0.0.2",
         audit_only=args.audit_only,
         batch_skip=args.dd2_batch_skip,
