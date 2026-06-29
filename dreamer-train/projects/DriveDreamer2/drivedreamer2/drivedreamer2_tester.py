@@ -25,6 +25,39 @@ CAM_NAMES = ['CAM_FRONT',
 'CAM_BACK_RIGHT']
 from torchvision import transforms
 
+
+def _driveloop_selected_video_indices(data_config, batch_skip, frame_num):
+    from pathlib import Path
+    from scripts.run_dd2_batch_sampler_audit import (
+        candidate_camera_starts,
+        load_records,
+        selected_frame_indices,
+    )
+
+    if batch_skip < 0:
+        raise ValueError(f"DRIVELOOP_DD2_BATCH_SKIP must be >= 0, got {batch_skip}")
+
+    labels_path = Path(data_config.data_or_config) / "labels" / "data.pkl"
+    records = load_records(labels_path)
+    starts = candidate_camera_starts(
+        records,
+        frame_num=frame_num,
+        hz_factor=data_config.hz_factor,
+        video_split_rate=data_config.get('video_split_rate', 1),
+        multiview=data_config.is_multiview,
+    )
+
+    if batch_skip >= len(starts):
+        raise IndexError(
+            f"DRIVELOOP_DD2_BATCH_SKIP={batch_skip} exceeds candidate count {len(starts)}"
+        )
+
+    return selected_frame_indices(
+        starts[batch_skip],
+        frame_num=frame_num,
+        hz_factor=data_config.hz_factor,
+    )
+
 class DriveDreamer2_Tester(Tester):
     def get_dataloaders(self, data_config):
         self.data_config = data_config
@@ -37,8 +70,35 @@ class DriveDreamer2_Tester(Tester):
         self.frame_num = data_config.frame_num
         batch_size_per_gpu = self.frame_num * self.cam_num
         cam_names = data_config.get('cam_names',None)
+        self.dd2_sampler_selected_batch_index = None
 
-        audit_batch_skip = int(os.environ.get("DRIVELOOP_DD2_BATCH_SKIP", "0"))
+        target_batch_skip_requested = "DRIVELOOP_DD2_BATCH_SKIP" in os.environ
+        target_batch_skip = int(os.environ.get("DRIVELOOP_DD2_BATCH_SKIP", "0"))
+        if target_batch_skip_requested and target_batch_skip > 0 and 'Video' in data_config.type:
+            selected_indices = _driveloop_selected_video_indices(
+                data_config,
+                batch_skip=target_batch_skip,
+                frame_num=self.frame_num,
+            )
+            self.dd2_sampler_selected_batch_index = target_batch_skip
+            self.logger.info(
+                'DRIVELOOP_DD2_BATCH_SKIP=%s: use targeted dataset subset with %s records',
+                target_batch_skip,
+                len(selected_indices),
+            )
+            selected_dataset = torch.utils.data.Subset(dataset, selected_indices)
+            return torch.utils.data.DataLoader(
+                selected_dataset,
+                collate_fn=VideoCollator(
+                    frame_num=self.frame_num,
+                    img_mask_type=data_config.img_mask_type,
+                    img_mask_num=data_config.img_mask_num,
+                ),
+                batch_size=len(selected_indices),
+                num_workers=0,
+            )
+
+        audit_batch_skip = target_batch_skip
         if os.environ.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1" and audit_batch_skip == 0:
             self.logger.info('DRIVELOOP_DD2_AUDIT_ONLY=1: use first contiguous batch without VideoSampler')
             audit_size = min(len(dataset), batch_size_per_gpu)
@@ -148,7 +208,8 @@ class DriveDreamer2_Tester(Tester):
             generator = torch.Generator(device=self.device)
             generator.manual_seed(self.seed)
             idx = 0
-            batch_skip = int(os.environ.get("DRIVELOOP_DD2_BATCH_SKIP", "0"))
+            sampler_selected_batch_index = getattr(self, "dd2_sampler_selected_batch_index", None)
+            batch_skip = 0 if sampler_selected_batch_index is not None else int(os.environ.get("DRIVELOOP_DD2_BATCH_SKIP", "0"))
             prompts = [
                 ['realistic autonomous driving scene, panoramic videos from different perspectives.' ],
                 ['rainy, realistic autonomous driving scene, panoramic videos from different perspectives.'],
@@ -206,7 +267,7 @@ class DriveDreamer2_Tester(Tester):
                         "audit_only": os.environ.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1",
                         "prompt_override": prompt_override,
                         "batch_skip": batch_skip,
-                        "selected_batch_index": batch_i,
+                        "selected_batch_index": sampler_selected_batch_index if sampler_selected_batch_index is not None else batch_i,
                         "prompt_embed": tensor_summary(prompt_embed),
                         "img_cond": tensor_summary(input_dict.get("img_cond")),
                         "grounding_downsampler_input": tensor_summary(input_dict.get("grounding_downsampler_input")),
