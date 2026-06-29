@@ -727,3 +727,13 @@ def test_drivedreamer2_runner_passes_audit_only_and_batch_skip_to_backend():
 
     assert "audit_only=args.audit_only" in script
     assert "batch_skip=args.dd2_batch_skip" in script
+
+
+def test_dd2_tester_audit_batch_skip_uses_video_sampler_path():
+    script = Path("dreamer-train/projects/DriveDreamer2/drivedreamer2/drivedreamer2_tester.py").read_text(
+        encoding="utf-8"
+    )
+
+    assert 'audit_batch_skip = int(os.environ.get("DRIVELOOP_DD2_BATCH_SKIP", "0"))' in script
+    assert 'DRIVELOOP_DD2_AUDIT_ONLY") == "1" and audit_batch_skip == 0' in script
+    assert "use VideoSampler to match generation path" in script

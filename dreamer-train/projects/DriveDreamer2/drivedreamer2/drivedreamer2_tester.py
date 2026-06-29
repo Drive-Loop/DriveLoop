@@ -38,7 +38,8 @@ class DriveDreamer2_Tester(Tester):
         batch_size_per_gpu = self.frame_num * self.cam_num
         cam_names = data_config.get('cam_names',None)
 
-        if os.environ.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1":
+        audit_batch_skip = int(os.environ.get("DRIVELOOP_DD2_BATCH_SKIP", "0"))
+        if os.environ.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1" and audit_batch_skip == 0:
             self.logger.info('DRIVELOOP_DD2_AUDIT_ONLY=1: use first contiguous batch without VideoSampler')
             audit_size = min(len(dataset), batch_size_per_gpu)
             audit_dataset = torch.utils.data.Subset(dataset, list(range(audit_size)))
@@ -52,6 +53,8 @@ class DriveDreamer2_Tester(Tester):
                 batch_size=audit_size,
                 num_workers=0,
             )
+        if os.environ.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1":
+            self.logger.info('DRIVELOOP_DD2_AUDIT_ONLY=1 with batch skip: use VideoSampler to match generation path')
         
         dataloader = torch.utils.data.DataLoader(
             dataset,
