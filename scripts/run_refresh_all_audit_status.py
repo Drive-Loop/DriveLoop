@@ -42,6 +42,7 @@ DEFAULT_PROMPT_OBJECT_TRANSFER_AUDIT = Path("outputs/driveloop/prompt_object_tra
 DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT = Path("outputs/driveloop/trajectory_runtime_surface_audit/motorcycle_refined_trajectory_runtime_surface_audit.json")
 DEFAULT_RUNTIME_SURFACE_CODE_AUDIT = Path("outputs/driveloop/runtime_surface_code_audit/motorcycle_refined_runtime_surface_code_audit.json")
 DEFAULT_MOTION_METADATA_RUNTIME_AUDIT = Path("outputs/driveloop/motorcycle_motion_metadata_audit_only/motorcycle_motion_metadata_audit_only/dd2_runtime_input_audit_00.json")
+DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT = Path("outputs/driveloop/actor_identity_surface_audit/mini_actor_identity_surface_audit.json")
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -76,6 +77,7 @@ def build_refresh_summary(
     trajectory_runtime_surface_audit: Path,
     runtime_surface_code_audit: Path,
     motion_metadata_runtime_audit: Path,
+    actor_identity_surface_audit: Path,
 ) -> dict[str, Any]:
     return {
         "schema_version": "driveloop_refresh_all_audit_status.v0",
@@ -95,6 +97,7 @@ def build_refresh_summary(
             "trajectory_runtime_surface_audit": artifact_entry(trajectory_runtime_surface_audit, "trajectory_runtime_surface_audit"),
             "runtime_surface_code_audit": artifact_entry(runtime_surface_code_audit, "runtime_surface_code_audit"),
             "motion_metadata_runtime_audit": artifact_entry(motion_metadata_runtime_audit, "motion_metadata_runtime_audit"),
+            "actor_identity_surface_audit": artifact_entry(actor_identity_surface_audit, "actor_identity_surface_audit"),
         },
         "refresh_order": [
             "readiness_gate",
@@ -107,6 +110,7 @@ def build_refresh_summary(
             "trajectory_runtime_surface_audit",
             "runtime_surface_code_audit",
             "motion_metadata_runtime_audit",
+            "actor_identity_surface_audit",
         ],
         "status_summary": {
             "gpu_smoke_allowed": readiness.get("gpu_smoke_allowed"),
@@ -129,6 +133,9 @@ def build_refresh_summary(
             ),
             "motion_metadata_runtime_status": dashboard.get("summary", {}).get(
                 "motion_metadata_runtime_status"
+            ),
+            "actor_identity_surface_status": dashboard.get("summary", {}).get(
+                "actor_identity_surface_status"
             ),
         },
         "claim_boundary": {
@@ -169,6 +176,7 @@ def refresh_all(
     trajectory_runtime_surface_audit: Path = DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT,
     runtime_surface_code_audit: Path = DEFAULT_RUNTIME_SURFACE_CODE_AUDIT,
     motion_metadata_runtime_audit: Path = DEFAULT_MOTION_METADATA_RUNTIME_AUDIT,
+    actor_identity_surface_audit: Path = DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT,
 ) -> dict[str, Any]:
     readiness = build_readiness_report(
         prompt=prompt,
@@ -229,6 +237,7 @@ def refresh_all(
         trajectory_runtime_surface_audit_path=trajectory_runtime_surface_audit,
         runtime_surface_code_audit_path=runtime_surface_code_audit,
         motion_metadata_runtime_audit_path=motion_metadata_runtime_audit,
+        actor_identity_surface_audit_path=actor_identity_surface_audit,
     )
     write_json(dashboard_output, dashboard)
 
@@ -249,6 +258,7 @@ def refresh_all(
         trajectory_runtime_surface_audit=trajectory_runtime_surface_audit,
         runtime_surface_code_audit=runtime_surface_code_audit,
         motion_metadata_runtime_audit=motion_metadata_runtime_audit,
+        actor_identity_surface_audit=actor_identity_surface_audit,
     )
     write_json(summary_output, summary)
     return summary

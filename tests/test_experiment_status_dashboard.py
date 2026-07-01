@@ -268,6 +268,41 @@ def test_dashboard_surfaces_object_transfer_and_trajectory_runtime_audits(tmp_pa
     assert dashboard["claim_boundary"]["motion_metadata_audit_is_not_runtime_motion_control"] is True
     assert dashboard["claim_boundary"]["motion_metadata_audit_is_not_video_semantic_success"] is True
     assert dashboard["sources"]["motion_metadata_runtime_audit"]["exists"] is True
+    actor_identity_audit = write_json(
+        tmp_path / "actor_identity_surface_audit.json",
+        {
+            "status": "identity_available_upstream_but_missing_from_processed_labels",
+            "claim": {
+                "actor_identity_available_in_processed_labels": False,
+                "actor_identity_available_upstream": True,
+                "runtime_motion_control_connected": False,
+                "semantic_success_claim_allowed": False,
+            },
+            "blockers": ["processed_labels_do_not_include_persistent_actor_identity"],
+        },
+    )
+    dashboard = build_dashboard(
+        readiness_path=readiness,
+        manifest_path=manifest,
+        bundle_validation_path=bundle,
+        runtime_compare_path=tmp_path / "runtime.json",
+        motion_gap_path=tmp_path / "motion.json",
+        velocity_audit_path=tmp_path / "velocity.json",
+        evidence_index_path=tmp_path / "index.md",
+        claim_table_path=tmp_path / "claim.md",
+        prompt_object_transfer_audit_path=object_transfer,
+        trajectory_runtime_surface_audit_path=trajectory_surface,
+        runtime_surface_code_audit_path=runtime_surface_code,
+        motion_metadata_runtime_audit_path=motion_metadata_audit,
+        actor_identity_surface_audit_path=actor_identity_audit,
+    )
+    assert dashboard["summary"]["actor_identity_surface_status"] == "identity_available_upstream_but_missing_from_processed_labels"
+    assert dashboard["summary"]["actor_identity_available_in_processed_labels"] is False
+    assert dashboard["summary"]["actor_identity_available_upstream"] is True
+    assert dashboard["audit_signals"]["actor_identity_surface_blockers"] == ["processed_labels_do_not_include_persistent_actor_identity"]
+    assert dashboard["claim_boundary"]["actor_identity_surface_audit_is_not_runtime_motion_control"] is True
+    assert dashboard["claim_boundary"]["actor_identity_surface_audit_is_not_video_semantic_success"] is True
+    assert dashboard["sources"]["actor_identity_surface_audit"]["exists"] is True
     assert dashboard["sources"]["prompt_object_transfer_audit"]["exists"] is True
     assert dashboard["sources"]["trajectory_runtime_surface_audit"]["exists"] is True
     assert dashboard["sources"]["runtime_surface_code_audit"]["exists"] is True

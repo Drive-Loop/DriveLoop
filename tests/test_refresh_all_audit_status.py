@@ -81,6 +81,18 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
             }
         },
     )
+    actor_identity_surface_audit = write_json(
+        tmp_path / "inputs" / "actor_identity_surface_audit.json",
+        {
+            "status": "identity_available_upstream_but_missing_from_processed_labels",
+            "claim": {
+                "actor_identity_available_in_processed_labels": False,
+                "actor_identity_available_upstream": True,
+                "runtime_motion_control_connected": False,
+                "semantic_success_claim_allowed": False,
+            },
+        },
+    )
 
     summary = refresh_all(
         prompt="daytime urban road with a motorcycle",
@@ -108,6 +120,7 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
         trajectory_runtime_surface_audit=trajectory_surface,
         runtime_surface_code_audit=runtime_surface_code,
         motion_metadata_runtime_audit=motion_metadata_runtime_audit,
+        actor_identity_surface_audit=actor_identity_surface_audit,
     )
 
     assert summary["does_not_run_gpu"] is True
@@ -123,6 +136,7 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
     assert summary["status_summary"]["trajectory_runtime_surface_status"] == "not_runtime_connected"
     assert summary["status_summary"]["runtime_surface_code_audit_status"] == "not_runtime_connected"
     assert summary["status_summary"]["motion_metadata_runtime_status"] == "metadata_observed_not_runtime_control"
+    assert summary["status_summary"]["actor_identity_surface_status"] == "identity_available_upstream_but_missing_from_processed_labels"
 
     for artifact in summary["refreshed_artifacts"].values():
         assert artifact["exists_after_refresh"] is True
@@ -136,3 +150,4 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
     assert dashboard["summary"]["motion_metadata_runtime_status"] == "metadata_observed_not_runtime_control"
     assert dashboard["audit_signals"]["actor_identity_available_in_batch_any"] is False
     assert dashboard["audit_signals"]["per_frame_actor_boxes3d_observed_any"] is False
+    assert dashboard["summary"]["actor_identity_surface_status"] == "identity_available_upstream_but_missing_from_processed_labels"
