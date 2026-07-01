@@ -352,6 +352,8 @@ class NuScenesConverter:
         names = []
         velocities = []
         attributes = []
+        sample_annotation_tokens = []
+        instance_tokens = []
         for cam_box in cam_boxes:
             cam_box.translate(-np.array(pose_record['translation']))
             cam_box.rotate(Quaternion(pose_record['rotation']).inverse)
@@ -376,8 +378,11 @@ class NuScenesConverter:
             velo = cam_velo3d[0::2]
             if math.isnan(velo[0]):
                 velo[:] = 0.0
-            # attr
-            ann_token = self.nusc.get('sample_annotation', cam_box.token)['attribute_tokens']
+            # actor identity and attr
+            sample_annotation = self.nusc.get('sample_annotation', cam_box.token)
+            sample_annotation_tokens.append(cam_box.token)
+            instance_tokens.append(sample_annotation.get('instance_token'))
+            ann_token = sample_annotation['attribute_tokens']
             if len(ann_token) == 0:
                 attr_name = 'None'
             else:
@@ -397,6 +402,8 @@ class NuScenesConverter:
             'labels3d': names,
             'velocities': velocities,
             'attributes': attributes,
+            'sample_annotation_tokens': sample_annotation_tokens,
+            'instance_tokens': instance_tokens,
         }
         return label_dict
 
