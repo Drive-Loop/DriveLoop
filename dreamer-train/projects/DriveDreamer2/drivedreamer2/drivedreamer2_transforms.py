@@ -247,11 +247,39 @@ class DriveDreamer2_Transform:
         
         new_data_dict['box_downsampler_input'] = box_downsampler_input
         prompt_embeds = self.prompt_embed_map[prompt]
+        velocities = data_dict.get('velocities')
+        labels3d = data_dict.get('ori_labels3d', data_dict.get('labels3d', []))
+        boxes3d_source = data_dict.get('boxes3d')
+        velocity_shape = list(velocities.shape) if hasattr(velocities, 'shape') else None
+        boxes3d_shape = list(boxes3d_source.shape) if hasattr(boxes3d_source, 'shape') else None
+        motion_metadata = {
+            'velocities_available_in_batch': velocities is not None,
+            'velocities_shape': velocity_shape,
+            'actor_labels_available_in_batch': labels3d is not None,
+            'actor_label_count': len(labels3d) if hasattr(labels3d, '__len__') else None,
+            'actor_identity_available_in_batch': any(
+                key in data_dict
+                for key in [
+                    'instance_token',
+                    'instance_tokens',
+                    'track_id',
+                    'track_ids',
+                    'sample_annotation_token',
+                    'sample_annotation_tokens',
+                ]
+            ),
+            'boxes3d_available_in_batch': boxes3d_source is not None,
+            'boxes3d_shape': boxes3d_shape,
+            'per_frame_actor_boxes3d_observed': False,
+            'claim': 'metadata_observed_only_not_runtime_control',
+        }
+
         new_data_dict.update(
             {
                 'frame_idx':data_dict['frame_idx'],
                 'cam_type':data_dict['cam_type'],
                 'video_length':data_dict['video_length'],
+                'motion_metadata': motion_metadata,
                 
              })
         if 'multiview_start_idx' in data_dict:

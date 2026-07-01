@@ -227,6 +227,7 @@ class DriveDreamer2_Tester(Tester):
                 input_dict = {
                     'grounding_downsampler_input': grounding_downsampler_input,
                     'box_downsampler_input': box_downsampler_input}
+                motion_metadata = batch_dict.get('motion_metadata', None)
                 
                 if self.mode == 'img_cond':
                     input_dict.update({
@@ -262,6 +263,65 @@ class DriveDreamer2_Tester(Tester):
                             "sha256": hashlib.sha256(contiguous.tobytes()).hexdigest(),
                         }
 
+                    def metadata_summary(value):
+                        if value is None:
+                            return {
+                                "available": False,
+                                "claim": "metadata_observed_only_not_runtime_control",
+                            }
+
+                        def as_list(item):
+                            if hasattr(item, "detach"):
+                                item = item.detach().cpu()
+                            if hasattr(item, "tolist"):
+                                item = item.tolist()
+                            if isinstance(item, tuple):
+                                item = list(item)
+                            if isinstance(item, list):
+                                return item
+                            return [item]
+
+                        def bool_any(item):
+                            return any(bool(x) for x in as_list(item))
+
+                        def bool_all(item):
+                            values = as_list(item)
+                            return bool(values) and all(bool(x) for x in values)
+
+                        def shape_preview(item, limit=8):
+                            values = as_list(item)
+                            normalized = [as_list(value) for value in values]
+                            if not normalized:
+                                return []
+                            if all(isinstance(dim_values, list) for dim_values in normalized):
+                                same_length = all(len(dim_values) == len(normalized[0]) for dim_values in normalized)
+                                looks_transposed = 1 < len(normalized) <= 4 and same_length and len(normalized[0]) > len(normalized)
+                                if looks_transposed:
+                                    return [list(shape) for shape in zip(*normalized)][:limit]
+                                return normalized[:limit]
+                            return normalized[:limit]
+                        raw_velocities_available = value.get("velocities_available_in_batch")
+                        raw_actor_identity = value.get("actor_identity_available_in_batch")
+                        raw_per_frame_boxes = value.get("per_frame_actor_boxes3d_observed")
+                        raw_boxes_available = value.get("boxes3d_available_in_batch")
+                        raw_labels_available = value.get("actor_labels_available_in_batch")
+                        raw_claim = value.get("claim", "metadata_observed_only_not_runtime_control")
+
+                        return {
+                            "available": True,
+                            "batch_item_count": len(as_list(raw_velocities_available)),
+                            "velocities_available_in_batch_any": bool_any(raw_velocities_available),
+                            "velocities_available_in_batch_all": bool_all(raw_velocities_available),
+                            "velocities_shape_preview": shape_preview(value.get("velocities_shape")),
+                            "actor_labels_available_in_batch_any": bool_any(raw_labels_available),
+                            "actor_label_count_preview": as_list(value.get("actor_label_count"))[:8],
+                            "actor_identity_available_in_batch_any": bool_any(raw_actor_identity),
+                            "boxes3d_available_in_batch_any": bool_any(raw_boxes_available),
+                            "boxes3d_shape_preview": shape_preview(value.get("boxes3d_shape")),
+                            "per_frame_actor_boxes3d_observed_any": bool_any(raw_per_frame_boxes),
+                            "claim": as_list(raw_claim)[0] if as_list(raw_claim) else "metadata_observed_only_not_runtime_control",
+                        }
+
                     audit = {
                         "schema_version": "dd2_runtime_input_audit.v0",
                         "audit_only": os.environ.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1",
@@ -272,6 +332,7 @@ class DriveDreamer2_Tester(Tester):
                         "img_cond": tensor_summary(input_dict.get("img_cond")),
                         "grounding_downsampler_input": tensor_summary(input_dict.get("grounding_downsampler_input")),
                         "box_downsampler_input": tensor_summary(input_dict.get("box_downsampler_input")),
+                        "motion_metadata": metadata_summary(motion_metadata),
                     }
                     with open(audit_path, "w", encoding="utf-8") as f:
                         json.dump(audit, f, indent=2)
