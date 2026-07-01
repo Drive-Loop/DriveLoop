@@ -35,6 +35,8 @@ def test_dashboard_reports_pre_gpu_ready_without_semantic_claim(tmp_path):
         claim_table_path=tmp_path / "claim.md",
         candidate_audit_path=write_json(tmp_path / "candidate_audit.json", {"allowed": True, "status": "allowed"}),
         failure_taxonomy_path=write_json(tmp_path / "taxonomy.json", {"taxonomy_labels": ["lane_change_motion_failed"], "intervention_hints": ["audit trajectory"]}),
+        prompt_object_transfer_audit_path=write_json(tmp_path / "object_transfer.json", {"status": "partially_verified"}),
+        trajectory_runtime_surface_audit_path=write_json(tmp_path / "trajectory_surface.json", {"status": "not_runtime_connected"}),
     )
 
     assert dashboard["dashboard_status"] == "pre_gpu_ready"
@@ -44,6 +46,8 @@ def test_dashboard_reports_pre_gpu_ready_without_semantic_claim(tmp_path):
     assert dashboard["summary"]["source_candidate_support_status"] == "allowed"
     assert dashboard["summary"]["source_candidate_support_allowed"] is True
     assert dashboard["summary"]["failure_taxonomy_labels"] == ["lane_change_motion_failed"]
+    assert dashboard["summary"]["object_transfer_status"] == "partially_verified"
+    assert dashboard["summary"]["trajectory_runtime_surface_status"] == "not_runtime_connected"
     assert dashboard["claim_boundary"]["failure_taxonomy_is_diagnostic_not_success_claim"] is True
     assert "gated GPU smoke candidate" in dashboard["next_recommended_action"]
 
@@ -150,3 +154,63 @@ def test_dashboard_surfaces_measured_failed_alignment_eval(tmp_path):
     assert dashboard["summary"]["video_semantic_claim"] == "measured_failed"
     assert dashboard["summary"]["semantic_success_claim_allowed"] is False
     assert dashboard["sources"]["alignment_eval"]["exists"] is True
+
+
+def test_dashboard_surfaces_object_transfer_and_trajectory_runtime_audits(tmp_path):
+    readiness = write_json(tmp_path / "readiness.json", {"gpu_smoke_allowed": True})
+    manifest = write_json(tmp_path / "manifest.json", {})
+    bundle = write_json(tmp_path / "bundle.json", {})
+    object_transfer = write_json(
+        tmp_path / "object_transfer.json",
+        {
+            "status": "partially_verified",
+            "blockers": ["runtime_tensor_class_label_not_directly_observable"],
+            "checks": {
+                "runtime_tensor_class_labels": {
+                    "class_label_observable": False,
+                }
+            },
+        },
+    )
+    trajectory_surface = write_json(
+        tmp_path / "trajectory_surface.json",
+        {
+            "status": "not_runtime_connected",
+            "blockers": ["trajectory_tensor_not_observed_in_runtime_audit"],
+            "surfaces": {
+                "trajectory_tensor": {"available": False},
+                "per_frame_actor_boxes3d": {"verified": False},
+                "hdmap_lane_geometry": {"override_verified": False},
+            },
+        },
+    )
+
+    dashboard = build_dashboard(
+        readiness_path=readiness,
+        manifest_path=manifest,
+        bundle_validation_path=bundle,
+        runtime_compare_path=tmp_path / "runtime.json",
+        motion_gap_path=tmp_path / "motion.json",
+        velocity_audit_path=tmp_path / "velocity.json",
+        evidence_index_path=tmp_path / "index.md",
+        claim_table_path=tmp_path / "claim.md",
+        prompt_object_transfer_audit_path=object_transfer,
+        trajectory_runtime_surface_audit_path=trajectory_surface,
+    )
+
+    assert dashboard["summary"]["object_transfer_status"] == "partially_verified"
+    assert dashboard["summary"]["trajectory_runtime_surface_status"] == "not_runtime_connected"
+    assert dashboard["audit_signals"]["object_transfer_blockers"] == [
+        "runtime_tensor_class_label_not_directly_observable"
+    ]
+    assert dashboard["audit_signals"]["runtime_tensor_class_label_observable"] is False
+    assert dashboard["audit_signals"]["trajectory_runtime_surface_blockers"] == [
+        "trajectory_tensor_not_observed_in_runtime_audit"
+    ]
+    assert dashboard["audit_signals"]["trajectory_tensor_available"] is False
+    assert dashboard["audit_signals"]["per_frame_actor_boxes3d_verified"] is False
+    assert dashboard["audit_signals"]["hdmap_lane_geometry_override_verified"] is False
+    assert dashboard["claim_boundary"]["object_transfer_audit_is_not_video_semantic_success"] is True
+    assert dashboard["claim_boundary"]["trajectory_surface_audit_is_not_video_semantic_success"] is True
+    assert dashboard["sources"]["prompt_object_transfer_audit"]["exists"] is True
+    assert dashboard["sources"]["trajectory_runtime_surface_audit"]["exists"] is True

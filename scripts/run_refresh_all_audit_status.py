@@ -38,6 +38,8 @@ DEFAULT_LABELS_PATH = Path("/data/projects/DriveLoop/data/processed/nuscenes/v1.
 DEFAULT_WEIGHTS_PATH = Path("/data/projects/DriveLoop/pretrained_models/drivedreamer2_img_cond/pytorch_gligen_weights.bin")
 DEFAULT_EVIDENCE_INDEX = Path("experiments/2026-06-28_motorcycle_alignment_evidence_index.md")
 DEFAULT_CLAIM_TABLE = Path("experiments/2026-06-28_paper_claim_table_v0.md")
+DEFAULT_PROMPT_OBJECT_TRANSFER_AUDIT = Path("outputs/driveloop/prompt_object_transfer_audit/motorcycle_refined_object_transfer_audit.json")
+DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT = Path("outputs/driveloop/trajectory_runtime_surface_audit/motorcycle_refined_trajectory_runtime_surface_audit.json")
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -68,6 +70,8 @@ def build_refresh_summary(
     manifest: dict[str, Any],
     validation: dict[str, Any],
     dashboard: dict[str, Any],
+    prompt_object_transfer_audit: Path,
+    trajectory_runtime_surface_audit: Path,
 ) -> dict[str, Any]:
     return {
         "schema_version": "driveloop_refresh_all_audit_status.v0",
@@ -83,6 +87,8 @@ def build_refresh_summary(
             "candidate_manifest": artifact_entry(manifest_output, "candidate_artifact_manifest"),
             "bundle_validation": artifact_entry(validation_output, "candidate_bundle_validation"),
             "experiment_dashboard": artifact_entry(dashboard_output, "experiment_status_dashboard"),
+            "prompt_object_transfer_audit": artifact_entry(prompt_object_transfer_audit, "prompt_object_transfer_audit"),
+            "trajectory_runtime_surface_audit": artifact_entry(trajectory_runtime_surface_audit, "trajectory_runtime_surface_audit"),
         },
         "refresh_order": [
             "readiness_gate",
@@ -91,15 +97,24 @@ def build_refresh_summary(
             "candidate_manifest",
             "bundle_validation",
             "experiment_dashboard",
+            "prompt_object_transfer_audit",
+            "trajectory_runtime_surface_audit",
         ],
         "status_summary": {
             "gpu_smoke_allowed": readiness.get("gpu_smoke_allowed"),
             "candidate_status": manifest.get("candidate_status"),
             "bundle_status": validation.get("bundle_status"),
             "dashboard_status": dashboard.get("dashboard_status"),
-            "video_semantic_claim": manifest.get("video_semantic_claim"),
+            "video_semantic_claim": dashboard.get("summary", {}).get(
+                "video_semantic_claim", manifest.get("video_semantic_claim")
+            ),
+            "candidate_manifest_video_semantic_claim": manifest.get("video_semantic_claim"),
             "dashboard_semantic_success_claim_allowed": dashboard.get("summary", {}).get(
                 "semantic_success_claim_allowed"
+            ),
+            "object_transfer_status": dashboard.get("summary", {}).get("object_transfer_status"),
+            "trajectory_runtime_surface_status": dashboard.get("summary", {}).get(
+                "trajectory_runtime_surface_status"
             ),
         },
         "claim_boundary": {
@@ -135,6 +150,9 @@ def refresh_all(
     weights_path: Path = DEFAULT_WEIGHTS_PATH,
     evidence_index: Path = DEFAULT_EVIDENCE_INDEX,
     claim_table: Path = DEFAULT_CLAIM_TABLE,
+    runtime_audit: Path | None = None,
+    prompt_object_transfer_audit: Path = DEFAULT_PROMPT_OBJECT_TRANSFER_AUDIT,
+    trajectory_runtime_surface_audit: Path = DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT,
 ) -> dict[str, Any]:
     readiness = build_readiness_report(
         prompt=prompt,
@@ -164,6 +182,7 @@ def refresh_all(
     write_text(runbook_output, runbook)
 
     video_path = expected_video_path(output_dir, scenario_id)
+    runtime_audit_path = runtime_audit or (output_dir / "artifacts" / scenario_id / "dd2_runtime_input_audit_00.json")
     manifest = build_manifest(
         prompt=prompt,
         scenario_id=scenario_id,
@@ -173,7 +192,8 @@ def refresh_all(
         runbook=runbook_output,
         post_gpu_gate=post_gate_dir / "post_gpu_review_gate.json",
         manual_report=post_gate_dir / "manual_review_pack" / "manual_alignment_report.json",
-        alignment_eval=alignment_eval_dir / f"{scenario_id}_manual_review.json",
+        alignment_eval=alignment_eval_dir / f"{scenario_id}_manual_review" / "prompt_video_alignment_evaluation.json",
+        runtime_audit=runtime_audit_path,
     )
     write_json(manifest_output, manifest)
 
@@ -189,6 +209,8 @@ def refresh_all(
         velocity_audit_path=velocity_surface,
         evidence_index_path=evidence_index,
         claim_table_path=claim_table,
+        prompt_object_transfer_audit_path=prompt_object_transfer_audit,
+        trajectory_runtime_surface_audit_path=trajectory_runtime_surface_audit,
     )
     write_json(dashboard_output, dashboard)
 
@@ -205,6 +227,8 @@ def refresh_all(
         manifest=manifest,
         validation=validation,
         dashboard=dashboard,
+        prompt_object_transfer_audit=prompt_object_transfer_audit,
+        trajectory_runtime_surface_audit=trajectory_runtime_surface_audit,
     )
     write_json(summary_output, summary)
     return summary
