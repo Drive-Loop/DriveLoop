@@ -68,6 +68,19 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
         tmp_path / "inputs" / "runtime_surface_code.json",
         {"status": "not_runtime_connected"},
     )
+    motion_metadata_runtime_audit = write_json(
+        tmp_path / "inputs" / "motion_metadata_runtime_audit.json",
+        {
+            "motion_metadata": {
+                "available": True,
+                "velocities_available_in_batch_any": True,
+                "actor_identity_available_in_batch_any": False,
+                "boxes3d_available_in_batch_any": True,
+                "per_frame_actor_boxes3d_observed_any": False,
+                "claim": "metadata_observed_only_not_runtime_control",
+            }
+        },
+    )
 
     summary = refresh_all(
         prompt="daytime urban road with a motorcycle",
@@ -94,6 +107,7 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
         prompt_object_transfer_audit=object_transfer,
         trajectory_runtime_surface_audit=trajectory_surface,
         runtime_surface_code_audit=runtime_surface_code,
+        motion_metadata_runtime_audit=motion_metadata_runtime_audit,
     )
 
     assert summary["does_not_run_gpu"] is True
@@ -108,6 +122,7 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
     assert summary["status_summary"]["object_transfer_status"] == "partially_verified"
     assert summary["status_summary"]["trajectory_runtime_surface_status"] == "not_runtime_connected"
     assert summary["status_summary"]["runtime_surface_code_audit_status"] == "not_runtime_connected"
+    assert summary["status_summary"]["motion_metadata_runtime_status"] == "metadata_observed_not_runtime_control"
 
     for artifact in summary["refreshed_artifacts"].values():
         assert artifact["exists_after_refresh"] is True
@@ -118,3 +133,6 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
     assert dashboard["summary"]["object_transfer_status"] == "partially_verified"
     assert dashboard["summary"]["trajectory_runtime_surface_status"] == "not_runtime_connected"
     assert dashboard["summary"]["runtime_surface_code_audit_status"] == "not_runtime_connected"
+    assert dashboard["summary"]["motion_metadata_runtime_status"] == "metadata_observed_not_runtime_control"
+    assert dashboard["audit_signals"]["actor_identity_available_in_batch_any"] is False
+    assert dashboard["audit_signals"]["per_frame_actor_boxes3d_observed_any"] is False

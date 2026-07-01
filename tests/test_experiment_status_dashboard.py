@@ -230,6 +230,44 @@ def test_dashboard_surfaces_object_transfer_and_trajectory_runtime_audits(tmp_pa
     assert dashboard["audit_signals"]["dataset_velocity_status"] == "available_in_converter"
     assert dashboard["audit_signals"]["dataset_lane_hdmap_status"] == "rasterized_image_hdmap_from_lane_geometry"
     assert dashboard["audit_signals"]["direct_motion_runtime_surface_status"] == "not_observed"
+    motion_metadata_audit = write_json(
+        tmp_path / "motion_metadata_runtime_audit.json",
+        {
+            "motion_metadata": {
+                "available": True,
+                "velocities_available_in_batch_any": True,
+                "velocities_available_in_batch_all": True,
+                "actor_identity_available_in_batch_any": False,
+                "boxes3d_available_in_batch_any": True,
+                "per_frame_actor_boxes3d_observed_any": False,
+                "claim": "metadata_observed_only_not_runtime_control",
+            }
+        },
+    )
+    dashboard = build_dashboard(
+        readiness_path=readiness,
+        manifest_path=manifest,
+        bundle_validation_path=bundle,
+        runtime_compare_path=tmp_path / "runtime.json",
+        motion_gap_path=tmp_path / "motion.json",
+        velocity_audit_path=tmp_path / "velocity.json",
+        evidence_index_path=tmp_path / "index.md",
+        claim_table_path=tmp_path / "claim.md",
+        prompt_object_transfer_audit_path=object_transfer,
+        trajectory_runtime_surface_audit_path=trajectory_surface,
+        runtime_surface_code_audit_path=runtime_surface_code,
+        motion_metadata_runtime_audit_path=motion_metadata_audit,
+    )
+    assert dashboard["summary"]["motion_metadata_runtime_status"] == "metadata_observed_not_runtime_control"
+    assert dashboard["summary"]["motion_metadata_claim"] == "metadata_observed_only_not_runtime_control"
+    assert dashboard["audit_signals"]["motion_metadata_available"] is True
+    assert dashboard["audit_signals"]["velocities_available_in_batch_any"] is True
+    assert dashboard["audit_signals"]["actor_identity_available_in_batch_any"] is False
+    assert dashboard["audit_signals"]["boxes3d_available_in_batch_any"] is True
+    assert dashboard["audit_signals"]["per_frame_actor_boxes3d_observed_any"] is False
+    assert dashboard["claim_boundary"]["motion_metadata_audit_is_not_runtime_motion_control"] is True
+    assert dashboard["claim_boundary"]["motion_metadata_audit_is_not_video_semantic_success"] is True
+    assert dashboard["sources"]["motion_metadata_runtime_audit"]["exists"] is True
     assert dashboard["sources"]["prompt_object_transfer_audit"]["exists"] is True
     assert dashboard["sources"]["trajectory_runtime_surface_audit"]["exists"] is True
     assert dashboard["sources"]["runtime_surface_code_audit"]["exists"] is True

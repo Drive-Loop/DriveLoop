@@ -20,6 +20,7 @@ DEFAULT_FAILURE_TAXONOMY = Path("outputs/driveloop/alignment_failure_taxonomy/mo
 DEFAULT_PROMPT_OBJECT_TRANSFER_AUDIT = Path("outputs/driveloop/prompt_object_transfer_audit/motorcycle_refined_object_transfer_audit.json")
 DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT = Path("outputs/driveloop/trajectory_runtime_surface_audit/motorcycle_refined_trajectory_runtime_surface_audit.json")
 DEFAULT_RUNTIME_SURFACE_CODE_AUDIT = Path("outputs/driveloop/runtime_surface_code_audit/motorcycle_refined_runtime_surface_code_audit.json")
+DEFAULT_MOTION_METADATA_RUNTIME_AUDIT = Path("outputs/driveloop/motorcycle_motion_metadata_audit_only/motorcycle_motion_metadata_audit_only/dd2_runtime_input_audit_00.json")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -32,6 +33,16 @@ def load_json(path: Path) -> dict[str, Any]:
 
 def source_entry(path: Path) -> dict[str, Any]:
     return {"path": str(path), "exists": path.exists()}
+
+
+
+def motion_metadata_status(runtime_audit: dict[str, Any]) -> tuple[str, dict[str, Any]]:
+    motion_metadata = runtime_audit.get("motion_metadata", {})
+    if not isinstance(motion_metadata, dict):
+        motion_metadata = {}
+    if motion_metadata.get("available") is True:
+        return "metadata_observed_not_runtime_control", motion_metadata
+    return "not_observed", motion_metadata
 
 
 def build_dashboard(
@@ -49,6 +60,7 @@ def build_dashboard(
     prompt_object_transfer_audit_path: Path = DEFAULT_PROMPT_OBJECT_TRANSFER_AUDIT,
     trajectory_runtime_surface_audit_path: Path = DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT,
     runtime_surface_code_audit_path: Path = DEFAULT_RUNTIME_SURFACE_CODE_AUDIT,
+    motion_metadata_runtime_audit_path: Path = DEFAULT_MOTION_METADATA_RUNTIME_AUDIT,
 ) -> dict[str, Any]:
     readiness = load_json(readiness_path)
     manifest = load_json(manifest_path)
@@ -62,6 +74,8 @@ def build_dashboard(
     prompt_object_transfer_audit = load_json(prompt_object_transfer_audit_path)
     trajectory_runtime_surface_audit = load_json(trajectory_runtime_surface_audit_path)
     runtime_surface_code_audit = load_json(runtime_surface_code_audit_path)
+    motion_metadata_runtime_audit = load_json(motion_metadata_runtime_audit_path)
+    motion_metadata_runtime_status, motion_metadata = motion_metadata_status(motion_metadata_runtime_audit)
 
     gpu_smoke_allowed = readiness.get("gpu_smoke_allowed") is True
     semantic_claim_allowed_by_readiness = readiness.get("semantic_claim_allowed") is True
@@ -100,6 +114,8 @@ def build_dashboard(
             "object_transfer_status": prompt_object_transfer_audit.get("status", "unknown"),
             "trajectory_runtime_surface_status": trajectory_runtime_surface_audit.get("status", "unknown"),
             "runtime_surface_code_audit_status": runtime_surface_code_audit.get("status", "unknown"),
+            "motion_metadata_runtime_status": motion_metadata_runtime_status,
+            "motion_metadata_claim": motion_metadata.get("claim", "unknown"),
             "failure_taxonomy_labels": failure_taxonomy.get("taxonomy_labels", []),
         },
         "claim_boundary": {
@@ -112,6 +128,8 @@ def build_dashboard(
             "object_transfer_audit_is_not_video_semantic_success": True,
             "trajectory_surface_audit_is_not_video_semantic_success": True,
             "runtime_surface_code_audit_is_not_video_semantic_success": True,
+            "motion_metadata_audit_is_not_runtime_motion_control": True,
+            "motion_metadata_audit_is_not_video_semantic_success": True,
         },
         "audit_signals": {
             "runtime_tensor_hash_changed": runtime_changed,
@@ -150,6 +168,14 @@ def build_dashboard(
             "direct_motion_runtime_surface_status": runtime_surface_code_audit.get("surfaces", {})
             .get("direct_motion_runtime_surface", {})
             .get("status"),
+            "motion_metadata_runtime_status": motion_metadata_runtime_status,
+            "motion_metadata_available": motion_metadata.get("available") is True,
+            "velocities_available_in_batch_any": motion_metadata.get("velocities_available_in_batch_any"),
+            "velocities_available_in_batch_all": motion_metadata.get("velocities_available_in_batch_all"),
+            "actor_identity_available_in_batch_any": motion_metadata.get("actor_identity_available_in_batch_any"),
+            "boxes3d_available_in_batch_any": motion_metadata.get("boxes3d_available_in_batch_any"),
+            "per_frame_actor_boxes3d_observed_any": motion_metadata.get("per_frame_actor_boxes3d_observed_any"),
+            "motion_metadata_claim": motion_metadata.get("claim", "unknown"),
         },
         "sources": {
             "readiness": source_entry(readiness_path),
@@ -166,6 +192,7 @@ def build_dashboard(
             "prompt_object_transfer_audit": source_entry(prompt_object_transfer_audit_path),
             "trajectory_runtime_surface_audit": source_entry(trajectory_runtime_surface_audit_path),
             "runtime_surface_code_audit": source_entry(runtime_surface_code_audit_path),
+            "motion_metadata_runtime_audit": source_entry(motion_metadata_runtime_audit_path),
         },
         "next_recommended_action": next_action(
             gpu_smoke_allowed=gpu_smoke_allowed,
@@ -205,6 +232,7 @@ def main() -> None:
     parser.add_argument("--prompt-object-transfer-audit", type=Path, default=DEFAULT_PROMPT_OBJECT_TRANSFER_AUDIT)
     parser.add_argument("--trajectory-runtime-surface-audit", type=Path, default=DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT)
     parser.add_argument("--runtime-surface-code-audit", type=Path, default=DEFAULT_RUNTIME_SURFACE_CODE_AUDIT)
+    parser.add_argument("--motion-metadata-runtime-audit", type=Path, default=DEFAULT_MOTION_METADATA_RUNTIME_AUDIT)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -223,6 +251,7 @@ def main() -> None:
         prompt_object_transfer_audit_path=args.prompt_object_transfer_audit,
         trajectory_runtime_surface_audit_path=args.trajectory_runtime_surface_audit,
         runtime_surface_code_audit_path=args.runtime_surface_code_audit,
+        motion_metadata_runtime_audit_path=args.motion_metadata_runtime_audit,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
