@@ -15,6 +15,7 @@ DEFAULT_MOTION_GAP = Path("outputs/driveloop/motion_control_gap_audit/motorcycle
 DEFAULT_VELOCITY_AUDIT = Path("outputs/driveloop/dd2_velocity_surface_audit/mini_velocity_surface.json")
 DEFAULT_EVIDENCE_INDEX = Path("experiments/2026-06-28_motorcycle_alignment_evidence_index.md")
 DEFAULT_CLAIM_TABLE = Path("experiments/2026-06-28_paper_claim_table_v0.md")
+DEFAULT_CANDIDATE_AUDIT = Path("outputs/driveloop/prompt_conditional_candidate_audit/motorcycle_source_candidate_rank16_audit.json")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -39,6 +40,7 @@ def build_dashboard(
     velocity_audit_path: Path = DEFAULT_VELOCITY_AUDIT,
     evidence_index_path: Path = DEFAULT_EVIDENCE_INDEX,
     claim_table_path: Path = DEFAULT_CLAIM_TABLE,
+    candidate_audit_path: Path = DEFAULT_CANDIDATE_AUDIT,
 ) -> dict[str, Any]:
     readiness = load_json(readiness_path)
     manifest = load_json(manifest_path)
@@ -47,6 +49,7 @@ def build_dashboard(
     runtime_compare = load_json(runtime_compare_path)
     motion_gap = load_json(motion_gap_path)
     velocity_audit = load_json(velocity_audit_path)
+    candidate_audit = load_json(candidate_audit_path)
 
     gpu_smoke_allowed = readiness.get("gpu_smoke_allowed") is True
     semantic_claim_allowed_by_readiness = readiness.get("semantic_claim_allowed") is True
@@ -80,18 +83,25 @@ def build_dashboard(
             "bundle_status": bundle_status,
             "video_semantic_claim": video_semantic_claim,
             "semantic_success_claim_allowed": False,
+            "source_candidate_support_status": candidate_audit.get("status", "unknown"),
+            "source_candidate_support_allowed": candidate_audit.get("allowed") is True,
         },
         "claim_boundary": {
             "readiness_allows_gpu_candidate_only": gpu_smoke_allowed and not semantic_claim_allowed_by_readiness,
             "video_generation_is_not_semantic_success": True,
             "runtime_tensor_audit_is_not_video_semantic_success": True,
             "semantic_success_requires_measured_passed_alignment_eval": True,
+            "source_candidate_support_is_not_generation_success": True,
         },
         "audit_signals": {
             "runtime_tensor_hash_changed": runtime_changed,
             "lane_change_motion_tensor_control": motion_claim.get("lane_change_motion_tensor_control"),
             "velocity_consumed_by_dd2_runtime": velocity_claim.get("velocity_consumed_by_dd2_runtime"),
             "trajectory_or_temporal_motion_verified": False,
+            "prompt_conditional_candidate_allowed": candidate_audit.get("allowed") is True,
+            "prompt_conditional_candidate_status": candidate_audit.get("status", "unknown"),
+            "prompt_conditional_candidate_missing_support": candidate_audit.get("missing_requested_support", []),
+            "prompt_conditional_candidate_unrequested_bias": candidate_audit.get("unrequested_selection_bias", []),
         },
         "sources": {
             "readiness": source_entry(readiness_path),
@@ -103,6 +113,7 @@ def build_dashboard(
             "velocity_audit": source_entry(velocity_audit_path),
             "evidence_index": source_entry(evidence_index_path),
             "claim_table": source_entry(claim_table_path),
+            "prompt_conditional_candidate_audit": source_entry(candidate_audit_path),
         },
         "next_recommended_action": next_action(
             gpu_smoke_allowed=gpu_smoke_allowed,
@@ -137,6 +148,7 @@ def main() -> None:
     parser.add_argument("--velocity-audit", type=Path, default=DEFAULT_VELOCITY_AUDIT)
     parser.add_argument("--evidence-index", type=Path, default=DEFAULT_EVIDENCE_INDEX)
     parser.add_argument("--claim-table", type=Path, default=DEFAULT_CLAIM_TABLE)
+    parser.add_argument("--candidate-audit", type=Path, default=DEFAULT_CANDIDATE_AUDIT)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -150,6 +162,7 @@ def main() -> None:
         velocity_audit_path=args.velocity_audit,
         evidence_index_path=args.evidence_index,
         claim_table_path=args.claim_table,
+        candidate_audit_path=args.candidate_audit,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

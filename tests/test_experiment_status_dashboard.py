@@ -33,11 +33,15 @@ def test_dashboard_reports_pre_gpu_ready_without_semantic_claim(tmp_path):
         velocity_audit_path=tmp_path / "velocity.json",
         evidence_index_path=tmp_path / "index.md",
         claim_table_path=tmp_path / "claim.md",
+        candidate_audit_path=write_json(tmp_path / "candidate_audit.json", {"allowed": True, "status": "allowed"}),
     )
 
     assert dashboard["dashboard_status"] == "pre_gpu_ready"
     assert dashboard["summary"]["semantic_success_claim_allowed"] is False
     assert dashboard["claim_boundary"]["readiness_allows_gpu_candidate_only"] is True
+    assert dashboard["claim_boundary"]["source_candidate_support_is_not_generation_success"] is True
+    assert dashboard["summary"]["source_candidate_support_status"] == "allowed"
+    assert dashboard["summary"]["source_candidate_support_allowed"] is True
     assert "gated GPU smoke candidate" in dashboard["next_recommended_action"]
 
 
@@ -58,6 +62,7 @@ def test_dashboard_promotes_candidate_and_review_states(tmp_path):
         velocity_audit_path=tmp_path / "velocity.json",
         evidence_index_path=tmp_path / "index.md",
         claim_table_path=tmp_path / "claim.md",
+        candidate_audit_path=write_json(tmp_path / "candidate_audit_review.json", {"allowed": True, "status": "allowed"}),
     )
 
     assert dashboard["dashboard_status"] == "review_ready"
@@ -83,12 +88,25 @@ def test_dashboard_surfaces_audit_signals(tmp_path):
         velocity_audit_path=velocity,
         evidence_index_path=tmp_path / "index.md",
         claim_table_path=tmp_path / "claim.md",
+        candidate_audit_path=write_json(
+            tmp_path / "candidate_audit_signals.json",
+            {
+                "allowed": False,
+                "status": "blocked",
+                "missing_requested_support": ["motorcycle"],
+                "unrequested_selection_bias": ["rainy"],
+            },
+        ),
     )
 
     assert dashboard["audit_signals"]["runtime_tensor_hash_changed"] == {"prompt_embed": True}
     assert dashboard["audit_signals"]["lane_change_motion_tensor_control"] == "not_verified"
     assert dashboard["audit_signals"]["velocity_consumed_by_dd2_runtime"] is False
     assert dashboard["audit_signals"]["trajectory_or_temporal_motion_verified"] is False
+    assert dashboard["audit_signals"]["prompt_conditional_candidate_allowed"] is False
+    assert dashboard["audit_signals"]["prompt_conditional_candidate_status"] == "blocked"
+    assert dashboard["audit_signals"]["prompt_conditional_candidate_missing_support"] == ["motorcycle"]
+    assert dashboard["audit_signals"]["prompt_conditional_candidate_unrequested_bias"] == ["rainy"]
 
 
 def test_dashboard_surfaces_measured_failed_alignment_eval(tmp_path):
