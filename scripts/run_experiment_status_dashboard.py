@@ -16,6 +16,7 @@ DEFAULT_VELOCITY_AUDIT = Path("outputs/driveloop/dd2_velocity_surface_audit/mini
 DEFAULT_EVIDENCE_INDEX = Path("experiments/2026-06-28_motorcycle_alignment_evidence_index.md")
 DEFAULT_CLAIM_TABLE = Path("experiments/2026-06-28_paper_claim_table_v0.md")
 DEFAULT_CANDIDATE_AUDIT = Path("outputs/driveloop/prompt_conditional_candidate_audit/motorcycle_source_candidate_rank16_audit.json")
+DEFAULT_FAILURE_TAXONOMY = Path("outputs/driveloop/alignment_failure_taxonomy/motorcycle_refined_candidate_failure_taxonomy.json")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -41,6 +42,7 @@ def build_dashboard(
     evidence_index_path: Path = DEFAULT_EVIDENCE_INDEX,
     claim_table_path: Path = DEFAULT_CLAIM_TABLE,
     candidate_audit_path: Path = DEFAULT_CANDIDATE_AUDIT,
+    failure_taxonomy_path: Path = DEFAULT_FAILURE_TAXONOMY,
 ) -> dict[str, Any]:
     readiness = load_json(readiness_path)
     manifest = load_json(manifest_path)
@@ -50,6 +52,7 @@ def build_dashboard(
     motion_gap = load_json(motion_gap_path)
     velocity_audit = load_json(velocity_audit_path)
     candidate_audit = load_json(candidate_audit_path)
+    failure_taxonomy = load_json(failure_taxonomy_path)
 
     gpu_smoke_allowed = readiness.get("gpu_smoke_allowed") is True
     semantic_claim_allowed_by_readiness = readiness.get("semantic_claim_allowed") is True
@@ -85,6 +88,7 @@ def build_dashboard(
             "semantic_success_claim_allowed": False,
             "source_candidate_support_status": candidate_audit.get("status", "unknown"),
             "source_candidate_support_allowed": candidate_audit.get("allowed") is True,
+            "failure_taxonomy_labels": failure_taxonomy.get("taxonomy_labels", []),
         },
         "claim_boundary": {
             "readiness_allows_gpu_candidate_only": gpu_smoke_allowed and not semantic_claim_allowed_by_readiness,
@@ -92,6 +96,7 @@ def build_dashboard(
             "runtime_tensor_audit_is_not_video_semantic_success": True,
             "semantic_success_requires_measured_passed_alignment_eval": True,
             "source_candidate_support_is_not_generation_success": True,
+            "failure_taxonomy_is_diagnostic_not_success_claim": True,
         },
         "audit_signals": {
             "runtime_tensor_hash_changed": runtime_changed,
@@ -102,6 +107,8 @@ def build_dashboard(
             "prompt_conditional_candidate_status": candidate_audit.get("status", "unknown"),
             "prompt_conditional_candidate_missing_support": candidate_audit.get("missing_requested_support", []),
             "prompt_conditional_candidate_unrequested_bias": candidate_audit.get("unrequested_selection_bias", []),
+            "failure_taxonomy_labels": failure_taxonomy.get("taxonomy_labels", []),
+            "failure_taxonomy_intervention_hints": failure_taxonomy.get("intervention_hints", []),
         },
         "sources": {
             "readiness": source_entry(readiness_path),
@@ -114,6 +121,7 @@ def build_dashboard(
             "evidence_index": source_entry(evidence_index_path),
             "claim_table": source_entry(claim_table_path),
             "prompt_conditional_candidate_audit": source_entry(candidate_audit_path),
+            "alignment_failure_taxonomy": source_entry(failure_taxonomy_path),
         },
         "next_recommended_action": next_action(
             gpu_smoke_allowed=gpu_smoke_allowed,
@@ -149,6 +157,7 @@ def main() -> None:
     parser.add_argument("--evidence-index", type=Path, default=DEFAULT_EVIDENCE_INDEX)
     parser.add_argument("--claim-table", type=Path, default=DEFAULT_CLAIM_TABLE)
     parser.add_argument("--candidate-audit", type=Path, default=DEFAULT_CANDIDATE_AUDIT)
+    parser.add_argument("--failure-taxonomy", type=Path, default=DEFAULT_FAILURE_TAXONOMY)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -163,6 +172,7 @@ def main() -> None:
         evidence_index_path=args.evidence_index,
         claim_table_path=args.claim_table,
         candidate_audit_path=args.candidate_audit,
+        failure_taxonomy_path=args.failure_taxonomy,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
