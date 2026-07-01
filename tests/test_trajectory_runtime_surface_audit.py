@@ -61,3 +61,29 @@ def test_runtime_connected_when_required_surfaces_are_present_and_no_motion_requ
     assert "velocity_or_displacement_tensor_not_consumed_by_runtime" not in audit["blockers"]
     assert audit["status"] == "not_runtime_connected"
     assert "per_frame_actor_identity_not_observed" in audit["blockers"]
+
+
+def test_actor_track_audit_clears_identity_and_per_frame_box_blockers():
+    audit = build_audit(
+        "vehicle lane change",
+        backend_summary_with_static_boxes(),
+        velocity_audit={"claim": {"velocity_consumed_by_dd2_runtime": False}},
+        motion_gap={},
+        actor_track_audit={
+            "status": "per_frame_actor_tracks_observed",
+            "track_surface": {"persistent_track_count": 2},
+            "claim": {
+                "per_frame_actor_identity_observed": True,
+                "per_frame_actor_boxes3d_grouped_by_identity": True,
+            },
+        },
+    )
+
+    assert audit["status"] == "not_runtime_connected"
+    assert audit["surfaces"]["actor_track_identity"]["per_frame_actor_identity_observed"] is True
+    assert audit["surfaces"]["actor_track_identity"]["persistent_track_count"] == 2
+    assert audit["surfaces"]["per_frame_actor_boxes3d"]["verified"] is True
+    assert audit["surfaces"]["per_frame_actor_boxes3d"]["current_surface"] == "grouped_by_instance_token"
+    assert "per_frame_actor_identity_not_observed" not in audit["blockers"]
+    assert "per_frame_actor_boxes3d_not_verified" not in audit["blockers"]
+    assert "trajectory_tensor_not_observed_in_runtime_audit" in audit["blockers"]

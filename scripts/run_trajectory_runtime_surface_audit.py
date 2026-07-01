@@ -15,6 +15,7 @@ DEFAULT_BACKEND_SUMMARY = Path(
 )
 DEFAULT_VELOCITY_AUDIT = Path("outputs/driveloop/dd2_velocity_surface_audit/mini_velocity_surface.json")
 DEFAULT_MOTION_GAP = Path("outputs/driveloop/motion_control_gap_audit/motorcycle_manual_feedback_motion_gap.json")
+DEFAULT_ACTOR_TRACK_AUDIT = Path("outputs/driveloop/actor_track_surface_audit/tiny_real_actor_track_surface_audit.json")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -68,9 +69,11 @@ def build_audit(
     backend_summary: dict[str, Any],
     velocity_audit: dict[str, Any] | None = None,
     motion_gap: dict[str, Any] | None = None,
+    actor_track_audit: dict[str, Any] | None = None,
 ) -> dict[str, Any]:
     velocity_audit = velocity_audit or {}
     motion_gap = motion_gap or {}
+    actor_track_audit = actor_track_audit or {}
 
     requested_motions = requested_prompt_motions(prompt)
     runtime = runtime_input_audit(backend_summary)
@@ -79,6 +82,8 @@ def build_audit(
     velocity_claim = first_dict(velocity_audit.get("claim"))
     motion_gap_claim = first_dict(motion_gap.get("claim"))
     control_path_status = first_dict(motion_gap.get("control_path_status"))
+    actor_track_claim = first_dict(actor_track_audit.get("claim"))
+    actor_track_surface = first_dict(actor_track_audit.get("track_surface"))
 
     box_condition_available = has_available_tensor(runtime, ["box_downsampler_input"])
     grounding_condition_available = has_available_tensor(runtime, ["grounding_downsampler_input"])
@@ -101,8 +106,8 @@ def build_audit(
     )
     velocity_consumed = velocity_claim.get("velocity_consumed_by_dd2_runtime") is True
 
-    per_frame_actor_identity = False
-    per_frame_actor_boxes3d = False
+    per_frame_actor_identity = actor_track_claim.get("per_frame_actor_identity_observed") is True
+    per_frame_actor_boxes3d = actor_track_claim.get("per_frame_actor_boxes3d_grouped_by_identity") is True
     hdmap_override_verified = False
 
     blockers: list[str] = []
@@ -163,12 +168,14 @@ def build_audit(
             },
             "actor_track_identity": {
                 "per_frame_actor_identity_observed": per_frame_actor_identity,
+                "actor_track_audit_status": actor_track_audit.get("status", "unknown"),
+                "persistent_track_count": actor_track_surface.get("persistent_track_count"),
             },
             "per_frame_actor_boxes3d": {
                 "verified": per_frame_actor_boxes3d,
-                "current_surface": "static_sample_level_override"
-                if box_condition_available
-                else "not_observed",
+                "current_surface": "grouped_by_instance_token"
+                if per_frame_actor_boxes3d
+                else ("static_sample_level_override" if box_condition_available else "not_observed"),
             },
             "hdmap_lane_geometry": {
                 "override_verified": hdmap_override_verified,
@@ -181,6 +188,7 @@ def build_audit(
             ),
             "paper_stage_3_status": stage_3.get("status"),
             "paper_stage_3_tensor_control_ready": stage_3.get("tensor_control_ready"),
+            "actor_track_audit_status": actor_track_audit.get("status"),
         },
         "blockers": list(dict.fromkeys(blockers)),
         "claim_boundary": {
@@ -222,6 +230,7 @@ def main() -> None:
     parser.add_argument("--backend-summary", type=Path, default=DEFAULT_BACKEND_SUMMARY)
     parser.add_argument("--velocity-audit", type=Path, default=DEFAULT_VELOCITY_AUDIT)
     parser.add_argument("--motion-gap", type=Path, default=DEFAULT_MOTION_GAP)
+    parser.add_argument("--actor-track-audit", type=Path, default=DEFAULT_ACTOR_TRACK_AUDIT)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -230,6 +239,7 @@ def main() -> None:
         backend_summary=load_json(args.backend_summary),
         velocity_audit=load_json(args.velocity_audit),
         motion_gap=load_json(args.motion_gap),
+        actor_track_audit=load_json(args.actor_track_audit),
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
