@@ -40,6 +40,7 @@ DEFAULT_EVIDENCE_INDEX = Path("experiments/2026-06-28_motorcycle_alignment_evide
 DEFAULT_CLAIM_TABLE = Path("experiments/2026-06-28_paper_claim_table_v0.md")
 DEFAULT_PROMPT_OBJECT_TRANSFER_AUDIT = Path("outputs/driveloop/prompt_object_transfer_audit/motorcycle_refined_object_transfer_audit.json")
 DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT = Path("outputs/driveloop/trajectory_runtime_surface_audit/motorcycle_refined_trajectory_runtime_surface_audit.json")
+DEFAULT_RUNTIME_SURFACE_CODE_AUDIT = Path("outputs/driveloop/runtime_surface_code_audit/motorcycle_refined_runtime_surface_code_audit.json")
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -72,6 +73,7 @@ def build_refresh_summary(
     dashboard: dict[str, Any],
     prompt_object_transfer_audit: Path,
     trajectory_runtime_surface_audit: Path,
+    runtime_surface_code_audit: Path,
 ) -> dict[str, Any]:
     return {
         "schema_version": "driveloop_refresh_all_audit_status.v0",
@@ -89,6 +91,7 @@ def build_refresh_summary(
             "experiment_dashboard": artifact_entry(dashboard_output, "experiment_status_dashboard"),
             "prompt_object_transfer_audit": artifact_entry(prompt_object_transfer_audit, "prompt_object_transfer_audit"),
             "trajectory_runtime_surface_audit": artifact_entry(trajectory_runtime_surface_audit, "trajectory_runtime_surface_audit"),
+            "runtime_surface_code_audit": artifact_entry(runtime_surface_code_audit, "runtime_surface_code_audit"),
         },
         "refresh_order": [
             "readiness_gate",
@@ -99,6 +102,7 @@ def build_refresh_summary(
             "experiment_dashboard",
             "prompt_object_transfer_audit",
             "trajectory_runtime_surface_audit",
+            "runtime_surface_code_audit",
         ],
         "status_summary": {
             "gpu_smoke_allowed": readiness.get("gpu_smoke_allowed"),
@@ -115,6 +119,9 @@ def build_refresh_summary(
             "object_transfer_status": dashboard.get("summary", {}).get("object_transfer_status"),
             "trajectory_runtime_surface_status": dashboard.get("summary", {}).get(
                 "trajectory_runtime_surface_status"
+            ),
+            "runtime_surface_code_audit_status": dashboard.get("summary", {}).get(
+                "runtime_surface_code_audit_status"
             ),
         },
         "claim_boundary": {
@@ -153,6 +160,7 @@ def refresh_all(
     runtime_audit: Path | None = None,
     prompt_object_transfer_audit: Path = DEFAULT_PROMPT_OBJECT_TRANSFER_AUDIT,
     trajectory_runtime_surface_audit: Path = DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT,
+    runtime_surface_code_audit: Path = DEFAULT_RUNTIME_SURFACE_CODE_AUDIT,
 ) -> dict[str, Any]:
     readiness = build_readiness_report(
         prompt=prompt,
@@ -211,6 +219,7 @@ def refresh_all(
         claim_table_path=claim_table,
         prompt_object_transfer_audit_path=prompt_object_transfer_audit,
         trajectory_runtime_surface_audit_path=trajectory_runtime_surface_audit,
+        runtime_surface_code_audit_path=runtime_surface_code_audit,
     )
     write_json(dashboard_output, dashboard)
 
@@ -229,6 +238,7 @@ def refresh_all(
         dashboard=dashboard,
         prompt_object_transfer_audit=prompt_object_transfer_audit,
         trajectory_runtime_surface_audit=trajectory_runtime_surface_audit,
+        runtime_surface_code_audit=runtime_surface_code_audit,
     )
     write_json(summary_output, summary)
     return summary

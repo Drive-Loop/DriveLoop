@@ -19,6 +19,7 @@ DEFAULT_CANDIDATE_AUDIT = Path("outputs/driveloop/prompt_conditional_candidate_a
 DEFAULT_FAILURE_TAXONOMY = Path("outputs/driveloop/alignment_failure_taxonomy/motorcycle_refined_candidate_failure_taxonomy.json")
 DEFAULT_PROMPT_OBJECT_TRANSFER_AUDIT = Path("outputs/driveloop/prompt_object_transfer_audit/motorcycle_refined_object_transfer_audit.json")
 DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT = Path("outputs/driveloop/trajectory_runtime_surface_audit/motorcycle_refined_trajectory_runtime_surface_audit.json")
+DEFAULT_RUNTIME_SURFACE_CODE_AUDIT = Path("outputs/driveloop/runtime_surface_code_audit/motorcycle_refined_runtime_surface_code_audit.json")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -47,6 +48,7 @@ def build_dashboard(
     failure_taxonomy_path: Path = DEFAULT_FAILURE_TAXONOMY,
     prompt_object_transfer_audit_path: Path = DEFAULT_PROMPT_OBJECT_TRANSFER_AUDIT,
     trajectory_runtime_surface_audit_path: Path = DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT,
+    runtime_surface_code_audit_path: Path = DEFAULT_RUNTIME_SURFACE_CODE_AUDIT,
 ) -> dict[str, Any]:
     readiness = load_json(readiness_path)
     manifest = load_json(manifest_path)
@@ -59,6 +61,7 @@ def build_dashboard(
     failure_taxonomy = load_json(failure_taxonomy_path)
     prompt_object_transfer_audit = load_json(prompt_object_transfer_audit_path)
     trajectory_runtime_surface_audit = load_json(trajectory_runtime_surface_audit_path)
+    runtime_surface_code_audit = load_json(runtime_surface_code_audit_path)
 
     gpu_smoke_allowed = readiness.get("gpu_smoke_allowed") is True
     semantic_claim_allowed_by_readiness = readiness.get("semantic_claim_allowed") is True
@@ -96,6 +99,7 @@ def build_dashboard(
             "source_candidate_support_allowed": candidate_audit.get("allowed") is True,
             "object_transfer_status": prompt_object_transfer_audit.get("status", "unknown"),
             "trajectory_runtime_surface_status": trajectory_runtime_surface_audit.get("status", "unknown"),
+            "runtime_surface_code_audit_status": runtime_surface_code_audit.get("status", "unknown"),
             "failure_taxonomy_labels": failure_taxonomy.get("taxonomy_labels", []),
         },
         "claim_boundary": {
@@ -107,6 +111,7 @@ def build_dashboard(
             "failure_taxonomy_is_diagnostic_not_success_claim": True,
             "object_transfer_audit_is_not_video_semantic_success": True,
             "trajectory_surface_audit_is_not_video_semantic_success": True,
+            "runtime_surface_code_audit_is_not_video_semantic_success": True,
         },
         "audit_signals": {
             "runtime_tensor_hash_changed": runtime_changed,
@@ -135,6 +140,16 @@ def build_dashboard(
             "hdmap_lane_geometry_override_verified": trajectory_runtime_surface_audit.get("surfaces", {})
             .get("hdmap_lane_geometry", {})
             .get("override_verified"),
+            "runtime_surface_code_audit_status": runtime_surface_code_audit.get("status", "unknown"),
+            "dataset_velocity_status": runtime_surface_code_audit.get("surfaces", {})
+            .get("dataset_velocity", {})
+            .get("status"),
+            "dataset_lane_hdmap_status": runtime_surface_code_audit.get("surfaces", {})
+            .get("dataset_lane_hdmap", {})
+            .get("status"),
+            "direct_motion_runtime_surface_status": runtime_surface_code_audit.get("surfaces", {})
+            .get("direct_motion_runtime_surface", {})
+            .get("status"),
         },
         "sources": {
             "readiness": source_entry(readiness_path),
@@ -150,6 +165,7 @@ def build_dashboard(
             "alignment_failure_taxonomy": source_entry(failure_taxonomy_path),
             "prompt_object_transfer_audit": source_entry(prompt_object_transfer_audit_path),
             "trajectory_runtime_surface_audit": source_entry(trajectory_runtime_surface_audit_path),
+            "runtime_surface_code_audit": source_entry(runtime_surface_code_audit_path),
         },
         "next_recommended_action": next_action(
             gpu_smoke_allowed=gpu_smoke_allowed,
@@ -188,6 +204,7 @@ def main() -> None:
     parser.add_argument("--failure-taxonomy", type=Path, default=DEFAULT_FAILURE_TAXONOMY)
     parser.add_argument("--prompt-object-transfer-audit", type=Path, default=DEFAULT_PROMPT_OBJECT_TRANSFER_AUDIT)
     parser.add_argument("--trajectory-runtime-surface-audit", type=Path, default=DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT)
+    parser.add_argument("--runtime-surface-code-audit", type=Path, default=DEFAULT_RUNTIME_SURFACE_CODE_AUDIT)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -205,6 +222,7 @@ def main() -> None:
         failure_taxonomy_path=args.failure_taxonomy,
         prompt_object_transfer_audit_path=args.prompt_object_transfer_audit,
         trajectory_runtime_surface_audit_path=args.trajectory_runtime_surface_audit,
+        runtime_surface_code_audit_path=args.runtime_surface_code_audit,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

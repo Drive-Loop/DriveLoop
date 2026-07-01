@@ -37,6 +37,7 @@ def test_dashboard_reports_pre_gpu_ready_without_semantic_claim(tmp_path):
         failure_taxonomy_path=write_json(tmp_path / "taxonomy.json", {"taxonomy_labels": ["lane_change_motion_failed"], "intervention_hints": ["audit trajectory"]}),
         prompt_object_transfer_audit_path=write_json(tmp_path / "object_transfer.json", {"status": "partially_verified"}),
         trajectory_runtime_surface_audit_path=write_json(tmp_path / "trajectory_surface.json", {"status": "not_runtime_connected"}),
+        runtime_surface_code_audit_path=write_json(tmp_path / "runtime_surface_code.json", {"status": "not_runtime_connected"}),
     )
 
     assert dashboard["dashboard_status"] == "pre_gpu_ready"
@@ -48,6 +49,7 @@ def test_dashboard_reports_pre_gpu_ready_without_semantic_claim(tmp_path):
     assert dashboard["summary"]["failure_taxonomy_labels"] == ["lane_change_motion_failed"]
     assert dashboard["summary"]["object_transfer_status"] == "partially_verified"
     assert dashboard["summary"]["trajectory_runtime_surface_status"] == "not_runtime_connected"
+    assert dashboard["summary"]["runtime_surface_code_audit_status"] == "not_runtime_connected"
     assert dashboard["claim_boundary"]["failure_taxonomy_is_diagnostic_not_success_claim"] is True
     assert "gated GPU smoke candidate" in dashboard["next_recommended_action"]
 
@@ -184,6 +186,17 @@ def test_dashboard_surfaces_object_transfer_and_trajectory_runtime_audits(tmp_pa
             },
         },
     )
+    runtime_surface_code = write_json(
+        tmp_path / "runtime_surface_code.json",
+        {
+            "status": "not_runtime_connected",
+            "surfaces": {
+                "dataset_velocity": {"status": "available_in_converter"},
+                "dataset_lane_hdmap": {"status": "rasterized_image_hdmap_from_lane_geometry"},
+                "direct_motion_runtime_surface": {"status": "not_observed"},
+            },
+        },
+    )
 
     dashboard = build_dashboard(
         readiness_path=readiness,
@@ -196,6 +209,7 @@ def test_dashboard_surfaces_object_transfer_and_trajectory_runtime_audits(tmp_pa
         claim_table_path=tmp_path / "claim.md",
         prompt_object_transfer_audit_path=object_transfer,
         trajectory_runtime_surface_audit_path=trajectory_surface,
+        runtime_surface_code_audit_path=runtime_surface_code,
     )
 
     assert dashboard["summary"]["object_transfer_status"] == "partially_verified"
@@ -212,5 +226,10 @@ def test_dashboard_surfaces_object_transfer_and_trajectory_runtime_audits(tmp_pa
     assert dashboard["audit_signals"]["hdmap_lane_geometry_override_verified"] is False
     assert dashboard["claim_boundary"]["object_transfer_audit_is_not_video_semantic_success"] is True
     assert dashboard["claim_boundary"]["trajectory_surface_audit_is_not_video_semantic_success"] is True
+    assert dashboard["claim_boundary"]["runtime_surface_code_audit_is_not_video_semantic_success"] is True
+    assert dashboard["audit_signals"]["dataset_velocity_status"] == "available_in_converter"
+    assert dashboard["audit_signals"]["dataset_lane_hdmap_status"] == "rasterized_image_hdmap_from_lane_geometry"
+    assert dashboard["audit_signals"]["direct_motion_runtime_surface_status"] == "not_observed"
     assert dashboard["sources"]["prompt_object_transfer_audit"]["exists"] is True
     assert dashboard["sources"]["trajectory_runtime_surface_audit"]["exists"] is True
+    assert dashboard["sources"]["runtime_surface_code_audit"]["exists"] is True
