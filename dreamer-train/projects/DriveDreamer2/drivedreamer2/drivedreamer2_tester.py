@@ -302,6 +302,7 @@ class DriveDreamer2_Tester(Tester):
                             return normalized[:limit]
                         raw_velocities_available = value.get("velocities_available_in_batch")
                         raw_actor_identity = value.get("actor_identity_available_in_batch")
+                        raw_actor_identity_fields = value.get("actor_identity_fields")
                         raw_per_frame_boxes = value.get("per_frame_actor_boxes3d_observed")
                         raw_boxes_available = value.get("boxes3d_available_in_batch")
                         raw_labels_available = value.get("actor_labels_available_in_batch")
@@ -316,6 +317,7 @@ class DriveDreamer2_Tester(Tester):
                             "actor_labels_available_in_batch_any": bool_any(raw_labels_available),
                             "actor_label_count_preview": as_list(value.get("actor_label_count"))[:8],
                             "actor_identity_available_in_batch_any": bool_any(raw_actor_identity),
+                            "actor_identity_fields_preview": as_list(raw_actor_identity_fields)[:8],
                             "boxes3d_available_in_batch_any": bool_any(raw_boxes_available),
                             "boxes3d_shape_preview": shape_preview(value.get("boxes3d_shape")),
                             "per_frame_actor_boxes3d_observed_any": bool_any(raw_per_frame_boxes),

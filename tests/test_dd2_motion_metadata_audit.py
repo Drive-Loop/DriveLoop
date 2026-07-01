@@ -8,7 +8,8 @@ def test_transform_preserves_motion_metadata_audit_only():
 
     assert "'motion_metadata': motion_metadata" in text
     assert "'velocities_available_in_batch': velocities is not None" in text
-    assert "'actor_identity_available_in_batch': any(" in text
+    assert "'actor_identity_available_in_batch': bool(actor_identity_fields)" in text
+    assert "'actor_identity_fields': actor_identity_fields" in text
     assert "'per_frame_actor_boxes3d_observed': False" in text
     assert "'claim': 'metadata_observed_only_not_runtime_control'" in text
 

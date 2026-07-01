@@ -250,6 +250,15 @@ class DriveDreamer2_Transform:
         velocities = data_dict.get('velocities')
         labels3d = data_dict.get('ori_labels3d', data_dict.get('labels3d', []))
         boxes3d_source = data_dict.get('boxes3d')
+        identity_fields = [
+            'instance_token',
+            'instance_tokens',
+            'track_id',
+            'track_ids',
+            'sample_annotation_token',
+            'sample_annotation_tokens',
+        ]
+        actor_identity_fields = [key for key in identity_fields if key in data_dict]
         velocity_shape = list(velocities.shape) if hasattr(velocities, 'shape') else None
         boxes3d_shape = list(boxes3d_source.shape) if hasattr(boxes3d_source, 'shape') else None
         motion_metadata = {
@@ -257,17 +266,8 @@ class DriveDreamer2_Transform:
             'velocities_shape': velocity_shape,
             'actor_labels_available_in_batch': labels3d is not None,
             'actor_label_count': len(labels3d) if hasattr(labels3d, '__len__') else None,
-            'actor_identity_available_in_batch': any(
-                key in data_dict
-                for key in [
-                    'instance_token',
-                    'instance_tokens',
-                    'track_id',
-                    'track_ids',
-                    'sample_annotation_token',
-                    'sample_annotation_tokens',
-                ]
-            ),
+            'actor_identity_available_in_batch': bool(actor_identity_fields),
+            'actor_identity_fields': actor_identity_fields,
             'boxes3d_available_in_batch': boxes3d_source is not None,
             'boxes3d_shape': boxes3d_shape,
             'per_frame_actor_boxes3d_observed': False,
