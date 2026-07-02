@@ -25,6 +25,7 @@ DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT = Path("outputs/driveloop/actor_identity_su
 DEFAULT_CANDIDATE70_CONVERTER_IDENTITY_SUMMARY = Path("outputs/driveloop/candidate70_converter_identity_probe/cam_front_8/v0.0.1/labels/summary.json")
 DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT = Path("outputs/driveloop/actor_track_surface_audit/candidate70_converter_identity_probe_actor_track_surface_audit.json")
 DEFAULT_CANDIDATE70_HDMAP_RASTER_PROBE = Path("outputs/driveloop/candidate70_hdmap_raster_probe/candidate70_hdmap_raster_probe_summary.json")
+DEFAULT_CANDIDATE70_HDMAP_REPLACEMENT_SURFACE_AUDIT = Path("outputs/driveloop/hdmap_replacement_surface_audit/candidate70_verified_raster_to_grounding_surface.json")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -75,6 +76,35 @@ def candidate70_hdmap_probe_status(probe: dict[str, Any]) -> dict[str, Any]:
     }
 
 
+def candidate70_hdmap_replacement_surface_status(audit: dict[str, Any]) -> dict[str, Any]:
+    claim = audit.get("claim", {})
+    if not isinstance(claim, dict):
+        claim = {}
+    surfaces = audit.get("surfaces", {})
+    if not isinstance(surfaces, dict):
+        surfaces = {}
+    image_hdmap_override = surfaces.get("image_hdmap_override", {})
+    if not isinstance(image_hdmap_override, dict):
+        image_hdmap_override = {}
+    grounding = surfaces.get("grounding_downsampler_input", {})
+    if not isinstance(grounding, dict):
+        grounding = {}
+    return {
+        "audit_available": bool(audit),
+        "status": audit.get("status", "unknown") if audit else "missing",
+        "does_not_run_gpu": audit.get("does_not_run_gpu") is True,
+        "does_not_generate_video": audit.get("does_not_generate_video") is True,
+        "image_hdmap_override_changed": image_hdmap_override.get("changed") is True,
+        "grounding_downsampler_input_changed": grounding.get("changed") is True,
+        "replacement_raster_reaches_grounding_downsampler_input": claim.get("replacement_raster_reaches_grounding_downsampler_input") is True,
+        "candidate70_verified_replacement_hdmap_raster_available": claim.get("candidate70_verified_replacement_hdmap_raster_available") is True,
+        "hdmap_lane_geometry_override_verified": claim.get("hdmap_lane_geometry_override_verified") is True,
+        "lane_change_control_verified": claim.get("lane_change_control_verified") is True,
+        "runtime_motion_control_connected": claim.get("runtime_motion_control_connected") is True,
+        "semantic_success_claim_allowed": claim.get("semantic_success_claim_allowed") is True,
+    }
+
+
 def motion_metadata_status(runtime_audit: dict[str, Any]) -> tuple[str, dict[str, Any]]:
     motion_metadata = runtime_audit.get("motion_metadata", {})
     if not isinstance(motion_metadata, dict):
@@ -104,6 +134,7 @@ def build_dashboard(
     candidate70_converter_identity_summary_path: Path = DEFAULT_CANDIDATE70_CONVERTER_IDENTITY_SUMMARY,
     candidate70_converter_actor_track_audit_path: Path = DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT,
     candidate70_hdmap_raster_probe_path: Path = DEFAULT_CANDIDATE70_HDMAP_RASTER_PROBE,
+    candidate70_hdmap_replacement_surface_audit_path: Path = DEFAULT_CANDIDATE70_HDMAP_REPLACEMENT_SURFACE_AUDIT,
 ) -> dict[str, Any]:
     readiness = load_json(readiness_path)
     manifest = load_json(manifest_path)
@@ -125,6 +156,8 @@ def build_dashboard(
     candidate70_actor_track_audit = load_json(candidate70_converter_actor_track_audit_path)
     candidate70_hdmap_raster_probe = load_json(candidate70_hdmap_raster_probe_path)
     candidate70_hdmap_status = candidate70_hdmap_probe_status(candidate70_hdmap_raster_probe)
+    candidate70_hdmap_replacement_surface_audit = load_json(candidate70_hdmap_replacement_surface_audit_path)
+    candidate70_hdmap_replacement_status = candidate70_hdmap_replacement_surface_status(candidate70_hdmap_replacement_surface_audit)
     candidate70_target_token = candidate70_identity_summary.get("target_raw_instance_token")
     candidate70_frame_count = candidate70_identity_summary.get("frame_count")
     candidate70_tracks = candidate70_actor_track_audit.get("track_surface", {}).get("tracks_preview", [])
@@ -184,6 +217,7 @@ def build_dashboard(
             "candidate70_full_processed_labels_rebuilt_with_identity": False,
             "candidate70_baseline_hdmap_raster_reproducible": candidate70_hdmap_status["baseline_hdmap_raster_reproducible"],
             "candidate70_processed_hdmap_matches_converter": candidate70_hdmap_status["processed_hdmap_matches_converter"],
+            "candidate70_replacement_raster_reaches_grounding_downsampler_input": candidate70_hdmap_replacement_status["replacement_raster_reaches_grounding_downsampler_input"],
             "candidate70_verified_replacement_hdmap_raster_available": False,
             "failure_taxonomy_labels": failure_taxonomy.get("taxonomy_labels", []),
         },
@@ -203,6 +237,8 @@ def build_dashboard(
             "actor_identity_surface_audit_is_not_video_semantic_success": True,
             "candidate70_hdmap_raster_source_probe_is_not_lane_geometry_override": True,
             "candidate70_hdmap_raster_source_probe_is_not_video_semantic_success": True,
+            "candidate70_hdmap_replacement_surface_audit_is_not_lane_geometry_override": True,
+            "candidate70_hdmap_replacement_surface_audit_is_not_video_semantic_success": True,
         },
         "audit_signals": {
             "runtime_tensor_hash_changed": runtime_changed,
@@ -265,8 +301,20 @@ def build_dashboard(
             "candidate70_hdmap_raster_probe_processed_match_false": candidate70_hdmap_status["processed_match_false"],
             "candidate70_baseline_hdmap_raster_reproducible": candidate70_hdmap_status["baseline_hdmap_raster_reproducible"],
             "candidate70_processed_hdmap_matches_converter": candidate70_hdmap_status["processed_hdmap_matches_converter"],
+            "candidate70_replacement_raster_reaches_grounding_downsampler_input": candidate70_hdmap_replacement_status["replacement_raster_reaches_grounding_downsampler_input"],
+            "candidate70_hdmap_replacement_surface_audit_status": candidate70_hdmap_replacement_status["status"],
+            "candidate70_hdmap_replacement_audit_available": candidate70_hdmap_replacement_status["audit_available"],
+            "candidate70_hdmap_replacement_does_not_run_gpu": candidate70_hdmap_replacement_status["does_not_run_gpu"],
+            "candidate70_hdmap_replacement_does_not_generate_video": candidate70_hdmap_replacement_status["does_not_generate_video"],
+            "candidate70_image_hdmap_override_changed": candidate70_hdmap_replacement_status["image_hdmap_override_changed"],
+            "candidate70_replacement_grounding_downsampler_input_changed": candidate70_hdmap_replacement_status["grounding_downsampler_input_changed"],
             "candidate70_verified_replacement_hdmap_raster_available": False,
+            "candidate70_hdmap_lane_geometry_override_verified": candidate70_hdmap_replacement_status["hdmap_lane_geometry_override_verified"],
+            "candidate70_lane_change_control_verified": candidate70_hdmap_replacement_status["lane_change_control_verified"],
+            "candidate70_runtime_motion_control_connected": candidate70_hdmap_replacement_status["runtime_motion_control_connected"],
+            "candidate70_semantic_success_claim_allowed": candidate70_hdmap_replacement_status["semantic_success_claim_allowed"],
             "candidate70_hdmap_raster_source_probe_is_not_lane_geometry_override": True,
+            "candidate70_hdmap_replacement_surface_audit_is_not_lane_geometry_override": True,
         },
         "sources": {
             "readiness": source_entry(readiness_path),
@@ -288,6 +336,7 @@ def build_dashboard(
             "candidate70_converter_identity_summary": source_entry(candidate70_converter_identity_summary_path),
             "candidate70_converter_actor_track_audit": source_entry(candidate70_converter_actor_track_audit_path),
             "candidate70_hdmap_raster_probe": source_entry(candidate70_hdmap_raster_probe_path),
+            "candidate70_hdmap_replacement_surface_audit": source_entry(candidate70_hdmap_replacement_surface_audit_path),
         },
         "next_recommended_action": next_action(
             gpu_smoke_allowed=gpu_smoke_allowed,
@@ -332,6 +381,7 @@ def main() -> None:
     parser.add_argument("--candidate70-converter-identity-summary", type=Path, default=DEFAULT_CANDIDATE70_CONVERTER_IDENTITY_SUMMARY)
     parser.add_argument("--candidate70-converter-actor-track-audit", type=Path, default=DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT)
     parser.add_argument("--candidate70-hdmap-raster-probe", type=Path, default=DEFAULT_CANDIDATE70_HDMAP_RASTER_PROBE)
+    parser.add_argument("--candidate70-hdmap-replacement-surface-audit", type=Path, default=DEFAULT_CANDIDATE70_HDMAP_REPLACEMENT_SURFACE_AUDIT)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -355,6 +405,7 @@ def main() -> None:
         candidate70_converter_identity_summary_path=args.candidate70_converter_identity_summary,
         candidate70_converter_actor_track_audit_path=args.candidate70_converter_actor_track_audit,
         candidate70_hdmap_raster_probe_path=args.candidate70_hdmap_raster_probe,
+        candidate70_hdmap_replacement_surface_audit_path=args.candidate70_hdmap_replacement_surface_audit,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

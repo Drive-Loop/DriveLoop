@@ -73,6 +73,12 @@ def apply_dd2_override_to_sample(
     if isinstance(image_hdmap, dict) and image_hdmap.get("mode") == "zero":
         updated, hdmap_audit = _zero_image_hdmap(updated, image_hdmap)
         audit["applied"].append(hdmap_audit)
+    elif isinstance(image_hdmap, dict) and image_hdmap.get("mode") == "replace_from_path":
+        updated, hdmap_audit = _replace_image_hdmap_from_path(updated, image_hdmap)
+        if hdmap_audit.get("applied") is True:
+            audit["applied"].append(hdmap_audit)
+        else:
+            audit["skipped"].append(hdmap_audit)
     else:
         reason = image_hdmap.get("reason", "no_verified_hdmap_override") if isinstance(image_hdmap, dict) else "missing_hdmap_override"
         audit["skipped"].append({"target": "image_hdmap", "reason": reason})
@@ -216,3 +222,64 @@ def _zero_image_hdmap(data_dict: dict[str, Any], image_hdmap_spec: dict[str, Any
         "applied": True,
         "source": image_hdmap_spec.get("source", "explicit_override"),
     }
+
+
+def _replace_image_hdmap_from_path(
+    data_dict: dict[str, Any],
+    image_hdmap_spec: dict[str, Any],
+) -> tuple[dict[str, Any], dict[str, Any]]:
+    updated = dict(data_dict)
+    raster_path_value = image_hdmap_spec.get("path")
+    expected_sha256 = image_hdmap_spec.get("expected_sha256")
+
+    audit = {
+        "target": "image_hdmap",
+        "mode": "replace_from_path",
+        "applied": False,
+        "path": str(raster_path_value) if raster_path_value else None,
+        "source": image_hdmap_spec.get("source", "unknown"),
+        "provenance": image_hdmap_spec.get("provenance", "unknown"),
+        "expected_sha256": expected_sha256,
+        "claim_boundary": {
+            "replacement_raster_reaches_grounding_surface_only": True,
+            "hdmap_lane_geometry_override_verified": False,
+            "lane_change_control_verified": False,
+            "runtime_motion_control_connected": False,
+            "semantic_success_claim_allowed": False,
+        },
+    }
+
+    if not raster_path_value:
+        audit["reason"] = "missing_path"
+        return updated, audit
+    if not expected_sha256:
+        audit["reason"] = "missing_expected_sha256"
+        return updated, audit
+
+    raster_path = Path(str(raster_path_value))
+    if not raster_path.exists():
+        audit["reason"] = "missing_path"
+        return updated, audit
+
+    try:
+        from PIL import Image
+
+        replacement = Image.open(raster_path).convert(image_hdmap_spec.get("pil_mode", "RGB"))
+        replacement.load()
+    except Exception as exc:
+        audit["reason"] = "failed_to_load_image"
+        audit["error"] = str(exc)
+        return updated, audit
+
+    replacement_signature = tensor_signature(replacement)
+    actual_sha256 = replacement_signature.get("sha256") if replacement_signature else None
+    audit["actual_sha256"] = actual_sha256
+    audit["replacement_signature"] = replacement_signature
+
+    if actual_sha256 != expected_sha256:
+        audit["reason"] = "sha256_mismatch"
+        return updated, audit
+
+    updated["image_hdmap"] = replacement
+    audit["applied"] = True
+    return updated, audit

@@ -397,3 +397,71 @@ def test_dashboard_surfaces_candidate70_hdmap_raster_source_probe(tmp_path):
     assert dashboard["audit_signals"]["candidate70_hdmap_raster_source_probe_is_not_lane_geometry_override"] is True
     assert dashboard["claim_boundary"]["candidate70_hdmap_raster_source_probe_is_not_video_semantic_success"] is True
     assert dashboard["sources"]["candidate70_hdmap_raster_probe"]["exists"] is True
+
+
+def test_dashboard_surfaces_candidate70_hdmap_replacement_surface_audit(tmp_path):
+    readiness = write_json(tmp_path / "readiness.json", {"gpu_smoke_allowed": False})
+    manifest = write_json(tmp_path / "manifest.json", {})
+    bundle = write_json(tmp_path / "bundle.json", {})
+    hdmap_probe = write_json(
+        tmp_path / "candidate70_hdmap_probe.json",
+        {
+            "frame_count": 1,
+            "records": [
+                {
+                    "converter_signature": {"nonzero": 10},
+                    "processed_matches": [{"matches_converter": True}],
+                },
+            ],
+        },
+    )
+    replacement_audit = write_json(
+        tmp_path / "candidate70_hdmap_replacement_surface_audit.json",
+        {
+            "status": "replacement_raster_reaches_grounding_surface",
+            "does_not_run_gpu": True,
+            "does_not_generate_video": True,
+            "surfaces": {
+                "image_hdmap_override": {"changed": True},
+                "grounding_downsampler_input": {"changed": True},
+            },
+            "claim": {
+                "replacement_raster_reaches_grounding_downsampler_input": True,
+                "candidate70_verified_replacement_hdmap_raster_available": False,
+                "hdmap_lane_geometry_override_verified": False,
+                "lane_change_control_verified": False,
+                "runtime_motion_control_connected": False,
+                "semantic_success_claim_allowed": False,
+            },
+        },
+    )
+
+    dashboard = build_dashboard(
+        readiness_path=readiness,
+        manifest_path=manifest,
+        bundle_validation_path=bundle,
+        runtime_compare_path=tmp_path / "runtime.json",
+        motion_gap_path=tmp_path / "motion.json",
+        velocity_audit_path=tmp_path / "velocity.json",
+        evidence_index_path=tmp_path / "index.md",
+        claim_table_path=tmp_path / "claim.md",
+        candidate70_hdmap_raster_probe_path=hdmap_probe,
+        candidate70_hdmap_replacement_surface_audit_path=replacement_audit,
+    )
+
+    assert dashboard["summary"]["candidate70_replacement_raster_reaches_grounding_downsampler_input"] is True
+    assert dashboard["summary"]["candidate70_verified_replacement_hdmap_raster_available"] is False
+    assert dashboard["audit_signals"]["candidate70_hdmap_replacement_surface_audit_status"] == "replacement_raster_reaches_grounding_surface"
+    assert dashboard["audit_signals"]["candidate70_hdmap_replacement_audit_available"] is True
+    assert dashboard["audit_signals"]["candidate70_hdmap_replacement_does_not_run_gpu"] is True
+    assert dashboard["audit_signals"]["candidate70_hdmap_replacement_does_not_generate_video"] is True
+    assert dashboard["audit_signals"]["candidate70_image_hdmap_override_changed"] is True
+    assert dashboard["audit_signals"]["candidate70_replacement_grounding_downsampler_input_changed"] is True
+    assert dashboard["audit_signals"]["candidate70_replacement_raster_reaches_grounding_downsampler_input"] is True
+    assert dashboard["audit_signals"]["candidate70_hdmap_lane_geometry_override_verified"] is False
+    assert dashboard["audit_signals"]["candidate70_lane_change_control_verified"] is False
+    assert dashboard["audit_signals"]["candidate70_runtime_motion_control_connected"] is False
+    assert dashboard["audit_signals"]["candidate70_semantic_success_claim_allowed"] is False
+    assert dashboard["claim_boundary"]["candidate70_hdmap_replacement_surface_audit_is_not_lane_geometry_override"] is True
+    assert dashboard["claim_boundary"]["candidate70_hdmap_replacement_surface_audit_is_not_video_semantic_success"] is True
+    assert dashboard["sources"]["candidate70_hdmap_replacement_surface_audit"]["exists"] is True

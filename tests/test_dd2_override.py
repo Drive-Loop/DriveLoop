@@ -123,3 +123,117 @@ def test_override_audit_summary_does_not_double_count_image_box(tmp_path):
         "scene_description": 1,
     }
 
+
+
+def test_apply_dd2_override_replaces_hdmap_from_verified_path(tmp_path):
+    from PIL import Image
+
+    raster_path = tmp_path / "replacement_hdmap.png"
+    replacement = np.zeros((3, 4, 3), dtype=np.uint8)
+    replacement[:, :, 1] = 7
+    Image.fromarray(replacement).save(raster_path)
+    expected_sha256 = tensor_signature(Image.open(raster_path).convert("RGB"))["sha256"]
+
+    sample = {
+        "boxes3d": np.zeros((0, 9), dtype=np.float32),
+        "ori_labels3d": [],
+        "labels3d": [],
+        "image_hdmap": np.ones((3, 4, 3), dtype=np.uint8),
+    }
+
+    updated, audit = apply_dd2_override_to_sample(
+        sample,
+        {
+            "schema_version": "driveloop_dd2_override.v0",
+            "image_hdmap": {
+                "mode": "replace_from_path",
+                "path": str(raster_path),
+                "source": "unit_test_verified_raster",
+                "provenance": "tmp_path_png",
+                "expected_sha256": expected_sha256,
+            },
+        },
+    )
+
+    assert audit["changed"]["image_hdmap"] is True
+    applied = audit["applied"][0]
+    assert applied["target"] == "image_hdmap"
+    assert applied["mode"] == "replace_from_path"
+    assert applied["applied"] is True
+    assert applied["path"] == str(raster_path)
+    assert applied["source"] == "unit_test_verified_raster"
+    assert applied["provenance"] == "tmp_path_png"
+    assert applied["expected_sha256"] == expected_sha256
+    assert applied["actual_sha256"] == expected_sha256
+    assert applied["claim_boundary"]["replacement_raster_reaches_grounding_surface_only"] is True
+    assert applied["claim_boundary"]["hdmap_lane_geometry_override_verified"] is False
+    assert applied["claim_boundary"]["lane_change_control_verified"] is False
+    assert applied["claim_boundary"]["runtime_motion_control_connected"] is False
+    assert applied["claim_boundary"]["semantic_success_claim_allowed"] is False
+    assert tensor_signature(updated["image_hdmap"])["sha256"] == expected_sha256
+
+
+def test_apply_dd2_override_rejects_missing_hdmap_replacement_path():
+    sample = {
+        "boxes3d": np.zeros((0, 9), dtype=np.float32),
+        "ori_labels3d": [],
+        "labels3d": [],
+        "image_hdmap": np.ones((2, 2, 3), dtype=np.uint8),
+    }
+    before = tensor_signature(sample["image_hdmap"])
+
+    updated, audit = apply_dd2_override_to_sample(
+        sample,
+        {
+            "schema_version": "driveloop_dd2_override.v0",
+            "image_hdmap": {
+                "mode": "replace_from_path",
+                "path": "does/not/exist.png",
+                "source": "unit_test_missing_raster",
+                "expected_sha256": "not_used",
+            },
+        },
+    )
+
+    assert tensor_signature(updated["image_hdmap"]) == before
+    assert audit["changed"]["image_hdmap"] is False
+    hdmap_skip = next(item for item in audit["skipped"] if item["target"] == "image_hdmap")
+    assert hdmap_skip["mode"] == "replace_from_path"
+    assert hdmap_skip["reason"] == "missing_path"
+
+
+def test_apply_dd2_override_rejects_hdmap_replacement_hash_mismatch(tmp_path):
+    from PIL import Image
+
+    raster_path = tmp_path / "replacement_hdmap.png"
+    replacement = np.zeros((2, 2, 3), dtype=np.uint8)
+    replacement[:, :, 2] = 9
+    Image.fromarray(replacement).save(raster_path)
+
+    sample = {
+        "boxes3d": np.zeros((0, 9), dtype=np.float32),
+        "ori_labels3d": [],
+        "labels3d": [],
+        "image_hdmap": np.ones((2, 2, 3), dtype=np.uint8),
+    }
+    before = tensor_signature(sample["image_hdmap"])
+
+    updated, audit = apply_dd2_override_to_sample(
+        sample,
+        {
+            "schema_version": "driveloop_dd2_override.v0",
+            "image_hdmap": {
+                "mode": "replace_from_path",
+                "path": str(raster_path),
+                "source": "unit_test_bad_hash",
+                "expected_sha256": "0" * 64,
+            },
+        },
+    )
+
+    assert tensor_signature(updated["image_hdmap"]) == before
+    assert audit["changed"]["image_hdmap"] is False
+    hdmap_skip = next(item for item in audit["skipped"] if item["target"] == "image_hdmap")
+    assert hdmap_skip["mode"] == "replace_from_path"
+    assert hdmap_skip["reason"] == "sha256_mismatch"
+    assert hdmap_skip["actual_sha256"] != "0" * 64
