@@ -27,6 +27,7 @@ DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT = Path("outputs/driveloop/actor_
 DEFAULT_CANDIDATE70_HDMAP_RASTER_PROBE = Path("outputs/driveloop/candidate70_hdmap_raster_probe/candidate70_hdmap_raster_probe_summary.json")
 DEFAULT_CANDIDATE70_HDMAP_REPLACEMENT_SURFACE_AUDIT = Path("outputs/driveloop/hdmap_replacement_surface_audit/candidate70_verified_raster_to_grounding_surface.json")
 DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_SURFACE_AUDIT = Path("outputs/driveloop/candidate70_hdmap_dry_run_replacement_surface_audit/candidate70_dry_run_raster_to_grounding_surface.json")
+DEFAULT_CANDIDATE70_GPU_READINESS_GATE = Path("outputs/driveloop/gpu_smoke_readiness/candidate70_gpu_readiness_gate.json")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -140,6 +141,7 @@ def build_dashboard(
     candidate70_hdmap_raster_probe_path: Path = DEFAULT_CANDIDATE70_HDMAP_RASTER_PROBE,
     candidate70_hdmap_replacement_surface_audit_path: Path = DEFAULT_CANDIDATE70_HDMAP_REPLACEMENT_SURFACE_AUDIT,
     candidate70_dry_run_replacement_surface_audit_path: Path = DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_SURFACE_AUDIT,
+    candidate70_gpu_readiness_gate_path: Path = DEFAULT_CANDIDATE70_GPU_READINESS_GATE,
 ) -> dict[str, Any]:
     readiness = load_json(readiness_path)
     manifest = load_json(manifest_path)
@@ -165,6 +167,13 @@ def build_dashboard(
     candidate70_hdmap_replacement_status = candidate70_hdmap_replacement_surface_status(candidate70_hdmap_replacement_surface_audit)
     candidate70_dry_run_replacement_surface_audit = load_json(candidate70_dry_run_replacement_surface_audit_path)
     candidate70_dry_run_replacement_status = candidate70_hdmap_replacement_surface_status(candidate70_dry_run_replacement_surface_audit)
+    candidate70_gpu_readiness_gate = load_json(candidate70_gpu_readiness_gate_path)
+    candidate70_gpu_readiness_checks = candidate70_gpu_readiness_gate.get("checks", {})
+    if not isinstance(candidate70_gpu_readiness_checks, dict):
+        candidate70_gpu_readiness_checks = {}
+    candidate70_gpu_readiness_blockers = candidate70_gpu_readiness_gate.get("blockers", [])
+    if not isinstance(candidate70_gpu_readiness_blockers, list):
+        candidate70_gpu_readiness_blockers = []
     candidate70_target_token = candidate70_identity_summary.get("target_raw_instance_token")
     candidate70_frame_count = candidate70_identity_summary.get("frame_count")
     candidate70_tracks = candidate70_actor_track_audit.get("track_surface", {}).get("tracks_preview", [])
@@ -228,6 +237,9 @@ def build_dashboard(
             "candidate70_dry_run_raster_reaches_grounding_downsampler_input": candidate70_dry_run_replacement_status["replacement_raster_reaches_grounding_downsampler_input"],
             "candidate70_verified_replacement_hdmap_raster_available": False,
             "candidate70_true_lane_geometry_replacement_available": False,
+            "candidate70_gpu_readiness_status": candidate70_gpu_readiness_gate.get("readiness_status", "unknown"),
+            "candidate70_gpu_smoke_allowed": candidate70_gpu_readiness_gate.get("gpu_smoke_allowed") is True,
+            "candidate70_gpu_readiness_blockers": candidate70_gpu_readiness_blockers,
             "failure_taxonomy_labels": failure_taxonomy.get("taxonomy_labels", []),
         },
         "claim_boundary": {
@@ -251,6 +263,9 @@ def build_dashboard(
             "candidate70_dry_run_replacement_surface_audit_is_not_lane_geometry_override": True,
             "candidate70_dry_run_replacement_surface_audit_is_not_video_semantic_success": True,
             "candidate70_dry_run_gpu_requires_separate_readiness_gate": True,
+            "candidate70_readiness_gate_is_not_gpu_approval": candidate70_gpu_readiness_gate.get("claim_boundary", {}).get("candidate70_readiness_gate_is_not_gpu_approval") is True,
+            "candidate70_readiness_gate_is_not_video_semantic_success": candidate70_gpu_readiness_gate.get("claim_boundary", {}).get("candidate70_readiness_gate_is_not_video_semantic_success") is True,
+            "candidate70_accepted_prompt_required_before_generate": candidate70_gpu_readiness_gate.get("claim_boundary", {}).get("accepted_prompt_required_before_generate") is True,
         },
         "audit_signals": {
             "runtime_tensor_hash_changed": runtime_changed,
@@ -341,6 +356,13 @@ def build_dashboard(
             "candidate70_hdmap_replacement_surface_audit_is_not_lane_geometry_override": True,
             "candidate70_dry_run_replacement_surface_audit_is_not_lane_geometry_override": True,
             "candidate70_dry_run_replacement_surface_audit_is_not_video_semantic_success": True,
+            "candidate70_gpu_readiness_status": candidate70_gpu_readiness_gate.get("readiness_status", "unknown"),
+            "candidate70_gpu_smoke_allowed": candidate70_gpu_readiness_gate.get("gpu_smoke_allowed") is True,
+            "candidate70_gpu_readiness_blockers": candidate70_gpu_readiness_blockers,
+            "candidate70_accepted_prompt_selected": candidate70_gpu_readiness_checks.get("accepted_prompt_selected"),
+            "candidate70_readiness_runtime_motion_control_connected": candidate70_gpu_readiness_checks.get("runtime_motion_control_connected"),
+            "candidate70_readiness_true_lane_geometry_replacement_available": candidate70_gpu_readiness_checks.get("true_lane_geometry_replacement_available"),
+            "candidate70_readiness_semantic_success_claim_allowed": candidate70_gpu_readiness_checks.get("semantic_success_claim_allowed"),
         },
         "sources": {
             "readiness": source_entry(readiness_path),
@@ -364,6 +386,7 @@ def build_dashboard(
             "candidate70_hdmap_raster_probe": source_entry(candidate70_hdmap_raster_probe_path),
             "candidate70_hdmap_replacement_surface_audit": source_entry(candidate70_hdmap_replacement_surface_audit_path),
             "candidate70_dry_run_replacement_surface_audit": source_entry(candidate70_dry_run_replacement_surface_audit_path),
+            "candidate70_gpu_readiness_gate": source_entry(candidate70_gpu_readiness_gate_path),
         },
         "next_recommended_action": next_action(
             gpu_smoke_allowed=gpu_smoke_allowed,
@@ -410,6 +433,7 @@ def main() -> None:
     parser.add_argument("--candidate70-hdmap-raster-probe", type=Path, default=DEFAULT_CANDIDATE70_HDMAP_RASTER_PROBE)
     parser.add_argument("--candidate70-hdmap-replacement-surface-audit", type=Path, default=DEFAULT_CANDIDATE70_HDMAP_REPLACEMENT_SURFACE_AUDIT)
     parser.add_argument("--candidate70-dry-run-replacement-surface-audit", type=Path, default=DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_SURFACE_AUDIT)
+    parser.add_argument("--candidate70-gpu-readiness-gate", type=Path, default=DEFAULT_CANDIDATE70_GPU_READINESS_GATE)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -435,6 +459,7 @@ def main() -> None:
         candidate70_hdmap_raster_probe_path=args.candidate70_hdmap_raster_probe,
         candidate70_hdmap_replacement_surface_audit_path=args.candidate70_hdmap_replacement_surface_audit,
         candidate70_dry_run_replacement_surface_audit_path=args.candidate70_dry_run_replacement_surface_audit,
+        candidate70_gpu_readiness_gate_path=args.candidate70_gpu_readiness_gate,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

@@ -521,3 +521,62 @@ def test_dashboard_surfaces_candidate70_dry_run_replacement_surface_audit(tmp_pa
     assert dashboard["claim_boundary"]["candidate70_dry_run_replacement_surface_audit_is_not_video_semantic_success"] is True
     assert dashboard["claim_boundary"]["candidate70_dry_run_gpu_requires_separate_readiness_gate"] is True
     assert dashboard["sources"]["candidate70_dry_run_replacement_surface_audit"]["exists"] is True
+
+
+def test_dashboard_surfaces_candidate70_gpu_readiness_gate(tmp_path):
+    readiness = write_json(tmp_path / "readiness.json", {"gpu_smoke_allowed": False})
+    manifest = write_json(tmp_path / "manifest.json", {})
+    bundle = write_json(tmp_path / "bundle.json", {})
+    gate = write_json(
+        tmp_path / "candidate70_gpu_readiness_gate.json",
+        {
+            "readiness_status": "blocked",
+            "gpu_smoke_allowed": False,
+            "blockers": [
+                "accepted_prompt_required_before_generate",
+                "runtime_motion_control_not_connected",
+                "true_lane_geometry_replacement_not_available",
+            ],
+            "checks": {
+                "accepted_prompt_selected": False,
+                "runtime_motion_control_connected": False,
+                "true_lane_geometry_replacement_available": False,
+                "semantic_success_claim_allowed": False,
+            },
+            "claim_boundary": {
+                "candidate70_readiness_gate_is_not_gpu_approval": True,
+                "candidate70_readiness_gate_is_not_video_semantic_success": True,
+                "accepted_prompt_required_before_generate": True,
+            },
+        },
+    )
+
+    dashboard = build_dashboard(
+        readiness_path=readiness,
+        manifest_path=manifest,
+        bundle_validation_path=bundle,
+        runtime_compare_path=tmp_path / "runtime.json",
+        motion_gap_path=tmp_path / "motion.json",
+        velocity_audit_path=tmp_path / "velocity.json",
+        evidence_index_path=tmp_path / "index.md",
+        claim_table_path=tmp_path / "claim.md",
+        candidate70_gpu_readiness_gate_path=gate,
+    )
+
+    assert dashboard["summary"]["candidate70_gpu_readiness_status"] == "blocked"
+    assert dashboard["summary"]["candidate70_gpu_smoke_allowed"] is False
+    assert dashboard["summary"]["candidate70_gpu_readiness_blockers"] == [
+        "accepted_prompt_required_before_generate",
+        "runtime_motion_control_not_connected",
+        "true_lane_geometry_replacement_not_available",
+    ]
+    assert dashboard["audit_signals"]["candidate70_gpu_readiness_status"] == "blocked"
+    assert dashboard["audit_signals"]["candidate70_gpu_smoke_allowed"] is False
+    assert dashboard["audit_signals"]["candidate70_accepted_prompt_selected"] is False
+    assert dashboard["audit_signals"]["candidate70_readiness_runtime_motion_control_connected"] is False
+    assert dashboard["audit_signals"]["candidate70_readiness_true_lane_geometry_replacement_available"] is False
+    assert dashboard["audit_signals"]["candidate70_readiness_semantic_success_claim_allowed"] is False
+    assert dashboard["claim_boundary"]["candidate70_readiness_gate_is_not_gpu_approval"] is True
+    assert dashboard["claim_boundary"]["candidate70_readiness_gate_is_not_video_semantic_success"] is True
+    assert dashboard["claim_boundary"]["candidate70_accepted_prompt_required_before_generate"] is True
+    assert dashboard["sources"]["candidate70_gpu_readiness_gate"]["exists"] is True
