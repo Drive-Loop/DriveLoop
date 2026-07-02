@@ -101,6 +101,15 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
         tmp_path / "inputs" / "candidate70_trajectory_surface.json",
         {"status": "not_runtime_connected"},
     )
+    candidate70_gpu_smoke_plan_draft = write_json(
+        tmp_path / "inputs" / "candidate70_gpu_smoke_plan_draft.json",
+        {
+            "plan_status": "blocked_requires_explicit_user_approval",
+            "selected_prompt_id": "c70_pos_001",
+            "gpu_smoke_allowed_at_plan_time": False,
+            "readiness_blockers_at_plan_time": ["runtime_motion_control_not_connected"],
+        },
+    )
     candidate70_dry_run_replacement_audit = write_json(
         tmp_path / "inputs" / "candidate70_dry_run_replacement.json",
         {
@@ -144,6 +153,7 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
         candidate70_prompt_bank_support_audit_output=tmp_path / "out" / "candidate70_prompt_bank_support_audit.json",
         candidate70_accepted_prompt_selection=tmp_path / "out" / "missing_candidate70_accepted_prompt.json",
         candidate70_gpu_readiness_output=tmp_path / "out" / "candidate70_gpu_readiness.json",
+        candidate70_gpu_smoke_plan_draft=candidate70_gpu_smoke_plan_draft,
         candidate70_runtime_surface_audit=candidate70_runtime_surface_audit,
         candidate70_trajectory_surface_audit=candidate70_trajectory_surface_audit,
         candidate70_dry_run_replacement_audit=candidate70_dry_run_replacement_audit,
@@ -166,6 +176,11 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
     assert summary["status_summary"]["candidate70_gpu_readiness_status"] == "blocked"
     assert summary["status_summary"]["candidate70_gpu_smoke_allowed"] is False
     assert "accepted_prompt_required_before_generate" in summary["status_summary"]["candidate70_gpu_readiness_blockers"]
+    assert summary["status_summary"]["candidate70_gpu_smoke_plan_status"] == "blocked_requires_explicit_user_approval"
+    assert summary["status_summary"]["candidate70_gpu_smoke_plan_selected_prompt_id"] == "c70_pos_001"
+    assert summary["status_summary"]["candidate70_gpu_smoke_plan_allowed_at_plan_time"] is False
+    assert summary["status_summary"]["candidate70_gpu_smoke_plan_blockers_at_plan_time"] == ["runtime_motion_control_not_connected"]
+    assert summary["refreshed_artifacts"]["candidate70_gpu_smoke_plan_draft"]["exists_after_refresh"] is True
 
     for artifact in summary["refreshed_artifacts"].values():
         assert artifact["exists_after_refresh"] is True

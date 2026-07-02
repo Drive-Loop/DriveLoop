@@ -580,3 +580,50 @@ def test_dashboard_surfaces_candidate70_gpu_readiness_gate(tmp_path):
     assert dashboard["claim_boundary"]["candidate70_readiness_gate_is_not_video_semantic_success"] is True
     assert dashboard["claim_boundary"]["candidate70_accepted_prompt_required_before_generate"] is True
     assert dashboard["sources"]["candidate70_gpu_readiness_gate"]["exists"] is True
+
+
+def test_dashboard_surfaces_candidate70_gpu_smoke_plan_draft(tmp_path):
+    readiness = write_json(tmp_path / "readiness.json", {"gpu_smoke_allowed": False})
+    manifest = write_json(tmp_path / "manifest.json", {})
+    bundle = write_json(tmp_path / "bundle.json", {})
+    plan = write_json(
+        tmp_path / "candidate70_gpu_smoke_plan_draft.json",
+        {
+            "plan_status": "blocked_requires_explicit_user_approval",
+            "selected_prompt_id": "c70_pos_001",
+            "gpu_smoke_allowed_at_plan_time": False,
+            "readiness_status_at_plan_time": "blocked",
+            "readiness_blockers_at_plan_time": [
+                "runtime_motion_control_not_connected",
+                "semantic_success_claim_not_allowed",
+            ],
+            "claim_boundary": {
+                "candidate70_plan_is_not_gpu_approval": True,
+                "candidate70_plan_must_not_run_while_gate_blocked": True,
+            },
+        },
+    )
+
+    dashboard = build_dashboard(
+        readiness_path=readiness,
+        manifest_path=manifest,
+        bundle_validation_path=bundle,
+        runtime_compare_path=tmp_path / "runtime.json",
+        motion_gap_path=tmp_path / "motion.json",
+        velocity_audit_path=tmp_path / "velocity.json",
+        evidence_index_path=tmp_path / "index.md",
+        claim_table_path=tmp_path / "claim.md",
+        candidate70_gpu_smoke_plan_draft_path=plan,
+    )
+
+    assert dashboard["summary"]["candidate70_gpu_smoke_plan_status"] == "blocked_requires_explicit_user_approval"
+    assert dashboard["summary"]["candidate70_gpu_smoke_plan_selected_prompt_id"] == "c70_pos_001"
+    assert dashboard["summary"]["candidate70_gpu_smoke_plan_allowed_at_plan_time"] is False
+    assert dashboard["summary"]["candidate70_gpu_smoke_plan_blockers_at_plan_time"] == [
+        "runtime_motion_control_not_connected",
+        "semantic_success_claim_not_allowed",
+    ]
+    assert dashboard["audit_signals"]["candidate70_gpu_smoke_plan_status"] == "blocked_requires_explicit_user_approval"
+    assert dashboard["claim_boundary"]["candidate70_gpu_smoke_plan_is_not_gpu_approval"] is True
+    assert dashboard["claim_boundary"]["candidate70_gpu_smoke_plan_must_not_run_while_gate_blocked"] is True
+    assert dashboard["sources"]["candidate70_gpu_smoke_plan_draft"]["exists"] is True
