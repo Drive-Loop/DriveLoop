@@ -7,6 +7,7 @@ from typing import Any
 
 from scripts.run_candidate70_gpu_readiness_gate import build_candidate70_readiness_gate, write_gate
 from scripts.run_candidate70_prompt_bank import write_outputs as write_candidate70_prompt_bank_outputs
+from scripts.run_candidate70_source_sample_binding_readiness import build_gate as build_candidate70_source_sample_binding_gate
 from scripts.run_candidate_artifact_manifest import build_manifest
 from scripts.run_candidate_bundle_validator import validate_bundle
 from scripts.run_experiment_status_dashboard import build_dashboard
@@ -50,6 +51,7 @@ DEFAULT_CANDIDATE70_PROMPT_BANK_SUPPORT_AUDIT_OUTPUT = Path("outputs/driveloop/p
 DEFAULT_CANDIDATE70_ACCEPTED_PROMPT_SELECTION = Path("outputs/driveloop/accepted_prompt/candidate70_accepted_prompt_v0.json")
 DEFAULT_CANDIDATE70_GPU_READINESS_OUTPUT = Path("outputs/driveloop/gpu_smoke_readiness/candidate70_gpu_readiness_gate.json")
 DEFAULT_CANDIDATE70_GPU_SMOKE_PLAN_DRAFT = Path("outputs/driveloop/gpu_smoke_command_plan/candidate70_night_cut_in_plan_draft.json")
+DEFAULT_CANDIDATE70_SOURCE_SAMPLE_BINDING_READINESS = Path("outputs/driveloop/source_sample_binding_readiness/candidate70_source_sample_binding_readiness.json")
 DEFAULT_CANDIDATE70_RUNTIME_SURFACE_AUDIT = Path("outputs/driveloop/runtime_surface_code_audit/candidate70_runtime_surface_code_audit.json")
 DEFAULT_CANDIDATE70_TRAJECTORY_SURFACE_AUDIT = Path("outputs/driveloop/trajectory_runtime_surface_audit/candidate70_night_cut_in_trajectory_runtime_surface_audit.json")
 DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_AUDIT = Path("outputs/driveloop/candidate70_hdmap_dry_run_replacement_surface_audit/candidate70_dry_run_raster_to_grounding_surface.json")
@@ -99,8 +101,10 @@ def build_refresh_summary(
     candidate70_prompt_bank_support_audit_output: Path,
     candidate70_gpu_readiness_output: Path,
     candidate70_gpu_smoke_plan_draft: Path,
+    candidate70_source_sample_binding_readiness_output: Path,
     candidate70_gpu_smoke_plan: dict[str, Any],
     candidate70_gpu_readiness: dict[str, Any],
+    candidate70_source_sample_binding_readiness: dict[str, Any],
 ) -> dict[str, Any]:
     return {
         "schema_version": "driveloop_refresh_all_audit_status.v0",
@@ -125,6 +129,7 @@ def build_refresh_summary(
             "candidate70_prompt_bank_support_audit": artifact_entry(candidate70_prompt_bank_support_audit_output, "candidate70_prompt_bank_support_audit"),
             "candidate70_gpu_readiness_gate": artifact_entry(candidate70_gpu_readiness_output, "candidate70_gpu_readiness_gate"),
             "candidate70_gpu_smoke_plan_draft": artifact_entry(candidate70_gpu_smoke_plan_draft, "candidate70_gpu_smoke_plan_draft"),
+            "candidate70_source_sample_binding_readiness": artifact_entry(candidate70_source_sample_binding_readiness_output, "candidate70_source_sample_binding_readiness"),
         },
         "refresh_order": [
             "readiness_gate",
@@ -142,6 +147,7 @@ def build_refresh_summary(
             "candidate70_prompt_bank_support_audit",
             "candidate70_gpu_readiness_gate",
             "candidate70_gpu_smoke_plan_draft",
+            "candidate70_source_sample_binding_readiness",
         ],
         "status_summary": {
             "gpu_smoke_allowed": readiness.get("gpu_smoke_allowed"),
@@ -175,6 +181,9 @@ def build_refresh_summary(
             "candidate70_gpu_smoke_plan_selected_prompt_id": candidate70_gpu_smoke_plan.get("selected_prompt_id"),
             "candidate70_gpu_smoke_plan_allowed_at_plan_time": candidate70_gpu_smoke_plan.get("gpu_smoke_allowed_at_plan_time"),
             "candidate70_gpu_smoke_plan_blockers_at_plan_time": candidate70_gpu_smoke_plan.get("readiness_blockers_at_plan_time", []),
+            "candidate70_source_sample_binding_readiness_status": candidate70_source_sample_binding_readiness.get("readiness_status"),
+            "candidate70_source_sample_binding_gpu_smoke_allowed": candidate70_source_sample_binding_readiness.get("gpu_smoke_allowed"),
+            "candidate70_source_sample_binding_blockers": candidate70_source_sample_binding_readiness.get("blockers", []),
         },
         "claim_boundary": {
             "refresh_all_is_audit_only": True,
@@ -183,6 +192,8 @@ def build_refresh_summary(
             "semantic_success_requires_explicit_measured_passed_review": True,
             "candidate70_readiness_gate_is_not_gpu_approval": True,
             "candidate70_readiness_gate_is_not_video_semantic_success": True,
+            "candidate70_source_sample_binding_gate_is_not_gpu_approval": True,
+            "candidate70_converter_identity_subset_is_not_runtime_binding": True,
         },
     }
 
@@ -222,6 +233,7 @@ def refresh_all(
     candidate70_accepted_prompt_selection: Path = DEFAULT_CANDIDATE70_ACCEPTED_PROMPT_SELECTION,
     candidate70_gpu_readiness_output: Path = DEFAULT_CANDIDATE70_GPU_READINESS_OUTPUT,
     candidate70_gpu_smoke_plan_draft: Path = DEFAULT_CANDIDATE70_GPU_SMOKE_PLAN_DRAFT,
+    candidate70_source_sample_binding_readiness_output: Path = DEFAULT_CANDIDATE70_SOURCE_SAMPLE_BINDING_READINESS,
     candidate70_runtime_surface_audit: Path = DEFAULT_CANDIDATE70_RUNTIME_SURFACE_AUDIT,
     candidate70_trajectory_surface_audit: Path = DEFAULT_CANDIDATE70_TRAJECTORY_SURFACE_AUDIT,
     candidate70_dry_run_replacement_audit: Path = DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_AUDIT,
@@ -284,6 +296,8 @@ def refresh_all(
         dry_run_replacement_audit_path=candidate70_dry_run_replacement_audit,
     )
     write_gate(candidate70_gpu_readiness_output, candidate70_gpu_readiness)
+    candidate70_source_sample_binding_readiness = build_candidate70_source_sample_binding_gate()
+    write_json(candidate70_source_sample_binding_readiness_output, candidate70_source_sample_binding_readiness)
     candidate70_gpu_smoke_plan = load_json(candidate70_gpu_smoke_plan_draft)
 
     dashboard = build_dashboard(
@@ -302,6 +316,7 @@ def refresh_all(
         actor_identity_surface_audit_path=actor_identity_surface_audit,
         candidate70_gpu_readiness_gate_path=candidate70_gpu_readiness_output,
         candidate70_gpu_smoke_plan_draft_path=candidate70_gpu_smoke_plan_draft,
+        candidate70_source_sample_binding_readiness_path=candidate70_source_sample_binding_readiness_output,
     )
     write_json(dashboard_output, dashboard)
 
@@ -327,8 +342,10 @@ def refresh_all(
         candidate70_prompt_bank_support_audit_output=candidate70_prompt_bank_support_audit_output,
         candidate70_gpu_readiness_output=candidate70_gpu_readiness_output,
         candidate70_gpu_smoke_plan_draft=candidate70_gpu_smoke_plan_draft,
+        candidate70_source_sample_binding_readiness_output=candidate70_source_sample_binding_readiness_output,
         candidate70_gpu_smoke_plan=candidate70_gpu_smoke_plan,
         candidate70_gpu_readiness=candidate70_gpu_readiness,
+        candidate70_source_sample_binding_readiness=candidate70_source_sample_binding_readiness,
     )
     write_json(summary_output, summary)
     return summary

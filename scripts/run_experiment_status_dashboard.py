@@ -29,6 +29,7 @@ DEFAULT_CANDIDATE70_HDMAP_REPLACEMENT_SURFACE_AUDIT = Path("outputs/driveloop/hd
 DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_SURFACE_AUDIT = Path("outputs/driveloop/candidate70_hdmap_dry_run_replacement_surface_audit/candidate70_dry_run_raster_to_grounding_surface.json")
 DEFAULT_CANDIDATE70_GPU_READINESS_GATE = Path("outputs/driveloop/gpu_smoke_readiness/candidate70_gpu_readiness_gate.json")
 DEFAULT_CANDIDATE70_GPU_SMOKE_PLAN_DRAFT = Path("outputs/driveloop/gpu_smoke_command_plan/candidate70_night_cut_in_plan_draft.json")
+DEFAULT_CANDIDATE70_SOURCE_SAMPLE_BINDING_READINESS = Path("outputs/driveloop/source_sample_binding_readiness/candidate70_source_sample_binding_readiness.json")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -144,6 +145,7 @@ def build_dashboard(
     candidate70_dry_run_replacement_surface_audit_path: Path = DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_SURFACE_AUDIT,
     candidate70_gpu_readiness_gate_path: Path = DEFAULT_CANDIDATE70_GPU_READINESS_GATE,
     candidate70_gpu_smoke_plan_draft_path: Path = DEFAULT_CANDIDATE70_GPU_SMOKE_PLAN_DRAFT,
+    candidate70_source_sample_binding_readiness_path: Path = DEFAULT_CANDIDATE70_SOURCE_SAMPLE_BINDING_READINESS,
 ) -> dict[str, Any]:
     readiness = load_json(readiness_path)
     manifest = load_json(manifest_path)
@@ -177,6 +179,7 @@ def build_dashboard(
     if not isinstance(candidate70_gpu_readiness_blockers, list):
         candidate70_gpu_readiness_blockers = []
     candidate70_gpu_smoke_plan_draft = load_json(candidate70_gpu_smoke_plan_draft_path)
+    candidate70_source_sample_binding_readiness = load_json(candidate70_source_sample_binding_readiness_path)
     candidate70_gpu_smoke_plan_blockers = candidate70_gpu_smoke_plan_draft.get("readiness_blockers_at_plan_time", [])
     if not isinstance(candidate70_gpu_smoke_plan_blockers, list):
         candidate70_gpu_smoke_plan_blockers = []
@@ -250,6 +253,9 @@ def build_dashboard(
             "candidate70_gpu_smoke_plan_selected_prompt_id": candidate70_gpu_smoke_plan_draft.get("selected_prompt_id"),
             "candidate70_gpu_smoke_plan_allowed_at_plan_time": candidate70_gpu_smoke_plan_draft.get("gpu_smoke_allowed_at_plan_time") is True,
             "candidate70_gpu_smoke_plan_blockers_at_plan_time": candidate70_gpu_smoke_plan_blockers,
+            "candidate70_source_sample_binding_readiness_status": candidate70_source_sample_binding_readiness.get("readiness_status", "unknown"),
+            "candidate70_source_sample_binding_gpu_smoke_allowed": candidate70_source_sample_binding_readiness.get("gpu_smoke_allowed") is True,
+            "candidate70_source_sample_binding_blockers": candidate70_source_sample_binding_readiness.get("blockers", []),
             "failure_taxonomy_labels": failure_taxonomy.get("taxonomy_labels", []),
         },
         "claim_boundary": {
@@ -278,6 +284,8 @@ def build_dashboard(
             "candidate70_accepted_prompt_required_before_generate": candidate70_gpu_readiness_gate.get("claim_boundary", {}).get("accepted_prompt_required_before_generate") is True,
             "candidate70_gpu_smoke_plan_is_not_gpu_approval": candidate70_gpu_smoke_plan_draft.get("claim_boundary", {}).get("candidate70_plan_is_not_gpu_approval") is True,
             "candidate70_gpu_smoke_plan_must_not_run_while_gate_blocked": candidate70_gpu_smoke_plan_draft.get("claim_boundary", {}).get("candidate70_plan_must_not_run_while_gate_blocked") is True,
+            "candidate70_source_sample_binding_gate_is_not_gpu_approval": candidate70_source_sample_binding_readiness.get("claim_boundary", {}).get("source_sample_binding_gate_is_not_gpu_approval") is True,
+            "candidate70_converter_identity_subset_is_not_runtime_binding": candidate70_source_sample_binding_readiness.get("claim_boundary", {}).get("converter_identity_subset_is_not_runtime_binding") is True,
         },
         "audit_signals": {
             "runtime_tensor_hash_changed": runtime_changed,
@@ -379,6 +387,9 @@ def build_dashboard(
             "candidate70_gpu_smoke_plan_selected_prompt_id": candidate70_gpu_smoke_plan_draft.get("selected_prompt_id"),
             "candidate70_gpu_smoke_plan_allowed_at_plan_time": candidate70_gpu_smoke_plan_draft.get("gpu_smoke_allowed_at_plan_time") is True,
             "candidate70_gpu_smoke_plan_blockers_at_plan_time": candidate70_gpu_smoke_plan_blockers,
+            "candidate70_source_sample_binding_readiness_status": candidate70_source_sample_binding_readiness.get("readiness_status", "unknown"),
+            "candidate70_source_sample_binding_gpu_smoke_allowed": candidate70_source_sample_binding_readiness.get("gpu_smoke_allowed") is True,
+            "candidate70_source_sample_binding_blockers": candidate70_source_sample_binding_readiness.get("blockers", []),
         },
         "sources": {
             "readiness": source_entry(readiness_path),
@@ -404,6 +415,7 @@ def build_dashboard(
             "candidate70_dry_run_replacement_surface_audit": source_entry(candidate70_dry_run_replacement_surface_audit_path),
             "candidate70_gpu_readiness_gate": source_entry(candidate70_gpu_readiness_gate_path),
             "candidate70_gpu_smoke_plan_draft": source_entry(candidate70_gpu_smoke_plan_draft_path),
+            "candidate70_source_sample_binding_readiness": source_entry(candidate70_source_sample_binding_readiness_path),
         },
         "next_recommended_action": next_action(
             gpu_smoke_allowed=gpu_smoke_allowed,
@@ -452,6 +464,7 @@ def main() -> None:
     parser.add_argument("--candidate70-dry-run-replacement-surface-audit", type=Path, default=DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_SURFACE_AUDIT)
     parser.add_argument("--candidate70-gpu-readiness-gate", type=Path, default=DEFAULT_CANDIDATE70_GPU_READINESS_GATE)
     parser.add_argument("--candidate70-gpu-smoke-plan-draft", type=Path, default=DEFAULT_CANDIDATE70_GPU_SMOKE_PLAN_DRAFT)
+    parser.add_argument("--candidate70-source-sample-binding-readiness", type=Path, default=DEFAULT_CANDIDATE70_SOURCE_SAMPLE_BINDING_READINESS)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -479,6 +492,7 @@ def main() -> None:
         candidate70_dry_run_replacement_surface_audit_path=args.candidate70_dry_run_replacement_surface_audit,
         candidate70_gpu_readiness_gate_path=args.candidate70_gpu_readiness_gate,
         candidate70_gpu_smoke_plan_draft_path=args.candidate70_gpu_smoke_plan_draft,
+        candidate70_source_sample_binding_readiness_path=args.candidate70_source_sample_binding_readiness,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
