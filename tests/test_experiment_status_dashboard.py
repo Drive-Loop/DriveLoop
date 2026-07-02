@@ -353,3 +353,47 @@ def test_dashboard_surfaces_candidate70_converter_identity_subset(tmp_path):
     assert dashboard["summary"]["candidate70_full_processed_labels_rebuilt_with_identity"] is False
     assert dashboard["audit_signals"]["candidate70_identity_subset_is_not_runtime_motion_control"] is True
     assert dashboard["claim_boundary"]["actor_identity_surface_audit_is_not_runtime_motion_control"] is True
+
+def test_dashboard_surfaces_candidate70_hdmap_raster_source_probe(tmp_path):
+    readiness = write_json(tmp_path / "readiness.json", {"gpu_smoke_allowed": True})
+    manifest = write_json(tmp_path / "manifest.json", {})
+    bundle = write_json(tmp_path / "bundle.json", {})
+    hdmap_probe = write_json(
+        tmp_path / "candidate70_hdmap_probe.json",
+        {
+            "frame_count": 2,
+            "records": [
+                {
+                    "converter_signature": {"nonzero": 10},
+                    "processed_matches": [{"matches_converter": True}, {"matches_converter": True}],
+                },
+                {
+                    "converter_signature": {"nonzero": 12},
+                    "processed_matches": [{"matches_converter": True}, {"matches_converter": True}],
+                },
+            ],
+        },
+    )
+
+    dashboard = build_dashboard(
+        readiness_path=readiness,
+        manifest_path=manifest,
+        bundle_validation_path=bundle,
+        runtime_compare_path=tmp_path / "runtime.json",
+        motion_gap_path=tmp_path / "motion.json",
+        velocity_audit_path=tmp_path / "velocity.json",
+        evidence_index_path=tmp_path / "index.md",
+        claim_table_path=tmp_path / "claim.md",
+        candidate70_hdmap_raster_probe_path=hdmap_probe,
+    )
+
+    assert dashboard["summary"]["candidate70_baseline_hdmap_raster_reproducible"] is True
+    assert dashboard["summary"]["candidate70_processed_hdmap_matches_converter"] is True
+    assert dashboard["summary"]["candidate70_verified_replacement_hdmap_raster_available"] is False
+    assert dashboard["audit_signals"]["candidate70_hdmap_raster_probe_frame_count"] == 2
+    assert dashboard["audit_signals"]["candidate70_hdmap_raster_probe_all_generated_nonzero"] is True
+    assert dashboard["audit_signals"]["candidate70_hdmap_raster_probe_processed_match_true"] == 4
+    assert dashboard["audit_signals"]["candidate70_hdmap_raster_probe_processed_match_false"] == 0
+    assert dashboard["audit_signals"]["candidate70_hdmap_raster_source_probe_is_not_lane_geometry_override"] is True
+    assert dashboard["claim_boundary"]["candidate70_hdmap_raster_source_probe_is_not_video_semantic_success"] is True
+    assert dashboard["sources"]["candidate70_hdmap_raster_probe"]["exists"] is True

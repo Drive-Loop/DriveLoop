@@ -24,6 +24,7 @@ DEFAULT_MOTION_METADATA_RUNTIME_AUDIT = Path("outputs/driveloop/motorcycle_motio
 DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT = Path("outputs/driveloop/actor_identity_surface_audit/mini_actor_identity_surface_audit.json")
 DEFAULT_CANDIDATE70_CONVERTER_IDENTITY_SUMMARY = Path("outputs/driveloop/candidate70_converter_identity_probe/cam_front_8/v0.0.1/labels/summary.json")
 DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT = Path("outputs/driveloop/actor_track_surface_audit/candidate70_converter_identity_probe_actor_track_surface_audit.json")
+DEFAULT_CANDIDATE70_HDMAP_RASTER_PROBE = Path("outputs/driveloop/candidate70_hdmap_raster_probe/candidate70_hdmap_raster_probe_summary.json")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -37,6 +38,41 @@ def load_json(path: Path) -> dict[str, Any]:
 def source_entry(path: Path) -> dict[str, Any]:
     return {"path": str(path), "exists": path.exists()}
 
+
+
+
+def candidate70_hdmap_probe_status(probe: dict[str, Any]) -> dict[str, Any]:
+    records = probe.get("records", [])
+    if not isinstance(records, list):
+        records = []
+    frame_count = probe.get("frame_count")
+    all_generated_nonzero = bool(records) and all(
+        ((record.get("converter_signature") or {}).get("nonzero") or 0) > 0
+        for record in records
+        if isinstance(record, dict)
+    )
+    match_true = 0
+    match_false = 0
+    for record in records:
+        if not isinstance(record, dict):
+            continue
+        for match in record.get("processed_matches", []):
+            if not isinstance(match, dict):
+                continue
+            if match.get("matches_converter") is True:
+                match_true += 1
+            elif match.get("matches_converter") is False:
+                match_false += 1
+    processed_matches_converter = bool(records) and match_false == 0 and match_true >= len(records)
+    baseline_reproducible = frame_count == len(records) and all_generated_nonzero and processed_matches_converter
+    return {
+        "frame_count": frame_count,
+        "all_generated_nonzero": all_generated_nonzero,
+        "processed_match_true": match_true,
+        "processed_match_false": match_false,
+        "processed_hdmap_matches_converter": processed_matches_converter,
+        "baseline_hdmap_raster_reproducible": baseline_reproducible,
+    }
 
 
 def motion_metadata_status(runtime_audit: dict[str, Any]) -> tuple[str, dict[str, Any]]:
@@ -67,6 +103,7 @@ def build_dashboard(
     actor_identity_surface_audit_path: Path = DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT,
     candidate70_converter_identity_summary_path: Path = DEFAULT_CANDIDATE70_CONVERTER_IDENTITY_SUMMARY,
     candidate70_converter_actor_track_audit_path: Path = DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT,
+    candidate70_hdmap_raster_probe_path: Path = DEFAULT_CANDIDATE70_HDMAP_RASTER_PROBE,
 ) -> dict[str, Any]:
     readiness = load_json(readiness_path)
     manifest = load_json(manifest_path)
@@ -86,6 +123,8 @@ def build_dashboard(
     actor_identity_claim = actor_identity_surface_audit.get("claim", {})
     candidate70_identity_summary = load_json(candidate70_converter_identity_summary_path)
     candidate70_actor_track_audit = load_json(candidate70_converter_actor_track_audit_path)
+    candidate70_hdmap_raster_probe = load_json(candidate70_hdmap_raster_probe_path)
+    candidate70_hdmap_status = candidate70_hdmap_probe_status(candidate70_hdmap_raster_probe)
     candidate70_target_token = candidate70_identity_summary.get("target_raw_instance_token")
     candidate70_frame_count = candidate70_identity_summary.get("frame_count")
     candidate70_tracks = candidate70_actor_track_audit.get("track_surface", {}).get("tracks_preview", [])
@@ -143,6 +182,9 @@ def build_dashboard(
             "candidate70_converter_identity_track_observed": candidate70_actor_track_audit.get("status") == "per_frame_actor_tracks_observed",
             "candidate70_target_motorcycle_track_covers_all_8_frames": candidate70_target_track_covers_all_frames,
             "candidate70_full_processed_labels_rebuilt_with_identity": False,
+            "candidate70_baseline_hdmap_raster_reproducible": candidate70_hdmap_status["baseline_hdmap_raster_reproducible"],
+            "candidate70_processed_hdmap_matches_converter": candidate70_hdmap_status["processed_hdmap_matches_converter"],
+            "candidate70_verified_replacement_hdmap_raster_available": False,
             "failure_taxonomy_labels": failure_taxonomy.get("taxonomy_labels", []),
         },
         "claim_boundary": {
@@ -159,6 +201,8 @@ def build_dashboard(
             "motion_metadata_audit_is_not_video_semantic_success": True,
             "actor_identity_surface_audit_is_not_runtime_motion_control": True,
             "actor_identity_surface_audit_is_not_video_semantic_success": True,
+            "candidate70_hdmap_raster_source_probe_is_not_lane_geometry_override": True,
+            "candidate70_hdmap_raster_source_probe_is_not_video_semantic_success": True,
         },
         "audit_signals": {
             "runtime_tensor_hash_changed": runtime_changed,
@@ -215,6 +259,14 @@ def build_dashboard(
             "candidate70_target_motorcycle_track_observation_count": candidate70_target_track.get("observation_count"),
             "candidate70_target_motorcycle_track_covers_all_8_frames": candidate70_target_track_covers_all_frames,
             "candidate70_identity_subset_is_not_runtime_motion_control": True,
+            "candidate70_hdmap_raster_probe_frame_count": candidate70_hdmap_status["frame_count"],
+            "candidate70_hdmap_raster_probe_all_generated_nonzero": candidate70_hdmap_status["all_generated_nonzero"],
+            "candidate70_hdmap_raster_probe_processed_match_true": candidate70_hdmap_status["processed_match_true"],
+            "candidate70_hdmap_raster_probe_processed_match_false": candidate70_hdmap_status["processed_match_false"],
+            "candidate70_baseline_hdmap_raster_reproducible": candidate70_hdmap_status["baseline_hdmap_raster_reproducible"],
+            "candidate70_processed_hdmap_matches_converter": candidate70_hdmap_status["processed_hdmap_matches_converter"],
+            "candidate70_verified_replacement_hdmap_raster_available": False,
+            "candidate70_hdmap_raster_source_probe_is_not_lane_geometry_override": True,
         },
         "sources": {
             "readiness": source_entry(readiness_path),
@@ -235,6 +287,7 @@ def build_dashboard(
             "actor_identity_surface_audit": source_entry(actor_identity_surface_audit_path),
             "candidate70_converter_identity_summary": source_entry(candidate70_converter_identity_summary_path),
             "candidate70_converter_actor_track_audit": source_entry(candidate70_converter_actor_track_audit_path),
+            "candidate70_hdmap_raster_probe": source_entry(candidate70_hdmap_raster_probe_path),
         },
         "next_recommended_action": next_action(
             gpu_smoke_allowed=gpu_smoke_allowed,
@@ -278,6 +331,7 @@ def main() -> None:
     parser.add_argument("--actor-identity-surface-audit", type=Path, default=DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT)
     parser.add_argument("--candidate70-converter-identity-summary", type=Path, default=DEFAULT_CANDIDATE70_CONVERTER_IDENTITY_SUMMARY)
     parser.add_argument("--candidate70-converter-actor-track-audit", type=Path, default=DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT)
+    parser.add_argument("--candidate70-hdmap-raster-probe", type=Path, default=DEFAULT_CANDIDATE70_HDMAP_RASTER_PROBE)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -300,6 +354,7 @@ def main() -> None:
         actor_identity_surface_audit_path=args.actor_identity_surface_audit,
         candidate70_converter_identity_summary_path=args.candidate70_converter_identity_summary,
         candidate70_converter_actor_track_audit_path=args.candidate70_converter_actor_track_audit,
+        candidate70_hdmap_raster_probe_path=args.candidate70_hdmap_raster_probe,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)
