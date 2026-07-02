@@ -22,6 +22,8 @@ DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT = Path("outputs/driveloop/trajectory_ru
 DEFAULT_RUNTIME_SURFACE_CODE_AUDIT = Path("outputs/driveloop/runtime_surface_code_audit/motorcycle_refined_runtime_surface_code_audit.json")
 DEFAULT_MOTION_METADATA_RUNTIME_AUDIT = Path("outputs/driveloop/motorcycle_motion_metadata_audit_only/motorcycle_motion_metadata_audit_only/dd2_runtime_input_audit_00.json")
 DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT = Path("outputs/driveloop/actor_identity_surface_audit/mini_actor_identity_surface_audit.json")
+DEFAULT_CANDIDATE70_CONVERTER_IDENTITY_SUMMARY = Path("outputs/driveloop/candidate70_converter_identity_probe/cam_front_8/v0.0.1/labels/summary.json")
+DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT = Path("outputs/driveloop/actor_track_surface_audit/candidate70_converter_identity_probe_actor_track_surface_audit.json")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -63,6 +65,8 @@ def build_dashboard(
     runtime_surface_code_audit_path: Path = DEFAULT_RUNTIME_SURFACE_CODE_AUDIT,
     motion_metadata_runtime_audit_path: Path = DEFAULT_MOTION_METADATA_RUNTIME_AUDIT,
     actor_identity_surface_audit_path: Path = DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT,
+    candidate70_converter_identity_summary_path: Path = DEFAULT_CANDIDATE70_CONVERTER_IDENTITY_SUMMARY,
+    candidate70_converter_actor_track_audit_path: Path = DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT,
 ) -> dict[str, Any]:
     readiness = load_json(readiness_path)
     manifest = load_json(manifest_path)
@@ -80,6 +84,16 @@ def build_dashboard(
     motion_metadata_runtime_status, motion_metadata = motion_metadata_status(motion_metadata_runtime_audit)
     actor_identity_surface_audit = load_json(actor_identity_surface_audit_path)
     actor_identity_claim = actor_identity_surface_audit.get("claim", {})
+    candidate70_identity_summary = load_json(candidate70_converter_identity_summary_path)
+    candidate70_actor_track_audit = load_json(candidate70_converter_actor_track_audit_path)
+    candidate70_target_token = candidate70_identity_summary.get("target_raw_instance_token")
+    candidate70_frame_count = candidate70_identity_summary.get("frame_count")
+    candidate70_tracks = candidate70_actor_track_audit.get("track_surface", {}).get("tracks_preview", [])
+    candidate70_target_track = next((t for t in candidate70_tracks if t.get("instance_token") == candidate70_target_token), {})
+    candidate70_target_track_covers_all_frames = (
+        bool(candidate70_target_token)
+        and candidate70_target_track.get("observation_count") == candidate70_frame_count
+    )
 
     gpu_smoke_allowed = readiness.get("gpu_smoke_allowed") is True
     semantic_claim_allowed_by_readiness = readiness.get("semantic_claim_allowed") is True
@@ -124,6 +138,11 @@ def build_dashboard(
             "actor_identity_available_in_processed_labels": actor_identity_claim.get("actor_identity_available_in_processed_labels"),
             "actor_identity_available_upstream": actor_identity_claim.get("actor_identity_available_upstream"),
             "actor_identity_surface_blockers": actor_identity_surface_audit.get("blockers", []),
+            "candidate70_converter_identity_subset_created": candidate70_identity_summary.get("claim", {}).get("candidate70_converter_derived_identity_subset_created") is True,
+            "candidate70_converter_identity_all_frames_have_target": candidate70_identity_summary.get("all_frames_have_target"),
+            "candidate70_converter_identity_track_observed": candidate70_actor_track_audit.get("status") == "per_frame_actor_tracks_observed",
+            "candidate70_target_motorcycle_track_covers_all_8_frames": candidate70_target_track_covers_all_frames,
+            "candidate70_full_processed_labels_rebuilt_with_identity": False,
             "failure_taxonomy_labels": failure_taxonomy.get("taxonomy_labels", []),
         },
         "claim_boundary": {
@@ -190,6 +209,12 @@ def build_dashboard(
             "actor_identity_available_in_processed_labels": actor_identity_claim.get("actor_identity_available_in_processed_labels"),
             "actor_identity_available_upstream": actor_identity_claim.get("actor_identity_available_upstream"),
             "actor_identity_surface_blockers": actor_identity_surface_audit.get("blockers", []),
+            "candidate70_converter_identity_subset_created": candidate70_identity_summary.get("claim", {}).get("candidate70_converter_derived_identity_subset_created") is True,
+            "candidate70_converter_identity_all_frames_have_target": candidate70_identity_summary.get("all_frames_have_target"),
+            "candidate70_converter_actor_track_status": candidate70_actor_track_audit.get("status", "unknown"),
+            "candidate70_target_motorcycle_track_observation_count": candidate70_target_track.get("observation_count"),
+            "candidate70_target_motorcycle_track_covers_all_8_frames": candidate70_target_track_covers_all_frames,
+            "candidate70_identity_subset_is_not_runtime_motion_control": True,
         },
         "sources": {
             "readiness": source_entry(readiness_path),
@@ -208,6 +233,8 @@ def build_dashboard(
             "runtime_surface_code_audit": source_entry(runtime_surface_code_audit_path),
             "motion_metadata_runtime_audit": source_entry(motion_metadata_runtime_audit_path),
             "actor_identity_surface_audit": source_entry(actor_identity_surface_audit_path),
+            "candidate70_converter_identity_summary": source_entry(candidate70_converter_identity_summary_path),
+            "candidate70_converter_actor_track_audit": source_entry(candidate70_converter_actor_track_audit_path),
         },
         "next_recommended_action": next_action(
             gpu_smoke_allowed=gpu_smoke_allowed,
@@ -249,6 +276,8 @@ def main() -> None:
     parser.add_argument("--runtime-surface-code-audit", type=Path, default=DEFAULT_RUNTIME_SURFACE_CODE_AUDIT)
     parser.add_argument("--motion-metadata-runtime-audit", type=Path, default=DEFAULT_MOTION_METADATA_RUNTIME_AUDIT)
     parser.add_argument("--actor-identity-surface-audit", type=Path, default=DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT)
+    parser.add_argument("--candidate70-converter-identity-summary", type=Path, default=DEFAULT_CANDIDATE70_CONVERTER_IDENTITY_SUMMARY)
+    parser.add_argument("--candidate70-converter-actor-track-audit", type=Path, default=DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -269,6 +298,8 @@ def main() -> None:
         runtime_surface_code_audit_path=args.runtime_surface_code_audit,
         motion_metadata_runtime_audit_path=args.motion_metadata_runtime_audit,
         actor_identity_surface_audit_path=args.actor_identity_surface_audit,
+        candidate70_converter_identity_summary_path=args.candidate70_converter_identity_summary,
+        candidate70_converter_actor_track_audit_path=args.candidate70_converter_actor_track_audit,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

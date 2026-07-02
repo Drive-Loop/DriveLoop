@@ -306,3 +306,50 @@ def test_dashboard_surfaces_object_transfer_and_trajectory_runtime_audits(tmp_pa
     assert dashboard["sources"]["prompt_object_transfer_audit"]["exists"] is True
     assert dashboard["sources"]["trajectory_runtime_surface_audit"]["exists"] is True
     assert dashboard["sources"]["runtime_surface_code_audit"]["exists"] is True
+
+
+def test_dashboard_surfaces_candidate70_converter_identity_subset(tmp_path):
+    readiness = write_json(tmp_path / "readiness.json", {"gpu_smoke_allowed": True})
+    manifest = write_json(tmp_path / "manifest.json", {})
+    bundle = write_json(tmp_path / "bundle.json", {})
+    identity_summary = write_json(
+        tmp_path / "candidate70_identity_summary.json",
+        {
+            "target_raw_instance_token": "target",
+            "frame_count": 8,
+            "all_frames_have_target": True,
+            "claim": {"candidate70_converter_derived_identity_subset_created": True},
+        },
+    )
+    actor_track = write_json(
+        tmp_path / "candidate70_actor_track.json",
+        {
+            "status": "per_frame_actor_tracks_observed",
+            "track_surface": {
+                "tracks_preview": [
+                    {"instance_token": "target", "observation_count": 8}
+                ]
+            },
+        },
+    )
+
+    dashboard = build_dashboard(
+        readiness_path=readiness,
+        manifest_path=manifest,
+        bundle_validation_path=bundle,
+        runtime_compare_path=tmp_path / "runtime.json",
+        motion_gap_path=tmp_path / "motion.json",
+        velocity_audit_path=tmp_path / "velocity.json",
+        evidence_index_path=tmp_path / "index.md",
+        claim_table_path=tmp_path / "claim.md",
+        candidate70_converter_identity_summary_path=identity_summary,
+        candidate70_converter_actor_track_audit_path=actor_track,
+    )
+
+    assert dashboard["summary"]["candidate70_converter_identity_subset_created"] is True
+    assert dashboard["summary"]["candidate70_converter_identity_all_frames_have_target"] is True
+    assert dashboard["summary"]["candidate70_converter_identity_track_observed"] is True
+    assert dashboard["summary"]["candidate70_target_motorcycle_track_covers_all_8_frames"] is True
+    assert dashboard["summary"]["candidate70_full_processed_labels_rebuilt_with_identity"] is False
+    assert dashboard["audit_signals"]["candidate70_identity_subset_is_not_runtime_motion_control"] is True
+    assert dashboard["claim_boundary"]["actor_identity_surface_audit_is_not_runtime_motion_control"] is True
