@@ -426,7 +426,7 @@ def test_dashboard_surfaces_candidate70_hdmap_replacement_surface_audit(tmp_path
                 "grounding_downsampler_input": {"changed": True},
             },
             "claim": {
-                "replacement_raster_reaches_grounding_downsampler_input": True,
+                "candidate70_dry_run_raster_reaches_grounding_downsampler_input": True,
                 "candidate70_verified_replacement_hdmap_raster_available": False,
                 "hdmap_lane_geometry_override_verified": False,
                 "lane_change_control_verified": False,

@@ -97,7 +97,10 @@ def candidate70_hdmap_replacement_surface_status(audit: dict[str, Any]) -> dict[
         "does_not_generate_video": audit.get("does_not_generate_video") is True,
         "image_hdmap_override_changed": image_hdmap_override.get("changed") is True,
         "grounding_downsampler_input_changed": grounding.get("changed") is True,
-        "replacement_raster_reaches_grounding_downsampler_input": claim.get("replacement_raster_reaches_grounding_downsampler_input") is True,
+        "replacement_raster_reaches_grounding_downsampler_input": (
+            claim.get("replacement_raster_reaches_grounding_downsampler_input") is True
+            or claim.get("candidate70_dry_run_raster_reaches_grounding_downsampler_input") is True
+        ),
         "candidate70_verified_replacement_hdmap_raster_available": claim.get("candidate70_verified_replacement_hdmap_raster_available") is True,
         "hdmap_lane_geometry_override_verified": claim.get("hdmap_lane_geometry_override_verified") is True,
         "lane_change_control_verified": claim.get("lane_change_control_verified") is True,
