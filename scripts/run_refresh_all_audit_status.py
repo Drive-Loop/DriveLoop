@@ -5,6 +5,8 @@ import json
 from pathlib import Path
 from typing import Any
 
+from scripts.run_candidate70_gpu_readiness_gate import build_candidate70_readiness_gate, write_gate
+from scripts.run_candidate70_prompt_bank import write_outputs as write_candidate70_prompt_bank_outputs
 from scripts.run_candidate_artifact_manifest import build_manifest
 from scripts.run_candidate_bundle_validator import validate_bundle
 from scripts.run_experiment_status_dashboard import build_dashboard
@@ -43,6 +45,12 @@ DEFAULT_TRAJECTORY_RUNTIME_SURFACE_AUDIT = Path("outputs/driveloop/trajectory_ru
 DEFAULT_RUNTIME_SURFACE_CODE_AUDIT = Path("outputs/driveloop/runtime_surface_code_audit/motorcycle_refined_runtime_surface_code_audit.json")
 DEFAULT_MOTION_METADATA_RUNTIME_AUDIT = Path("outputs/driveloop/motorcycle_motion_metadata_audit_only/motorcycle_motion_metadata_audit_only/dd2_runtime_input_audit_00.json")
 DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT = Path("outputs/driveloop/actor_identity_surface_audit/mini_actor_identity_surface_audit.json")
+DEFAULT_CANDIDATE70_PROMPT_BANK_OUTPUT = Path("outputs/driveloop/prompt_bank/candidate70_prompt_bank_v0.json")
+DEFAULT_CANDIDATE70_PROMPT_BANK_SUPPORT_AUDIT_OUTPUT = Path("outputs/driveloop/prompt_bank/candidate70_prompt_bank_support_audit_v0.json")
+DEFAULT_CANDIDATE70_GPU_READINESS_OUTPUT = Path("outputs/driveloop/gpu_smoke_readiness/candidate70_gpu_readiness_gate.json")
+DEFAULT_CANDIDATE70_RUNTIME_SURFACE_AUDIT = Path("outputs/driveloop/runtime_surface_code_audit/candidate70_runtime_surface_code_audit.json")
+DEFAULT_CANDIDATE70_TRAJECTORY_SURFACE_AUDIT = Path("outputs/driveloop/trajectory_runtime_surface_audit/candidate70_night_cut_in_trajectory_runtime_surface_audit.json")
+DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_AUDIT = Path("outputs/driveloop/candidate70_hdmap_dry_run_replacement_surface_audit/candidate70_dry_run_raster_to_grounding_surface.json")
 
 
 def write_json(path: Path, payload: dict[str, Any]) -> None:
@@ -78,6 +86,10 @@ def build_refresh_summary(
     runtime_surface_code_audit: Path,
     motion_metadata_runtime_audit: Path,
     actor_identity_surface_audit: Path,
+    candidate70_prompt_bank_output: Path,
+    candidate70_prompt_bank_support_audit_output: Path,
+    candidate70_gpu_readiness_output: Path,
+    candidate70_gpu_readiness: dict[str, Any],
 ) -> dict[str, Any]:
     return {
         "schema_version": "driveloop_refresh_all_audit_status.v0",
@@ -98,6 +110,9 @@ def build_refresh_summary(
             "runtime_surface_code_audit": artifact_entry(runtime_surface_code_audit, "runtime_surface_code_audit"),
             "motion_metadata_runtime_audit": artifact_entry(motion_metadata_runtime_audit, "motion_metadata_runtime_audit"),
             "actor_identity_surface_audit": artifact_entry(actor_identity_surface_audit, "actor_identity_surface_audit"),
+            "candidate70_prompt_bank": artifact_entry(candidate70_prompt_bank_output, "candidate70_prompt_bank"),
+            "candidate70_prompt_bank_support_audit": artifact_entry(candidate70_prompt_bank_support_audit_output, "candidate70_prompt_bank_support_audit"),
+            "candidate70_gpu_readiness_gate": artifact_entry(candidate70_gpu_readiness_output, "candidate70_gpu_readiness_gate"),
         },
         "refresh_order": [
             "readiness_gate",
@@ -111,6 +126,9 @@ def build_refresh_summary(
             "runtime_surface_code_audit",
             "motion_metadata_runtime_audit",
             "actor_identity_surface_audit",
+            "candidate70_prompt_bank",
+            "candidate70_prompt_bank_support_audit",
+            "candidate70_gpu_readiness_gate",
         ],
         "status_summary": {
             "gpu_smoke_allowed": readiness.get("gpu_smoke_allowed"),
@@ -137,12 +155,17 @@ def build_refresh_summary(
             "actor_identity_surface_status": dashboard.get("summary", {}).get(
                 "actor_identity_surface_status"
             ),
+            "candidate70_gpu_readiness_status": candidate70_gpu_readiness.get("readiness_status"),
+            "candidate70_gpu_smoke_allowed": candidate70_gpu_readiness.get("gpu_smoke_allowed"),
+            "candidate70_gpu_readiness_blockers": candidate70_gpu_readiness.get("blockers", []),
         },
         "claim_boundary": {
             "refresh_all_is_audit_only": True,
             "video_generation_is_not_semantic_success": True,
             "runtime_tensor_audit_is_not_video_semantic_success": True,
             "semantic_success_requires_explicit_measured_passed_review": True,
+            "candidate70_readiness_gate_is_not_gpu_approval": True,
+            "candidate70_readiness_gate_is_not_video_semantic_success": True,
         },
     }
 
@@ -177,6 +200,12 @@ def refresh_all(
     runtime_surface_code_audit: Path = DEFAULT_RUNTIME_SURFACE_CODE_AUDIT,
     motion_metadata_runtime_audit: Path = DEFAULT_MOTION_METADATA_RUNTIME_AUDIT,
     actor_identity_surface_audit: Path = DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT,
+    candidate70_prompt_bank_output: Path = DEFAULT_CANDIDATE70_PROMPT_BANK_OUTPUT,
+    candidate70_prompt_bank_support_audit_output: Path = DEFAULT_CANDIDATE70_PROMPT_BANK_SUPPORT_AUDIT_OUTPUT,
+    candidate70_gpu_readiness_output: Path = DEFAULT_CANDIDATE70_GPU_READINESS_OUTPUT,
+    candidate70_runtime_surface_audit: Path = DEFAULT_CANDIDATE70_RUNTIME_SURFACE_AUDIT,
+    candidate70_trajectory_surface_audit: Path = DEFAULT_CANDIDATE70_TRAJECTORY_SURFACE_AUDIT,
+    candidate70_dry_run_replacement_audit: Path = DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_AUDIT,
 ) -> dict[str, Any]:
     readiness = build_readiness_report(
         prompt=prompt,
@@ -224,6 +253,18 @@ def refresh_all(
     validation = validate_bundle(manifest)
     write_json(validation_output, validation)
 
+    write_candidate70_prompt_bank_outputs(
+        prompt_bank_output=candidate70_prompt_bank_output,
+        support_audit_output=candidate70_prompt_bank_support_audit_output,
+    )
+    candidate70_gpu_readiness = build_candidate70_readiness_gate(
+        prompt_bank_audit_path=candidate70_prompt_bank_support_audit_output,
+        runtime_surface_audit_path=candidate70_runtime_surface_audit,
+        trajectory_surface_audit_path=candidate70_trajectory_surface_audit,
+        dry_run_replacement_audit_path=candidate70_dry_run_replacement_audit,
+    )
+    write_gate(candidate70_gpu_readiness_output, candidate70_gpu_readiness)
+
     dashboard = build_dashboard(
         readiness_path=readiness_output,
         manifest_path=manifest_output,
@@ -238,6 +279,7 @@ def refresh_all(
         runtime_surface_code_audit_path=runtime_surface_code_audit,
         motion_metadata_runtime_audit_path=motion_metadata_runtime_audit,
         actor_identity_surface_audit_path=actor_identity_surface_audit,
+        candidate70_gpu_readiness_gate_path=candidate70_gpu_readiness_output,
     )
     write_json(dashboard_output, dashboard)
 
@@ -259,6 +301,10 @@ def refresh_all(
         runtime_surface_code_audit=runtime_surface_code_audit,
         motion_metadata_runtime_audit=motion_metadata_runtime_audit,
         actor_identity_surface_audit=actor_identity_surface_audit,
+        candidate70_prompt_bank_output=candidate70_prompt_bank_output,
+        candidate70_prompt_bank_support_audit_output=candidate70_prompt_bank_support_audit_output,
+        candidate70_gpu_readiness_output=candidate70_gpu_readiness_output,
+        candidate70_gpu_readiness=candidate70_gpu_readiness,
     )
     write_json(summary_output, summary)
     return summary

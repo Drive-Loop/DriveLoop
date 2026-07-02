@@ -93,6 +93,25 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
             },
         },
     )
+    candidate70_runtime_surface_audit = write_json(
+        tmp_path / "inputs" / "candidate70_runtime_surface.json",
+        {"status": "not_runtime_connected"},
+    )
+    candidate70_trajectory_surface_audit = write_json(
+        tmp_path / "inputs" / "candidate70_trajectory_surface.json",
+        {"status": "not_runtime_connected"},
+    )
+    candidate70_dry_run_replacement_audit = write_json(
+        tmp_path / "inputs" / "candidate70_dry_run_replacement.json",
+        {
+            "claim": {
+                "candidate70_dry_run_raster_reaches_grounding_downsampler_input": True,
+                "candidate70_true_lane_geometry_replacement_available": False,
+                "runtime_motion_control_connected": False,
+                "semantic_success_claim_allowed": False,
+            }
+        },
+    )
 
     summary = refresh_all(
         prompt="daytime urban road with a motorcycle",
@@ -121,6 +140,12 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
         runtime_surface_code_audit=runtime_surface_code,
         motion_metadata_runtime_audit=motion_metadata_runtime_audit,
         actor_identity_surface_audit=actor_identity_surface_audit,
+        candidate70_prompt_bank_output=tmp_path / "out" / "candidate70_prompt_bank.json",
+        candidate70_prompt_bank_support_audit_output=tmp_path / "out" / "candidate70_prompt_bank_support_audit.json",
+        candidate70_gpu_readiness_output=tmp_path / "out" / "candidate70_gpu_readiness.json",
+        candidate70_runtime_surface_audit=candidate70_runtime_surface_audit,
+        candidate70_trajectory_surface_audit=candidate70_trajectory_surface_audit,
+        candidate70_dry_run_replacement_audit=candidate70_dry_run_replacement_audit,
     )
 
     assert summary["does_not_run_gpu"] is True
@@ -137,6 +162,9 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
     assert summary["status_summary"]["runtime_surface_code_audit_status"] == "not_runtime_connected"
     assert summary["status_summary"]["motion_metadata_runtime_status"] == "metadata_observed_not_runtime_control"
     assert summary["status_summary"]["actor_identity_surface_status"] == "identity_available_upstream_but_missing_from_processed_labels"
+    assert summary["status_summary"]["candidate70_gpu_readiness_status"] == "blocked"
+    assert summary["status_summary"]["candidate70_gpu_smoke_allowed"] is False
+    assert "accepted_prompt_required_before_generate" in summary["status_summary"]["candidate70_gpu_readiness_blockers"]
 
     for artifact in summary["refreshed_artifacts"].values():
         assert artifact["exists_after_refresh"] is True
