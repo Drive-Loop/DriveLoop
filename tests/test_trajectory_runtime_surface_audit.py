@@ -41,6 +41,20 @@ def test_prompt_without_motion_is_not_applicable():
     assert audit["status"] == "not_applicable"
 
 
+def test_velocity_claim_does_not_clear_blocker_without_runtime_tensor():
+    audit = build_audit(
+        "vehicle lane change",
+        backend_summary_with_static_boxes(),
+        velocity_audit={"claim": {"velocity_consumed_by_dd2_runtime": True}},
+        motion_gap={},
+    )
+
+    assert audit["surfaces"]["velocity_tensor"]["available_in_runtime_audit"] is False
+    assert audit["surfaces"]["velocity_tensor"]["velocity_consumed_by_dd2_runtime"] is False
+    assert audit["surfaces"]["velocity_tensor"]["velocity_consumed_claimed_by_velocity_audit"] is True
+    assert "velocity_or_displacement_tensor_not_consumed_by_runtime" in audit["blockers"]
+
+
 def test_runtime_connected_when_required_surfaces_are_present_and_no_motion_requested_blockers():
     summary = {
         "runtime_input_audit": {

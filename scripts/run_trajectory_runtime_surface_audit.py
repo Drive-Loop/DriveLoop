@@ -104,7 +104,8 @@ def build_audit(
     dataset_velocity_exists = velocity_claim.get("dataset_velocity_surface_available") is True or (
         velocity_claim.get("velocity_surface_available") is True
     )
-    velocity_consumed = velocity_claim.get("velocity_consumed_by_dd2_runtime") is True
+    velocity_consumed_claimed = velocity_claim.get("velocity_consumed_by_dd2_runtime") is True
+    velocity_consumed = velocity_tensor_available and velocity_consumed_claimed
 
     per_frame_actor_identity = actor_track_claim.get("per_frame_actor_identity_observed") is True
     per_frame_actor_boxes3d = actor_track_claim.get("per_frame_actor_boxes3d_grouped_by_identity") is True
@@ -165,6 +166,8 @@ def build_audit(
                 "available_in_runtime_audit": velocity_tensor_available,
                 "dataset_velocity_surface_available": dataset_velocity_exists,
                 "velocity_consumed_by_dd2_runtime": velocity_consumed,
+                "velocity_consumed_claimed_by_velocity_audit": velocity_consumed_claimed,
+                "velocity_runtime_consumption_requires_runtime_tensor": True,
             },
             "actor_track_identity": {
                 "per_frame_actor_identity_observed": per_frame_actor_identity,
