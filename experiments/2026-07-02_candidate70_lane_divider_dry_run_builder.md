@@ -56,7 +56,7 @@ Disallowed claims:
 - Runtime motion control is connected.
 - Raster diff proves video semantics.
 - Prompt-to-video semantic success is verified.
-- This audit authorizes a GPU run.
+- This audit alone is not sufficient for a GPU run.
 
 ## Recommended Status
 
@@ -72,4 +72,4 @@ Disallowed claims:
 
 Inspect the generated candidate rasters and diffs.
 
-The next non-GPU step is to decide whether a map-geometry-grounded replacement operation can be defined. Do not run GPU from this dry-run builder alone.
+The next non-GPU step is to decide whether a map-geometry-grounded replacement operation can be defined. Run GPU only after separate readiness gate and explicit user approval.

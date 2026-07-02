@@ -82,4 +82,4 @@ def test_build_summary_keeps_dry_run_claim_boundaries():
     assert summary["claim"]["runtime_motion_control_connected"] is False
     assert summary["claim"]["semantic_success_claim_allowed"] is False
     assert summary["claim_boundary"]["dry_run_candidate_is_synthetic_not_verified_map_geometry"] is True
-    assert summary["claim_boundary"]["does_not_authorize_gpu"] is True
+    assert summary["claim_boundary"]["gpu_requires_separate_readiness_gate"] is True

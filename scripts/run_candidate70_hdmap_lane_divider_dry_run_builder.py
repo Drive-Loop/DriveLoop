@@ -178,12 +178,12 @@ def build_summary(
             "dry_run_candidate_is_synthetic_not_verified_map_geometry": True,
             "lane_divider_pixel_translation_is_not_lane_change_control": True,
             "hdmap_raster_diff_is_not_video_semantic_success": True,
-            "does_not_authorize_gpu": True,
+            "gpu_requires_separate_readiness_gate": True,
         },
         "next_required_steps": [
             "Inspect dry-run candidate rasters and diffs before considering any replacement source claim.",
             "Define a map-geometry-grounded replacement operation before claiming true lane geometry replacement.",
-            "Do not run GPU from this dry-run builder alone.",
+            "Run GPU only after separate readiness gate and explicit user approval.",
         ],
     }
 
