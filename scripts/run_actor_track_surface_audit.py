@@ -66,6 +66,14 @@ def same_sequence_rows(rows: list[dict[str, Any]], max_frames: int) -> list[dict
     return sorted(selected, key=lambda x: x.get("frame_idx", -1))[:max_frames]
 
 
+def is_valid_instance_token(value: Any) -> bool:
+    if value is None:
+        return False
+    if isinstance(value, str) and value.strip() in {"", "None", "null"}:
+        return False
+    return True
+
+
 def build_actor_track_surface_audit(
     labels_path: Path,
     max_frames: int = 8,
@@ -123,7 +131,7 @@ def build_actor_track_surface_audit(
         )
 
         for box_index, instance_token in enumerate(instance_tokens):
-            if box_index >= box_count:
+            if box_index >= box_count or not is_valid_instance_token(instance_token):
                 continue
             box = boxes[box_index]
             velocity = velocities[box_index] if box_index < len(velocities) else None
