@@ -26,6 +26,7 @@ DEFAULT_CANDIDATE70_CONVERTER_IDENTITY_SUMMARY = Path("outputs/driveloop/candida
 DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT = Path("outputs/driveloop/actor_track_surface_audit/candidate70_converter_identity_probe_actor_track_surface_audit.json")
 DEFAULT_CANDIDATE70_HDMAP_RASTER_PROBE = Path("outputs/driveloop/candidate70_hdmap_raster_probe/candidate70_hdmap_raster_probe_summary.json")
 DEFAULT_CANDIDATE70_HDMAP_REPLACEMENT_SURFACE_AUDIT = Path("outputs/driveloop/hdmap_replacement_surface_audit/candidate70_verified_raster_to_grounding_surface.json")
+DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_SURFACE_AUDIT = Path("outputs/driveloop/candidate70_hdmap_dry_run_replacement_surface_audit/candidate70_dry_run_raster_to_grounding_surface.json")
 
 
 def load_json(path: Path) -> dict[str, Any]:
@@ -135,6 +136,7 @@ def build_dashboard(
     candidate70_converter_actor_track_audit_path: Path = DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT,
     candidate70_hdmap_raster_probe_path: Path = DEFAULT_CANDIDATE70_HDMAP_RASTER_PROBE,
     candidate70_hdmap_replacement_surface_audit_path: Path = DEFAULT_CANDIDATE70_HDMAP_REPLACEMENT_SURFACE_AUDIT,
+    candidate70_dry_run_replacement_surface_audit_path: Path = DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_SURFACE_AUDIT,
 ) -> dict[str, Any]:
     readiness = load_json(readiness_path)
     manifest = load_json(manifest_path)
@@ -158,6 +160,8 @@ def build_dashboard(
     candidate70_hdmap_status = candidate70_hdmap_probe_status(candidate70_hdmap_raster_probe)
     candidate70_hdmap_replacement_surface_audit = load_json(candidate70_hdmap_replacement_surface_audit_path)
     candidate70_hdmap_replacement_status = candidate70_hdmap_replacement_surface_status(candidate70_hdmap_replacement_surface_audit)
+    candidate70_dry_run_replacement_surface_audit = load_json(candidate70_dry_run_replacement_surface_audit_path)
+    candidate70_dry_run_replacement_status = candidate70_hdmap_replacement_surface_status(candidate70_dry_run_replacement_surface_audit)
     candidate70_target_token = candidate70_identity_summary.get("target_raw_instance_token")
     candidate70_frame_count = candidate70_identity_summary.get("frame_count")
     candidate70_tracks = candidate70_actor_track_audit.get("track_surface", {}).get("tracks_preview", [])
@@ -218,7 +222,9 @@ def build_dashboard(
             "candidate70_baseline_hdmap_raster_reproducible": candidate70_hdmap_status["baseline_hdmap_raster_reproducible"],
             "candidate70_processed_hdmap_matches_converter": candidate70_hdmap_status["processed_hdmap_matches_converter"],
             "candidate70_replacement_raster_reaches_grounding_downsampler_input": candidate70_hdmap_replacement_status["replacement_raster_reaches_grounding_downsampler_input"],
+            "candidate70_dry_run_raster_reaches_grounding_downsampler_input": candidate70_dry_run_replacement_status["replacement_raster_reaches_grounding_downsampler_input"],
             "candidate70_verified_replacement_hdmap_raster_available": False,
+            "candidate70_true_lane_geometry_replacement_available": False,
             "failure_taxonomy_labels": failure_taxonomy.get("taxonomy_labels", []),
         },
         "claim_boundary": {
@@ -239,6 +245,9 @@ def build_dashboard(
             "candidate70_hdmap_raster_source_probe_is_not_video_semantic_success": True,
             "candidate70_hdmap_replacement_surface_audit_is_not_lane_geometry_override": True,
             "candidate70_hdmap_replacement_surface_audit_is_not_video_semantic_success": True,
+            "candidate70_dry_run_replacement_surface_audit_is_not_lane_geometry_override": True,
+            "candidate70_dry_run_replacement_surface_audit_is_not_video_semantic_success": True,
+            "candidate70_dry_run_gpu_requires_separate_readiness_gate": True,
         },
         "audit_signals": {
             "runtime_tensor_hash_changed": runtime_changed,
@@ -313,8 +322,22 @@ def build_dashboard(
             "candidate70_lane_change_control_verified": candidate70_hdmap_replacement_status["lane_change_control_verified"],
             "candidate70_runtime_motion_control_connected": candidate70_hdmap_replacement_status["runtime_motion_control_connected"],
             "candidate70_semantic_success_claim_allowed": candidate70_hdmap_replacement_status["semantic_success_claim_allowed"],
+            "candidate70_dry_run_replacement_surface_audit_status": candidate70_dry_run_replacement_status["status"],
+            "candidate70_dry_run_replacement_audit_available": candidate70_dry_run_replacement_status["audit_available"],
+            "candidate70_dry_run_replacement_does_not_run_gpu": candidate70_dry_run_replacement_status["does_not_run_gpu"],
+            "candidate70_dry_run_replacement_does_not_generate_video": candidate70_dry_run_replacement_status["does_not_generate_video"],
+            "candidate70_dry_run_image_hdmap_override_changed": candidate70_dry_run_replacement_status["image_hdmap_override_changed"],
+            "candidate70_dry_run_grounding_downsampler_input_changed": candidate70_dry_run_replacement_status["grounding_downsampler_input_changed"],
+            "candidate70_dry_run_raster_reaches_grounding_downsampler_input": candidate70_dry_run_replacement_status["replacement_raster_reaches_grounding_downsampler_input"],
+            "candidate70_true_lane_geometry_replacement_available": False,
+            "candidate70_dry_run_hdmap_lane_geometry_override_verified": candidate70_dry_run_replacement_status["hdmap_lane_geometry_override_verified"],
+            "candidate70_dry_run_lane_change_control_verified": candidate70_dry_run_replacement_status["lane_change_control_verified"],
+            "candidate70_dry_run_runtime_motion_control_connected": candidate70_dry_run_replacement_status["runtime_motion_control_connected"],
+            "candidate70_dry_run_semantic_success_claim_allowed": candidate70_dry_run_replacement_status["semantic_success_claim_allowed"],
             "candidate70_hdmap_raster_source_probe_is_not_lane_geometry_override": True,
             "candidate70_hdmap_replacement_surface_audit_is_not_lane_geometry_override": True,
+            "candidate70_dry_run_replacement_surface_audit_is_not_lane_geometry_override": True,
+            "candidate70_dry_run_replacement_surface_audit_is_not_video_semantic_success": True,
         },
         "sources": {
             "readiness": source_entry(readiness_path),
@@ -337,6 +360,7 @@ def build_dashboard(
             "candidate70_converter_actor_track_audit": source_entry(candidate70_converter_actor_track_audit_path),
             "candidate70_hdmap_raster_probe": source_entry(candidate70_hdmap_raster_probe_path),
             "candidate70_hdmap_replacement_surface_audit": source_entry(candidate70_hdmap_replacement_surface_audit_path),
+            "candidate70_dry_run_replacement_surface_audit": source_entry(candidate70_dry_run_replacement_surface_audit_path),
         },
         "next_recommended_action": next_action(
             gpu_smoke_allowed=gpu_smoke_allowed,
@@ -382,6 +406,7 @@ def main() -> None:
     parser.add_argument("--candidate70-converter-actor-track-audit", type=Path, default=DEFAULT_CANDIDATE70_CONVERTER_ACTOR_TRACK_AUDIT)
     parser.add_argument("--candidate70-hdmap-raster-probe", type=Path, default=DEFAULT_CANDIDATE70_HDMAP_RASTER_PROBE)
     parser.add_argument("--candidate70-hdmap-replacement-surface-audit", type=Path, default=DEFAULT_CANDIDATE70_HDMAP_REPLACEMENT_SURFACE_AUDIT)
+    parser.add_argument("--candidate70-dry-run-replacement-surface-audit", type=Path, default=DEFAULT_CANDIDATE70_DRY_RUN_REPLACEMENT_SURFACE_AUDIT)
     parser.add_argument("--output", required=True, type=Path)
     args = parser.parse_args()
 
@@ -406,6 +431,7 @@ def main() -> None:
         candidate70_converter_actor_track_audit_path=args.candidate70_converter_actor_track_audit,
         candidate70_hdmap_raster_probe_path=args.candidate70_hdmap_raster_probe,
         candidate70_hdmap_replacement_surface_audit_path=args.candidate70_hdmap_replacement_surface_audit,
+        candidate70_dry_run_replacement_surface_audit_path=args.candidate70_dry_run_replacement_surface_audit,
     )
 
     args.output.parent.mkdir(parents=True, exist_ok=True)

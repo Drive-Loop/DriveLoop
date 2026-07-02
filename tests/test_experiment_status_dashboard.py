@@ -465,3 +465,59 @@ def test_dashboard_surfaces_candidate70_hdmap_replacement_surface_audit(tmp_path
     assert dashboard["claim_boundary"]["candidate70_hdmap_replacement_surface_audit_is_not_lane_geometry_override"] is True
     assert dashboard["claim_boundary"]["candidate70_hdmap_replacement_surface_audit_is_not_video_semantic_success"] is True
     assert dashboard["sources"]["candidate70_hdmap_replacement_surface_audit"]["exists"] is True
+
+
+def test_dashboard_surfaces_candidate70_dry_run_replacement_surface_audit(tmp_path):
+    readiness = write_json(tmp_path / "readiness.json", {"gpu_smoke_allowed": False})
+    manifest = write_json(tmp_path / "manifest.json", {})
+    bundle = write_json(tmp_path / "bundle.json", {})
+    dry_run_audit = write_json(
+        tmp_path / "candidate70_dry_run_replacement_surface_audit.json",
+        {
+            "status": "dry_run_raster_reaches_grounding_surface",
+            "does_not_run_gpu": True,
+            "does_not_generate_video": True,
+            "surfaces": {
+                "image_hdmap_override": {"changed": True},
+                "grounding_downsampler_input": {"changed": True},
+            },
+            "claim": {
+                "replacement_raster_reaches_grounding_downsampler_input": True,
+                "hdmap_lane_geometry_override_verified": False,
+                "lane_change_control_verified": False,
+                "runtime_motion_control_connected": False,
+                "semantic_success_claim_allowed": False,
+            },
+        },
+    )
+
+    dashboard = build_dashboard(
+        readiness_path=readiness,
+        manifest_path=manifest,
+        bundle_validation_path=bundle,
+        runtime_compare_path=tmp_path / "runtime.json",
+        motion_gap_path=tmp_path / "motion.json",
+        velocity_audit_path=tmp_path / "velocity.json",
+        evidence_index_path=tmp_path / "index.md",
+        claim_table_path=tmp_path / "claim.md",
+        candidate70_dry_run_replacement_surface_audit_path=dry_run_audit,
+    )
+
+    assert dashboard["summary"]["candidate70_dry_run_raster_reaches_grounding_downsampler_input"] is True
+    assert dashboard["summary"]["candidate70_true_lane_geometry_replacement_available"] is False
+    assert dashboard["audit_signals"]["candidate70_dry_run_replacement_surface_audit_status"] == "dry_run_raster_reaches_grounding_surface"
+    assert dashboard["audit_signals"]["candidate70_dry_run_replacement_audit_available"] is True
+    assert dashboard["audit_signals"]["candidate70_dry_run_replacement_does_not_run_gpu"] is True
+    assert dashboard["audit_signals"]["candidate70_dry_run_replacement_does_not_generate_video"] is True
+    assert dashboard["audit_signals"]["candidate70_dry_run_image_hdmap_override_changed"] is True
+    assert dashboard["audit_signals"]["candidate70_dry_run_grounding_downsampler_input_changed"] is True
+    assert dashboard["audit_signals"]["candidate70_dry_run_raster_reaches_grounding_downsampler_input"] is True
+    assert dashboard["audit_signals"]["candidate70_true_lane_geometry_replacement_available"] is False
+    assert dashboard["audit_signals"]["candidate70_dry_run_hdmap_lane_geometry_override_verified"] is False
+    assert dashboard["audit_signals"]["candidate70_dry_run_lane_change_control_verified"] is False
+    assert dashboard["audit_signals"]["candidate70_dry_run_runtime_motion_control_connected"] is False
+    assert dashboard["audit_signals"]["candidate70_dry_run_semantic_success_claim_allowed"] is False
+    assert dashboard["claim_boundary"]["candidate70_dry_run_replacement_surface_audit_is_not_lane_geometry_override"] is True
+    assert dashboard["claim_boundary"]["candidate70_dry_run_replacement_surface_audit_is_not_video_semantic_success"] is True
+    assert dashboard["claim_boundary"]["candidate70_dry_run_gpu_requires_separate_readiness_gate"] is True
+    assert dashboard["sources"]["candidate70_dry_run_replacement_surface_audit"]["exists"] is True
