@@ -142,6 +142,7 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
         actor_identity_surface_audit=actor_identity_surface_audit,
         candidate70_prompt_bank_output=tmp_path / "out" / "candidate70_prompt_bank.json",
         candidate70_prompt_bank_support_audit_output=tmp_path / "out" / "candidate70_prompt_bank_support_audit.json",
+        candidate70_accepted_prompt_selection=tmp_path / "out" / "missing_candidate70_accepted_prompt.json",
         candidate70_gpu_readiness_output=tmp_path / "out" / "candidate70_gpu_readiness.json",
         candidate70_runtime_surface_audit=candidate70_runtime_surface_audit,
         candidate70_trajectory_surface_audit=candidate70_trajectory_surface_audit,

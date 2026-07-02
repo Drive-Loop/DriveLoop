@@ -47,6 +47,7 @@ DEFAULT_MOTION_METADATA_RUNTIME_AUDIT = Path("outputs/driveloop/motorcycle_motio
 DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT = Path("outputs/driveloop/actor_identity_surface_audit/mini_actor_identity_surface_audit.json")
 DEFAULT_CANDIDATE70_PROMPT_BANK_OUTPUT = Path("outputs/driveloop/prompt_bank/candidate70_prompt_bank_v0.json")
 DEFAULT_CANDIDATE70_PROMPT_BANK_SUPPORT_AUDIT_OUTPUT = Path("outputs/driveloop/prompt_bank/candidate70_prompt_bank_support_audit_v0.json")
+DEFAULT_CANDIDATE70_ACCEPTED_PROMPT_SELECTION = Path("outputs/driveloop/accepted_prompt/candidate70_accepted_prompt_v0.json")
 DEFAULT_CANDIDATE70_GPU_READINESS_OUTPUT = Path("outputs/driveloop/gpu_smoke_readiness/candidate70_gpu_readiness_gate.json")
 DEFAULT_CANDIDATE70_RUNTIME_SURFACE_AUDIT = Path("outputs/driveloop/runtime_surface_code_audit/candidate70_runtime_surface_code_audit.json")
 DEFAULT_CANDIDATE70_TRAJECTORY_SURFACE_AUDIT = Path("outputs/driveloop/trajectory_runtime_surface_audit/candidate70_night_cut_in_trajectory_runtime_surface_audit.json")
@@ -202,6 +203,7 @@ def refresh_all(
     actor_identity_surface_audit: Path = DEFAULT_ACTOR_IDENTITY_SURFACE_AUDIT,
     candidate70_prompt_bank_output: Path = DEFAULT_CANDIDATE70_PROMPT_BANK_OUTPUT,
     candidate70_prompt_bank_support_audit_output: Path = DEFAULT_CANDIDATE70_PROMPT_BANK_SUPPORT_AUDIT_OUTPUT,
+    candidate70_accepted_prompt_selection: Path = DEFAULT_CANDIDATE70_ACCEPTED_PROMPT_SELECTION,
     candidate70_gpu_readiness_output: Path = DEFAULT_CANDIDATE70_GPU_READINESS_OUTPUT,
     candidate70_runtime_surface_audit: Path = DEFAULT_CANDIDATE70_RUNTIME_SURFACE_AUDIT,
     candidate70_trajectory_surface_audit: Path = DEFAULT_CANDIDATE70_TRAJECTORY_SURFACE_AUDIT,
@@ -259,6 +261,7 @@ def refresh_all(
     )
     candidate70_gpu_readiness = build_candidate70_readiness_gate(
         prompt_bank_audit_path=candidate70_prompt_bank_support_audit_output,
+        accepted_prompt_selection_path=candidate70_accepted_prompt_selection,
         runtime_surface_audit_path=candidate70_runtime_surface_audit,
         trajectory_surface_audit_path=candidate70_trajectory_surface_audit,
         dry_run_replacement_audit_path=candidate70_dry_run_replacement_audit,
