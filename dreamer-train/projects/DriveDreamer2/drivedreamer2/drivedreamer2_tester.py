@@ -61,6 +61,14 @@ def _driveloop_selected_video_indices(data_config, batch_skip, frame_num):
 class DriveDreamer2_Tester(Tester):
     def get_dataloaders(self, data_config):
         self.data_config = data_config
+        data_or_config_override = os.environ.get("DRIVELOOP_DD2_DATA_OR_CONFIG")
+        if data_or_config_override:
+            self.logger.info(
+                'DRIVELOOP_DD2_DATA_OR_CONFIG=%s: override data_config.data_or_config',
+                data_or_config_override,
+            )
+            data_config.data_or_config = data_or_config_override
+        self.driveloop_data_or_config = str(data_config.data_or_config)
         dataset = load_dataset(data_config.data_or_config)
         transform = getattr(drivedreamer2_transforms, data_config.transform.pop('type'))(**data_config.transform)
         dataset.set_transform(transform)
@@ -327,6 +335,8 @@ class DriveDreamer2_Tester(Tester):
                     audit = {
                         "schema_version": "dd2_runtime_input_audit.v0",
                         "audit_only": os.environ.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1",
+                        "data_or_config": getattr(self, "driveloop_data_or_config", None),
+                        "data_or_config_override": os.environ.get("DRIVELOOP_DD2_DATA_OR_CONFIG"),
                         "prompt_override": prompt_override,
                         "batch_skip": batch_skip,
                         "selected_batch_index": sampler_selected_batch_index if sampler_selected_batch_index is not None else batch_i,

@@ -23,7 +23,20 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
     )
     motion_gap = write_json(
         tmp_path / "inputs" / "motion_gap.json",
-        {"claim": {"lane_change_motion_tensor_control": "not_verified"}},
+        {
+            "claim": {
+                "lane_change_motion_tensor_control": "not_verified",
+                "semantic_lane_change_claim": "not_allowed",
+                "semantic_success_claim_allowed": False,
+            },
+            "control_path_status": {
+                "trajectory_tensor": "not_implemented",
+                "semantic_lane_change_claim": "not_allowed",
+                "boxes3d_target_override": "not_applied",
+                "velocity_motion_control": "observed_only_not_condition_tensor",
+                "image_box_condition": "connected",
+            },
+        },
     )
     velocity_surface = write_json(
         tmp_path / "inputs" / "velocity.json",
@@ -162,10 +175,12 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
     assert summary["does_not_run_gpu"] is True
     assert summary["does_not_generate_video"] is True
     assert summary["semantic_success_claim_allowed"] is False
-    assert summary["status_summary"]["gpu_smoke_allowed"] is True
+    assert summary["status_summary"]["gpu_smoke_allowed"] is False
+    assert summary["status_summary"]["legacy_gpu_smoke_allowed"] is True
+    assert summary["status_summary"]["active_gpu_smoke_readiness_source"] == "candidate70_gpu_readiness_gate"
     assert summary["status_summary"]["candidate_status"] == "candidate_video_only"
     assert summary["status_summary"]["bundle_status"] == "measured_ready"
-    assert summary["status_summary"]["dashboard_status"] == "measured_ready"
+    assert summary["status_summary"]["dashboard_status"] == "pre_gpu_blocked"
     assert summary["status_summary"]["video_semantic_claim"] == "measured_failed"
     assert summary["status_summary"]["dashboard_semantic_success_claim_allowed"] is False
     assert summary["status_summary"]["object_transfer_status"] == "partially_verified"
@@ -195,3 +210,56 @@ def test_refresh_all_regenerates_audit_status_without_gpu(tmp_path):
     assert dashboard["audit_signals"]["actor_identity_available_in_batch_any"] is False
     assert dashboard["audit_signals"]["per_frame_actor_boxes3d_observed_any"] is False
     assert dashboard["summary"]["actor_identity_surface_status"] == "identity_available_upstream_but_missing_from_processed_labels"
+
+
+def test_refresh_summary_uses_candidate70_identity_when_candidate70_gate_is_active(tmp_path):
+    from scripts.run_refresh_all_audit_status import build_refresh_summary
+
+    candidate70_prompt = "night urban street with a motorcycle making a visible cut-in from the left toward the ego vehicle, panoramic multi-view video."
+    dashboard = {
+        "dashboard_status": "pre_gpu_blocked",
+        "summary": {
+            "gpu_smoke_allowed": False,
+            "active_gpu_smoke_readiness_source": "candidate70_gpu_readiness_gate",
+            "active_scenario_id": "candidate70_night_cut_in_gpu_smoke",
+            "active_prompt": candidate70_prompt,
+            "semantic_success_claim_allowed": False,
+        },
+    }
+
+    summary = build_refresh_summary(
+        prompt="legacy prompt",
+        scenario_id="legacy_case",
+        readiness_output=tmp_path / "legacy_gate.json",
+        command_plan_output=tmp_path / "legacy_plan.json",
+        runbook_output=tmp_path / "runbook.md",
+        manifest_output=tmp_path / "manifest.json",
+        validation_output=tmp_path / "validation.json",
+        dashboard_output=tmp_path / "dashboard.json",
+        readiness={"gpu_smoke_allowed": True},
+        manifest={"candidate_status": "candidate_video_only", "video_semantic_claim": "not_measured"},
+        validation={"bundle_status": "measured_ready"},
+        dashboard=dashboard,
+        prompt_object_transfer_audit=tmp_path / "object_transfer.json",
+        trajectory_runtime_surface_audit=tmp_path / "trajectory.json",
+        runtime_surface_code_audit=tmp_path / "runtime_surface.json",
+        motion_metadata_runtime_audit=tmp_path / "motion_metadata.json",
+        actor_identity_surface_audit=tmp_path / "actor_identity.json",
+        candidate70_prompt_bank_output=tmp_path / "prompt_bank.json",
+        candidate70_prompt_bank_support_audit_output=tmp_path / "prompt_bank_support.json",
+        candidate70_gpu_readiness_output=tmp_path / "candidate70_gate.json",
+        candidate70_gpu_smoke_plan_draft=tmp_path / "candidate70_plan.json",
+        candidate70_source_sample_binding_readiness_output=tmp_path / "candidate70_source_binding.json",
+        candidate70_gpu_smoke_plan={"scenario_id": "candidate70_night_cut_in_gpu_smoke", "prompt": candidate70_prompt, "selected_prompt_id": "c70_pos_001"},
+        candidate70_gpu_readiness={"schema_version": "driveloop_candidate70_gpu_readiness_gate.v0", "scenario_id": "candidate70_night_cut_in_gpu_smoke", "readiness_status": "blocked", "gpu_smoke_allowed": False},
+        candidate70_source_sample_binding_readiness={},
+    )
+
+    assert summary["scenario_id"] == "candidate70_night_cut_in_gpu_smoke"
+    assert summary["prompt"] == candidate70_prompt
+    assert summary["status_summary"]["active_gpu_smoke_readiness_source"] == "candidate70_gpu_readiness_gate"
+    assert summary["status_summary"]["active_scenario_id"] == "candidate70_night_cut_in_gpu_smoke"
+    assert summary["status_summary"]["active_prompt"] == candidate70_prompt
+    assert summary["status_summary"]["legacy_scenario_id"] == "legacy_case"
+    assert summary["status_summary"]["legacy_prompt"] == "legacy prompt"
+    assert summary["status_summary"]["candidate70_prompt_id"] == "c70_pos_001"

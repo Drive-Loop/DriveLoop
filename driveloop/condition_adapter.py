@@ -103,11 +103,13 @@ class DriveDreamer2ConditionAdapter:
         )
 
         trace_metadata: Dict[str, Any] = {
-            "structural_control_level": "tensor_override_contract",
-            "tensor_control_ready": True,
+            "structural_control_level": "runtime_surface_contract",
+            "tensor_control_ready": False,
             "limitations": [
-                "mini_dataset_structural_inputs_required",
+                "runtime_structural_surfaces_observed_not_overridden",
+                "boxes3d_override_not_applied",
                 "trajectory_tensor_control_not_connected",
+                "actor_track_identity_not_observed",
                 "hdmap_tensor_control_requires_explicit_verified_source",
             ],
         }
@@ -134,7 +136,7 @@ class DriveDreamer2ConditionAdapter:
 
         return {
             "schema_version": "dd2_executable_condition.v0",
-            "target_backend": "drivedreamer2_mini",
+            "target_backend": "drivedreamer2_runtime",
             "text_control": {
                 "prompt": text_prompt,
             },
@@ -194,11 +196,11 @@ class DriveDreamer2ConditionAdapter:
                 "temporal_consistency_audit",
             ],
             "current_runtime_surfaces": {
-                "boxes3d": "static_sample_level_override",
-                "image_box": "derived_from_boxes3d",
-                "velocities": "dataset_surface_not_dd2_runtime_input",
+                "boxes3d": "runtime_dataset_surface_observed_not_override",
+                "image_box": "derived_from_runtime_boxes3d_canvas_not_target_control",
+                "velocities": "dataset_surface_observed_not_dd2_condition_tensor",
                 "actor_track_identity": "not_observed",
-                "hdmap_lane_geometry": "mini_dataset_baseline",
+                "hdmap_lane_geometry": "runtime_dataset_baseline",
             },
             "claim_boundary": (
                 "This contract records the evidence required for trajectory control; "
@@ -214,8 +216,8 @@ class DriveDreamer2ConditionAdapter:
         labels = list(dict.fromkeys(actor["category"] for actor in actor_controls))
 
         return {
-            "target_dataset": "drivedreamer2_mini",
-            "control_level": "tensor_override_contract",
+            "target_dataset": "drivedreamer2_runtime",
+            "control_level": "runtime_surface_contract",
             "scene_description": {
                 "source": "text_control.prompt",
                 "value": text_prompt,
@@ -225,20 +227,24 @@ class DriveDreamer2ConditionAdapter:
                 "values": labels,
             },
             "image_hdmap": {
-                "source": "mini_dataset_baseline",
+                "source": "runtime_dataset_baseline",
                 "override_ready": False,
                 "reason": "no_verified_hdmap_override_source",
             },
             "image_box": {
-                "source": "derived_from_boxes3d_override",
-                "override_ready": True,
+                "source": "derived_from_runtime_boxes3d_canvas",
+                "override_ready": False,
+                "reason": "derived_from_baseline_runtime_boxes3d_not_target_override",
             },
             "boxes3d": {
-                "source": "executable_condition_tensor_override",
-                "override_ready": True,
+                "source": "runtime_dataset_baseline",
+                "override_ready": False,
+                "reason": "target_boxes3d_override_not_implemented",
             },
             "limitations": [
+                "boxes3d_override_not_applied",
                 "trajectory_tensor_override_not_implemented",
+                "actor_track_identity_not_observed",
                 "hdmap_tensor_override_requires_explicit_verified_source",
             ],
         }

@@ -48,6 +48,11 @@ def build_readiness_report(
 
     runtime_changed = runtime_data.get("runtime_tensor_hash_changed", {})
     motion_claim = motion_gap_data.get("claim", {})
+    if not isinstance(motion_claim, dict):
+        motion_claim = {}
+    motion_control_status = motion_gap_data.get("control_path_status", {})
+    if not isinstance(motion_control_status, dict):
+        motion_control_status = {}
     velocity_claim = velocity_data.get("claim", {})
 
     required_evidence = {
@@ -83,7 +88,13 @@ def build_readiness_report(
         and runtime_changed.get("grounding_downsampler_input") is False
         and runtime_changed.get("img_cond") is False
     )
-    motion_gap_ok = motion_claim.get("lane_change_motion_tensor_control") == "not_verified"
+    motion_gap_ok = (
+        motion_claim.get("lane_change_motion_tensor_control") == "not_verified"
+        and motion_claim.get("semantic_lane_change_claim") == "not_allowed"
+        and motion_claim.get("semantic_success_claim_allowed") is False
+        and motion_control_status.get("trajectory_tensor") == "not_implemented"
+        and motion_control_status.get("semantic_lane_change_claim") == "not_allowed"
+    )
     velocity_gap_ok = velocity_claim.get("velocity_consumed_by_dd2_runtime") is False
 
     gpu_smoke_allowed = bool(
@@ -114,6 +125,9 @@ def build_readiness_report(
             "resources_ready": resources_ready,
             "runtime_boundary_ok": expected_runtime_boundary_ok,
             "motion_gap_recorded": motion_gap_ok,
+            "motion_gap_semantic_lane_change_claim": motion_claim.get("semantic_lane_change_claim"),
+            "motion_gap_semantic_success_claim_allowed": motion_claim.get("semantic_success_claim_allowed"),
+            "motion_gap_control_path_status": motion_control_status,
             "velocity_gap_recorded": velocity_gap_ok,
         },
         "claim_boundary": (

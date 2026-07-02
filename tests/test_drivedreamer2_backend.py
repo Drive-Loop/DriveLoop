@@ -67,7 +67,7 @@ def test_drivedreamer2_backend_records_executable_condition_metadata(monkeypatch
     )
     executable_condition = {
         "schema_version": "dd2_executable_condition.v0",
-        "target_backend": "drivedreamer2_mini",
+        "target_backend": "drivedreamer2_runtime",
         "trace_metadata": {
             "structural_control_level": "schema_only",
             "tensor_control_ready": False,
@@ -102,7 +102,7 @@ def test_drivedreamer2_backend_records_structural_input_plan_metadata(monkeypatc
     monkeypatch.setattr("driveloop.backends.drivedreamer2.subprocess.run", fake_run)
 
     structural_input_plan = {
-        "target_dataset": "drivedreamer2_mini",
+        "target_dataset": "drivedreamer2_runtime",
         "control_level": "plan_only",
         "labels": {
             "source": "actor_controls.category",
@@ -370,13 +370,13 @@ def test_drivedreamer2_backend_records_override_candidate_plan(monkeypatch, tmp_
             "values": ["pedestrian", "bicycle"],
         },
         "image_hdmap": {
-            "source": "mini_dataset_baseline",
+            "source": "runtime_dataset_baseline",
         },
         "image_box": {
-            "source": "mini_dataset_baseline",
+            "source": "runtime_dataset_baseline",
         },
         "boxes3d": {
-            "source": "mini_dataset_baseline",
+            "source": "runtime_dataset_baseline",
         },
     }
 
@@ -420,9 +420,9 @@ def test_override_candidate_plan_includes_box_synthesis_plan_for_missing_actor()
     backend = DriveDreamer2Backend()
 
     structural_input_plan = {
-        "image_hdmap": {"source": "mini_dataset_baseline"},
-        "image_box": {"source": "mini_dataset_baseline"},
-        "boxes3d": {"source": "mini_dataset_baseline"},
+        "image_hdmap": {"source": "runtime_dataset_baseline"},
+        "image_box": {"source": "runtime_dataset_baseline"},
+        "boxes3d": {"source": "runtime_dataset_baseline"},
     }
     structural_request_diff = {
         "available": True,

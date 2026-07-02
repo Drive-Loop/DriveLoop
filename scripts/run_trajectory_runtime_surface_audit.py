@@ -46,6 +46,7 @@ def first_dict(*values: Any) -> dict[str, Any]:
 def runtime_input_audit(summary: dict[str, Any]) -> dict[str, Any]:
     metadata = summary.get("metadata", {})
     return first_dict(
+        summary if summary.get("schema_version") == "dd2_runtime_input_audit.v0" else None,
         summary.get("runtime_input_audit"),
         summary.get("dd2_runtime_input_audit"),
         metadata.get("dd2_runtime_input_audit") if isinstance(metadata, dict) else None,
@@ -117,14 +118,20 @@ def build_audit(
             blockers.append("trajectory_tensor_not_observed_in_runtime_audit")
         if not velocity_tensor_available and not velocity_consumed:
             blockers.append("velocity_or_displacement_tensor_not_consumed_by_runtime")
+        if control_path_status.get("velocity_motion_control") == "observed_only_not_condition_tensor":
+            blockers.append("velocity_metadata_observed_only_not_condition_tensor")
         if not per_frame_actor_identity:
             blockers.append("per_frame_actor_identity_not_observed")
         if not per_frame_actor_boxes3d:
             blockers.append("per_frame_actor_boxes3d_not_verified")
+        if control_path_status.get("boxes3d_target_override") == "not_applied":
+            blockers.append("target_boxes3d_override_not_applied")
         if not hdmap_override_verified:
             blockers.append("hdmap_lane_geometry_override_not_verified")
         if box_condition_available:
             blockers.append("static_box_condition_available_but_not_temporal_motion_control")
+        if motion_gap_claim.get("semantic_success_claim_allowed") is False:
+            blockers.append("semantic_success_claim_not_allowed_by_motion_gap")
 
     if not requested_motions:
         status = "not_applicable"
@@ -178,7 +185,7 @@ def build_audit(
                 "verified": per_frame_actor_boxes3d,
                 "current_surface": "grouped_by_instance_token"
                 if per_frame_actor_boxes3d
-                else ("static_sample_level_override" if box_condition_available else "not_observed"),
+                else ("image_box_condition_only_not_per_frame_actor_motion" if box_condition_available else "not_observed"),
             },
             "hdmap_lane_geometry": {
                 "override_verified": hdmap_override_verified,
@@ -189,6 +196,10 @@ def build_audit(
             "motion_gap_lane_change_motion_tensor_control": motion_gap_claim.get(
                 "lane_change_motion_tensor_control"
             ),
+            "motion_gap_semantic_lane_change_claim": motion_gap_claim.get("semantic_lane_change_claim"),
+            "motion_gap_semantic_success_claim_allowed": motion_gap_claim.get("semantic_success_claim_allowed"),
+            "motion_gap_boxes3d_target_override": control_path_status.get("boxes3d_target_override"),
+            "motion_gap_velocity_motion_control": control_path_status.get("velocity_motion_control"),
             "paper_stage_3_status": stage_3.get("status"),
             "paper_stage_3_tensor_control_ready": stage_3.get("tensor_control_ready"),
             "actor_track_audit_status": actor_track_audit.get("status"),
@@ -217,6 +228,12 @@ def next_steps(status: str, blockers: list[str]) -> list[str]:
         steps.append("audit actor track identity across frames")
     if "per_frame_actor_boxes3d_not_verified" in blockers:
         steps.append("audit per-frame actor boxes3d instead of static sample-level boxes only")
+    if "target_boxes3d_override_not_applied" in blockers:
+        steps.append("do not treat baseline runtime boxes3d as target actor override")
+    if "velocity_metadata_observed_only_not_condition_tensor" in blockers:
+        steps.append("keep dataset velocity as metadata until it is connected to a runtime condition tensor")
+    if "semantic_success_claim_not_allowed_by_motion_gap" in blockers:
+        steps.append("keep semantic_success_claim_allowed false until measured review passes")
     if "hdmap_lane_geometry_override_not_verified" in blockers:
         steps.append("audit HDMap/lane geometry compatibility with requested motion")
     if "static_box_condition_available_but_not_temporal_motion_control" in blockers:

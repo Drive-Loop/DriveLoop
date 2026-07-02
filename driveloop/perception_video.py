@@ -1,0 +1,400 @@
+from __future__ import annotations
+
+from dataclasses import asdict, dataclass, field
+from pathlib import Path
+from typing import Any, Dict, Iterable, List, Protocol, Sequence, Tuple
+
+from driveloop.evaluators import BaseEvaluator
+from driveloop.schema import Diagnosis, Evaluation, Generation
+
+
+Box = Tuple[float, float, float, float]
+
+
+@dataclass(frozen=True)
+class Detection:
+    frame_index: int
+    label: str
+    confidence: float
+    box: Box
+
+    @classmethod
+    def from_dict(cls, payload: Dict[str, Any], frame_index: int | None = None) -> "Detection":
+        box = payload.get("box") or payload.get("bbox") or payload.get("xyxy")
+        if not isinstance(box, Sequence) or len(box) != 4:
+            raise ValueError("detection box must have four xyxy values")
+        return cls(
+            frame_index=int(payload.get("frame_index", 0 if frame_index is None else frame_index)),
+            label=str(payload.get("label") or payload.get("class_name") or payload.get("category") or "unknown"),
+            confidence=float(payload.get("confidence", payload.get("score", 0.0))),
+            box=(float(box[0]), float(box[1]), float(box[2]), float(box[3])),
+        )
+
+    def area(self) -> float:
+        x1, y1, x2, y2 = self.box
+        return max(0.0, x2 - x1) * max(0.0, y2 - y1)
+
+    def iou(self, other: "Detection") -> float:
+        ax1, ay1, ax2, ay2 = self.box
+        bx1, by1, bx2, by2 = other.box
+        ix1, iy1 = max(ax1, bx1), max(ay1, by1)
+        ix2, iy2 = min(ax2, bx2), min(ay2, by2)
+        inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+        union = self.area() + other.area() - inter
+        return 0.0 if union <= 0 else inter / union
+
+
+@dataclass
+class Track:
+    track_id: int
+    label: str
+    detections: List[Detection] = field(default_factory=list)
+
+    @property
+    def last_frame(self) -> int:
+        return self.detections[-1].frame_index
+
+    def append(self, detection: Detection) -> None:
+        self.detections.append(detection)
+
+
+class VideoDetector(Protocol):
+    def detect(self, frame: Any, frame_index: int) -> List[Detection]:
+        ...
+
+
+class VideoFrameReader(Protocol):
+    def read(self, video_path: Path, max_frames: int | None = None) -> List[Any]:
+        ...
+
+
+class OpenCVFrameReader:
+    def read(self, video_path: Path, max_frames: int | None = None) -> List[Any]:
+        try:
+            import cv2  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError("opencv-python is required for pixel video evaluation") from exc
+
+        capture = cv2.VideoCapture(str(video_path))
+        if not capture.isOpened():
+            raise RuntimeError(f"could not open video artifact: {video_path}")
+
+        frames: List[Any] = []
+        try:
+            while True:
+                ok, frame = capture.read()
+                if not ok:
+                    break
+                frames.append(frame)
+                if max_frames is not None and len(frames) >= max_frames:
+                    break
+        finally:
+            capture.release()
+        return frames
+
+
+class UltralyticsYOLODetector:
+    def __init__(self, weights: str | Path, confidence_threshold: float = 0.25) -> None:
+        self.confidence_threshold = confidence_threshold
+        try:
+            from ultralytics import YOLO  # type: ignore
+        except ImportError as exc:
+            raise RuntimeError("ultralytics is required for YOLO detection") from exc
+        self.model = YOLO(str(weights))
+
+    def detect(self, frame: Any, frame_index: int) -> List[Detection]:
+        results = self.model.predict(frame, verbose=False)
+        if not results:
+            return []
+        result = results[0]
+        names = getattr(result, "names", {}) or {}
+        boxes = getattr(result, "boxes", None)
+        if boxes is None:
+            return []
+
+        detections: List[Detection] = []
+        for box in boxes:
+            confidence = float(box.conf[0]) if getattr(box, "conf", None) is not None else 0.0
+            if confidence < self.confidence_threshold:
+                continue
+            cls_id = int(box.cls[0]) if getattr(box, "cls", None) is not None else -1
+            xyxy = box.xyxy[0].tolist()
+            detections.append(
+                Detection(
+                    frame_index=frame_index,
+                    label=str(names.get(cls_id, cls_id)),
+                    confidence=confidence,
+                    box=(float(xyxy[0]), float(xyxy[1]), float(xyxy[2]), float(xyxy[3])),
+                )
+            )
+        return detections
+
+
+class SimpleIoUTracker:
+    def __init__(self, iou_threshold: float = 0.3, max_frame_gap: int = 1) -> None:
+        self.iou_threshold = iou_threshold
+        self.max_frame_gap = max_frame_gap
+        self.next_track_id = 1
+        self.tracks: List[Track] = []
+
+    def update(self, detections: Iterable[Detection]) -> None:
+        assigned: set[int] = set()
+        for detection in sorted(detections, key=lambda item: item.confidence, reverse=True):
+            best_track = None
+            best_iou = 0.0
+            for track in self.tracks:
+                if track.track_id in assigned:
+                    continue
+                if track.label != detection.label:
+                    continue
+                if detection.frame_index - track.last_frame > self.max_frame_gap:
+                    continue
+                iou = detection.iou(track.detections[-1])
+                if iou > best_iou:
+                    best_iou = iou
+                    best_track = track
+
+            if best_track is not None and best_iou >= self.iou_threshold:
+                best_track.append(detection)
+                assigned.add(best_track.track_id)
+            else:
+                track = Track(self.next_track_id, detection.label, [detection])
+                self.tracks.append(track)
+                assigned.add(track.track_id)
+                self.next_track_id += 1
+
+
+@dataclass(frozen=True)
+class PerceptionVideoWeights:
+    coverage: float = 0.3
+    confidence: float = 0.2
+    tracking: float = 0.2
+    identity: float = 0.2
+    box_stability: float = 0.1
+
+    def normalized(self) -> "PerceptionVideoWeights":
+        total = self.coverage + self.confidence + self.tracking + self.identity + self.box_stability
+        if total <= 0:
+            return self
+        return PerceptionVideoWeights(
+            coverage=self.coverage / total,
+            confidence=self.confidence / total,
+            tracking=self.tracking / total,
+            identity=self.identity / total,
+            box_stability=self.box_stability / total,
+        )
+
+
+class PerceptionVideoEvaluator(BaseEvaluator):
+    DETECTION_METADATA_KEYS = ("perception_detections", "detections_by_frame", "video_detections")
+
+    def __init__(
+        self,
+        detector: VideoDetector | None = None,
+        frame_reader: VideoFrameReader | None = None,
+        target_labels: Iterable[str] | None = None,
+        weights: PerceptionVideoWeights | None = None,
+        confidence_threshold: float = 0.25,
+        pass_threshold: float = 0.8,
+        max_frames: int | None = None,
+        tracker_iou_threshold: float = 0.3,
+    ) -> None:
+        self.detector = detector
+        self.frame_reader = frame_reader or OpenCVFrameReader()
+        self.target_labels = {self._normalize_label(label) for label in target_labels or []}
+        self.weights = (weights or PerceptionVideoWeights()).normalized()
+        self.confidence_threshold = confidence_threshold
+        self.pass_threshold = pass_threshold
+        self.max_frames = max_frames
+        self.tracker_iou_threshold = tracker_iou_threshold
+
+    def evaluate(self, generation: Generation) -> Evaluation:
+        detections, frame_count, measured, setup_reasons = self._collect_detections(generation)
+        target_labels = self._resolve_target_labels(generation)
+        metrics: Dict[str, float] = {
+            "perception_measured": 1.0 if measured else 0.0,
+            "perception_frame_count": float(frame_count),
+        }
+        reasons = list(setup_reasons)
+        actions: List[str] = []
+
+        if not measured:
+            actions.append("provide YOLO weights, a detector backend, or precomputed detection JSON")
+            return Evaluation(0.0, metrics, Diagnosis(False, reasons, actions))
+
+        if frame_count <= 0:
+            return Evaluation(0.0, metrics, Diagnosis(False, ["video_has_no_readable_frames"], ["verify video decoding"]))
+
+        filtered = [
+            d for d in detections
+            if d.confidence >= self.confidence_threshold
+            and (not target_labels or self._normalize_label(d.label) in target_labels)
+        ]
+
+        tracker = SimpleIoUTracker(iou_threshold=self.tracker_iou_threshold)
+        for frame_index in sorted({d.frame_index for d in filtered}):
+            tracker.update(d for d in filtered if d.frame_index == frame_index)
+
+        q_cov = self._coverage_score(filtered, frame_count)
+        q_conf = self._confidence_score(filtered)
+        q_track, dominant = self._track_score(tracker.tracks, frame_count)
+        q_id = self._identity_score(filtered, dominant)
+        q_box = self._box_stability_score(dominant)
+        score = round(
+            self.weights.coverage * q_cov
+            + self.weights.confidence * q_conf
+            + self.weights.tracking * q_track
+            + self.weights.identity * q_id
+            + self.weights.box_stability * q_box,
+            6,
+        )
+
+        metrics.update({
+            "Q_cov": q_cov,
+            "Q_conf": q_conf,
+            "Q_track": q_track,
+            "Q_id": q_id,
+            "Q_box": q_box,
+            "perception_detection_count": float(len(filtered)),
+            "perception_track_count": float(len(tracker.tracks)),
+            "perception_dominant_track_length": float(len(dominant.detections) if dominant else 0),
+        })
+
+        if not filtered:
+            reasons.append("target_object_not_detected")
+            actions.append("make the target actor visible or check detector classes")
+        if q_cov < self.pass_threshold:
+            reasons.append("low_detection_coverage")
+            actions.append("make the target actor visible across more frames")
+        if q_conf < self.pass_threshold:
+            reasons.append("low_detector_confidence")
+            actions.append("increase object clarity, lighting, or scale")
+        if q_track < self.pass_threshold:
+            reasons.append("unstable_track_coverage")
+            actions.append("reduce occlusion and keep motion temporally coherent")
+        if q_id < self.pass_threshold:
+            reasons.append("identity_inconsistent")
+            actions.append("reduce identity switches")
+        if q_box < self.pass_threshold:
+            reasons.append("unstable_bounding_boxes")
+            actions.append("stabilize target object box position and scale")
+
+        passed = score >= self.pass_threshold and not reasons
+        return Evaluation(score, metrics, Diagnosis(passed, list(dict.fromkeys(reasons)), list(dict.fromkeys(actions))))
+
+    def build_report(self, generation: Generation) -> Dict[str, Any]:
+        evaluation = self.evaluate(generation)
+        measured = evaluation.metrics.get("perception_measured") == 1.0
+        claim = "not_measured" if not measured else ("measured_passed" if evaluation.diagnosis.passed else "measured_failed")
+        return {
+            "schema_version": "driveloop_perception_video_eval.v0",
+            "generation": {"iteration": generation.iteration, "prompt": generation.prompt, "artifacts": dict(generation.artifacts)},
+            "evaluation": asdict(evaluation),
+            "interpretation": {
+                "perception_claim": claim,
+                "semantic_success_claim": "not_proven_by_perception_metrics_alone",
+                "claim_boundary": "This report measures detector/tracker evidence for Eq. (15); it does not prove full prompt-video semantic success by itself.",
+            },
+        }
+
+    def _collect_detections(self, generation: Generation) -> tuple[List[Detection], int, bool, List[str]]:
+        metadata_detections = self._detections_from_metadata(generation.metadata)
+        if metadata_detections is not None:
+            return metadata_detections, self._frame_count_from_metadata(generation.metadata, metadata_detections), True, []
+
+        video_path = generation.artifacts.get("video")
+        if not video_path:
+            return [], 0, False, ["missing_generation_artifact"]
+        if self.detector is None:
+            return [], 0, False, ["perception_detector_not_configured"]
+
+        frames = self.frame_reader.read(Path(video_path), max_frames=self.max_frames)
+        detections: List[Detection] = []
+        for index, frame in enumerate(frames):
+            detections.extend(self.detector.detect(frame, index))
+        return detections, len(frames), True, []
+
+    def _detections_from_metadata(self, metadata: Dict[str, Any]) -> List[Detection] | None:
+        payload = None
+        for key in self.DETECTION_METADATA_KEYS:
+            if key in metadata:
+                payload = metadata[key]
+                break
+        if payload is None:
+            return None
+
+        if isinstance(payload, dict) and isinstance(payload.get("frames"), list):
+            detections: List[Detection] = []
+            for frame in payload["frames"]:
+                if not isinstance(frame, dict):
+                    continue
+                frame_index = int(frame.get("frame_index", 0))
+                for item in frame.get("detections", []):
+                    if isinstance(item, dict):
+                        detections.append(Detection.from_dict(item, frame_index=frame_index))
+            return detections
+
+        if isinstance(payload, dict):
+            detections = []
+            for key, items in payload.items():
+                if key in ("frame_count", "schema_version"):
+                    continue
+                if not isinstance(items, list):
+                    continue
+                for item in items:
+                    if isinstance(item, dict):
+                        detections.append(Detection.from_dict(item, frame_index=int(key)))
+            return detections
+
+        if isinstance(payload, list):
+            return [Detection.from_dict(item) for item in payload if isinstance(item, dict)]
+        return None
+
+    def _frame_count_from_metadata(self, metadata: Dict[str, Any], detections: List[Detection]) -> int:
+        for key in self.DETECTION_METADATA_KEYS:
+            payload = metadata.get(key)
+            if isinstance(payload, dict) and payload.get("frame_count") is not None:
+                return int(payload["frame_count"])
+        if metadata.get("frame_count") is not None:
+            return int(metadata["frame_count"])
+        return max((d.frame_index for d in detections), default=-1) + 1
+
+    def _resolve_target_labels(self, generation: Generation) -> set[str]:
+        labels = set(self.target_labels)
+        metadata_labels = generation.metadata.get("target_labels")
+        if isinstance(metadata_labels, list):
+            labels.update(self._normalize_label(str(label)) for label in metadata_labels)
+        prompt = generation.prompt.lower()
+        for label in ("motorcycle", "car", "truck", "bus", "pedestrian", "bicycle"):
+            if label in prompt:
+                labels.add(label)
+        if "vehicle" in prompt:
+            labels.add("car")
+        return labels
+
+    def _coverage_score(self, detections: List[Detection], frame_count: int) -> float:
+        return round(len({d.frame_index for d in detections}) / frame_count, 6) if frame_count > 0 else 0.0
+
+    def _confidence_score(self, detections: List[Detection]) -> float:
+        return round(sum(d.confidence for d in detections) / len(detections), 6) if detections else 0.0
+
+    def _track_score(self, tracks: List[Track], frame_count: int) -> tuple[float, Track | None]:
+        if not tracks or frame_count <= 0:
+            return 0.0, None
+        dominant = max(tracks, key=lambda track: len(track.detections))
+        return round(len(dominant.detections) / frame_count, 6), dominant
+
+    def _identity_score(self, detections: List[Detection], dominant: Track | None) -> float:
+        return round(len(dominant.detections) / len(detections), 6) if detections and dominant else 0.0
+
+    def _box_stability_score(self, dominant: Track | None) -> float:
+        if dominant is None or not dominant.detections:
+            return 0.0
+        if len(dominant.detections) == 1:
+            return 1.0
+        ious = [cur.iou(prev) for prev, cur in zip(dominant.detections, dominant.detections[1:])]
+        return round(sum(ious) / len(ious), 6) if ious else 0.0
+
+    def _normalize_label(self, label: str) -> str:
+        aliases = {"motorbike": "motorcycle", "bike": "bicycle", "cyclist": "bicycle", "person": "pedestrian", "vehicle": "car", "vehicles": "car"}
+        return aliases.get(label.lower().strip().replace("-", "_"), label.lower().strip().replace("-", "_"))

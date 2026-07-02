@@ -106,10 +106,41 @@ def build_refresh_summary(
     candidate70_gpu_readiness: dict[str, Any],
     candidate70_source_sample_binding_readiness: dict[str, Any],
 ) -> dict[str, Any]:
+    dashboard_summary = dashboard.get("summary", {})
+    if not isinstance(dashboard_summary, dict):
+        dashboard_summary = {}
+
+    legacy_scenario_id = scenario_id
+    legacy_prompt = prompt
+    candidate70_readiness_active = bool(candidate70_gpu_readiness) and (
+        candidate70_gpu_readiness.get("schema_version") == "driveloop_candidate70_gpu_readiness_gate.v0"
+        or "readiness_status" in candidate70_gpu_readiness
+        or "gpu_smoke_allowed" in candidate70_gpu_readiness
+    )
+    candidate70_scenario_id = (
+        candidate70_gpu_readiness.get("scenario_id")
+        or candidate70_gpu_smoke_plan.get("scenario_id")
+    )
+    candidate70_prompt = (
+        candidate70_gpu_smoke_plan.get("prompt")
+        or candidate70_gpu_smoke_plan.get("accepted_prompt")
+        or candidate70_gpu_smoke_plan.get("selected_prompt")
+    )
+    active_scenario_id = (
+        (candidate70_scenario_id or legacy_scenario_id)
+        if candidate70_readiness_active
+        else legacy_scenario_id
+    )
+    active_prompt = (
+        (candidate70_prompt or legacy_prompt)
+        if candidate70_readiness_active
+        else legacy_prompt
+    )
+
     return {
         "schema_version": "driveloop_refresh_all_audit_status.v0",
-        "scenario_id": scenario_id,
-        "prompt": prompt,
+        "scenario_id": active_scenario_id,
+        "prompt": active_prompt,
         "does_not_run_gpu": True,
         "does_not_generate_video": True,
         "semantic_success_claim_allowed": False,
@@ -150,7 +181,25 @@ def build_refresh_summary(
             "candidate70_source_sample_binding_readiness",
         ],
         "status_summary": {
-            "gpu_smoke_allowed": readiness.get("gpu_smoke_allowed"),
+            "gpu_smoke_allowed": (
+                dashboard.get("summary", {}).get("gpu_smoke_allowed")
+                if isinstance(dashboard.get("summary"), dict)
+                and "gpu_smoke_allowed" in dashboard.get("summary", {})
+                else readiness.get("gpu_smoke_allowed")
+            ),
+            "legacy_gpu_smoke_allowed": readiness.get("gpu_smoke_allowed"),
+            "active_gpu_smoke_readiness_source": (
+                dashboard_summary.get("active_gpu_smoke_readiness_source")
+                if isinstance(dashboard_summary, dict)
+                else None
+            ),
+            "active_scenario_id": dashboard_summary.get("active_scenario_id", active_scenario_id),
+            "active_prompt": dashboard_summary.get("active_prompt", active_prompt),
+            "legacy_scenario_id": legacy_scenario_id,
+            "legacy_prompt": legacy_prompt,
+            "candidate70_scenario_id": candidate70_scenario_id,
+            "candidate70_prompt": candidate70_prompt,
+            "candidate70_prompt_id": candidate70_gpu_smoke_plan.get("selected_prompt_id"),
             "candidate_status": manifest.get("candidate_status"),
             "bundle_status": validation.get("bundle_status"),
             "dashboard_status": dashboard.get("dashboard_status"),

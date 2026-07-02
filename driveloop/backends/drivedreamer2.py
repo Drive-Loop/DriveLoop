@@ -12,6 +12,7 @@ from typing import Optional
 from driveloop.backends.base import GenerationBackend
 from driveloop.dd2_override import read_override_audit
 from driveloop.schema import DriveLoopRequest, Generation
+from driveloop.source_sample_binding import build_source_sample_binding
 
 
 class DriveDreamer2Backend(GenerationBackend):
@@ -28,6 +29,15 @@ class DriveDreamer2Backend(GenerationBackend):
         timeout_seconds: Optional[int] = None,
         audit_only: bool = False,
         batch_skip: int = 0,
+        source_candidate_id: Optional[str] = None,
+        sample_token: Optional[str] = None,
+        scene_token: Optional[str] = None,
+        instance_token: Optional[str] = None,
+        source_identity_summary_path: str | Path | None = None,
+        source_selector_frame_num: int = 8,
+        source_selector_hz_factor: int = 3,
+        source_selector_video_split_rate: int = 1,
+        source_selector_multiview: bool = True,
     ) -> None:
         self.project_root = Path(project_root).resolve()
         self.config_name = config_name
@@ -38,6 +48,15 @@ class DriveDreamer2Backend(GenerationBackend):
         self.timeout_seconds = timeout_seconds
         self.audit_only = audit_only
         self.batch_skip = batch_skip
+        self.source_candidate_id = source_candidate_id
+        self.sample_token = sample_token
+        self.scene_token = scene_token
+        self.instance_token = instance_token
+        self.source_identity_summary_path = Path(source_identity_summary_path) if source_identity_summary_path else None
+        self.source_selector_frame_num = source_selector_frame_num
+        self.source_selector_hz_factor = source_selector_hz_factor
+        self.source_selector_video_split_rate = source_selector_video_split_rate
+        self.source_selector_multiview = source_selector_multiview
 
     def generate(self, request: DriveLoopRequest, iteration: int) -> Generation:
         run_artifact_dir = self.artifact_dir
@@ -70,7 +89,18 @@ class DriveDreamer2Backend(GenerationBackend):
             else {}
         )
 
-        baseline_structural_snapshot = self._build_baseline_structural_snapshot()
+        runtime_sample_selector = self._build_runtime_sample_selector(request)
+        source_sample_binding = self._build_source_sample_binding(runtime_sample_selector)
+        effective_batch_skip = (
+            source_sample_binding.get("dd2_batch_skip")
+            if source_sample_binding.get("ready") is True
+            else self.batch_skip
+        )
+        baseline_structural_snapshot = self._build_baseline_structural_snapshot(
+            selected_label_index=source_sample_binding.get("front_record_index")
+            if source_sample_binding.get("ready") is True
+            else None
+        )
         structural_request_diff = self._build_structural_request_diff(
             structural_input_plan=structural_input_plan,
             baseline_structural_snapshot=baseline_structural_snapshot,
@@ -88,13 +118,18 @@ class DriveDreamer2Backend(GenerationBackend):
         )
         audit_path = run_artifact_dir / f"dd2_runtime_input_audit_{iteration:02d}.json"
         override_audit_path = run_artifact_dir / f"dd2_override_audit_{iteration:02d}.jsonl"
+        for stale_audit_path in (audit_path, override_audit_path):
+            if stale_audit_path.exists():
+                stale_audit_path.unlink()
         env["DRIVELOOP_DD2_AUDIT_PATH"] = str(audit_path)
+        env["DRIVELOOP_DD2_DATA_OR_CONFIG"] = str(self.baseline_dataset_dir)
+        effective_audit_only = self.audit_only or env.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1"
         if dd2_prompt:
             env["DRIVELOOP_DD2_PROMPT"] = str(dd2_prompt)
-        if self.audit_only:
+        if effective_audit_only:
             env["DRIVELOOP_DD2_AUDIT_ONLY"] = "1"
-        if self.batch_skip:
-            env["DRIVELOOP_DD2_BATCH_SKIP"] = str(self.batch_skip)
+        if effective_batch_skip is not None:
+            env["DRIVELOOP_DD2_BATCH_SKIP"] = str(effective_batch_skip)
         if override_json.get("available"):
             env["DRIVELOOP_DD2_OVERRIDE_JSON"] = json.dumps(override_json, sort_keys=True)
             env["DRIVELOOP_DD2_OVERRIDE_AUDIT_PATH"] = str(override_audit_path)
@@ -120,7 +155,7 @@ class DriveDreamer2Backend(GenerationBackend):
         )
 
         artifact_video = None
-        if not self.audit_only:
+        if not effective_audit_only:
             if not baseline_video.exists():
                 raise FileNotFoundError(f"DriveDreamer-2 did not create {baseline_video}")
 
@@ -160,8 +195,10 @@ class DriveDreamer2Backend(GenerationBackend):
                 "config_name": self.config_name,
                 "baseline_video": str(baseline_video),
                 "returncode": completed.returncode,
-                "dd2_audit_only": self.audit_only,
-                "dd2_batch_skip": self.batch_skip,
+                "dd2_audit_only": effective_audit_only,
+                "dd2_batch_skip": effective_batch_skip,
+                "dd2_runtime_sample_selector": runtime_sample_selector,
+                "dd2_source_sample_binding": source_sample_binding,
                 "dd2_prompt": str(dd2_prompt) if dd2_prompt else None,
                 "dd2_executable_condition": executable_condition,
                 "dd2_condition_schema_version": executable_condition.get("schema_version")
@@ -185,6 +222,46 @@ class DriveDreamer2Backend(GenerationBackend):
                 "dd2_paper_alignment_report": paper_alignment_report,
                 "dd2_runtime_input_audit": dd2_runtime_input_audit,
             },
+        )
+
+    def _build_runtime_sample_selector(self, request: DriveLoopRequest) -> dict:
+        metadata = request.metadata if isinstance(request.metadata, dict) else {}
+        condition = request.condition if isinstance(request.condition, dict) else {}
+
+        return {
+            "source_candidate_id": metadata.get("source_candidate_id")
+            or condition.get("source_candidate_id")
+            or self.source_candidate_id,
+            "sample_token": metadata.get("sample_token")
+            or condition.get("sample_token")
+            or self.sample_token,
+            "scene_token": metadata.get("scene_token")
+            or condition.get("scene_token")
+            or self.scene_token,
+            "instance_token": metadata.get("instance_token")
+            or condition.get("instance_token")
+            or self.instance_token,
+            "identity_summary_path": str(
+                metadata.get("source_identity_summary_path")
+                or condition.get("source_identity_summary_path")
+                or self.source_identity_summary_path
+                or ""
+            )
+            or None,
+        }
+
+    def _build_source_sample_binding(self, selector: dict) -> dict:
+        return build_source_sample_binding(
+            self.baseline_dataset_dir,
+            source_candidate_id=selector.get("source_candidate_id"),
+            sample_token=selector.get("sample_token"),
+            scene_token=selector.get("scene_token"),
+            instance_token=selector.get("instance_token"),
+            identity_summary_path=selector.get("identity_summary_path"),
+            frame_num=self.source_selector_frame_num,
+            hz_factor=self.source_selector_hz_factor,
+            video_split_rate=self.source_selector_video_split_rate,
+            multiview=self.source_selector_multiview,
         )
 
     def _build_override_json(
@@ -251,7 +328,7 @@ class DriveDreamer2Backend(GenerationBackend):
                 "mode": "keep_baseline",
                 "source": structural_input_plan.get("image_hdmap", {}).get(
                     "source",
-                    "mini_dataset_baseline",
+                    "runtime_dataset_baseline",
                 ),
                 "reason": structural_input_plan.get("image_hdmap", {}).get(
                     "reason",
@@ -259,9 +336,13 @@ class DriveDreamer2Backend(GenerationBackend):
                 ),
             },
             "audit": {
-                "control_level": "tensor_override_runtime",
+                "control_level": (
+                    "tensor_override_runtime"
+                    if append_boxes or structural_input_plan.get("image_hdmap", {}).get("source") != "runtime_dataset_baseline"
+                    else "runtime_surface_observation"
+                ),
                 "limitations": [
-                    "box_positions_are_draft_until_projection_and_scene_geometry_are_verified",
+                    "boxes3d_override_not_applied" if not append_boxes else "box_positions_are_draft_until_projection_and_scene_geometry_are_verified",
                     "hdmap_kept_baseline_without_explicit_verified_override",
                 ],
             },
@@ -359,9 +440,16 @@ class DriveDreamer2Backend(GenerationBackend):
             structural_request_diff.get("missing_requested_labels")
         )
 
+        control_level = (
+            "tensor_override_runtime"
+            if requires_box_synthesis
+            or structural_input_plan.get("image_hdmap", {}).get("source") != "runtime_dataset_baseline"
+            else "runtime_surface_observation"
+        )
+
         return {
             "available": True,
-            "control_level": "tensor_override_runtime",
+            "control_level": control_level,
             "scene_description_action": scene_description_action,
             "actor_label_actions": actor_label_actions,
             "requires_box_synthesis": requires_box_synthesis,
@@ -371,7 +459,7 @@ class DriveDreamer2Backend(GenerationBackend):
                 baseline_structural_snapshot=baseline_structural_snapshot,
             ),
             "requires_hdmap_override": structural_input_plan.get("image_hdmap", {}).get("source")
-            != "mini_dataset_baseline",
+            != "runtime_dataset_baseline",
             "baseline_sources": {
                 "image_hdmap": structural_input_plan.get("image_hdmap", {}).get("source"),
                 "image_box": structural_input_plan.get("image_box", {}).get("source"),
@@ -731,7 +819,7 @@ class DriveDreamer2Backend(GenerationBackend):
 
         return list(dict.fromkeys(labels))
 
-    def _build_baseline_structural_snapshot(self) -> dict:
+    def _build_baseline_structural_snapshot(self, selected_label_index: int | None = None) -> dict:
         dataset_dir = self.baseline_dataset_dir
         snapshot = {
             "dataset_dir": str(dataset_dir),
@@ -751,7 +839,10 @@ class DriveDreamer2Backend(GenerationBackend):
                 "labels_config": self._summarize_config(labels_config),
                 "images_config": self._summarize_config(images_config),
                 "hdmaps_config": self._summarize_config(hdmaps_config),
-                "sample": self._summarize_first_label_sample(dataset_dir / "labels" / "data.pkl"),
+                "sample": self._summarize_first_label_sample(
+                    dataset_dir / "labels" / "data.pkl",
+                    selected_index=selected_label_index,
+                ),
             }
         )
         return snapshot
@@ -777,7 +868,7 @@ class DriveDreamer2Backend(GenerationBackend):
             "config_paths": list(config.get("config_paths", [])),
         }
 
-    def _summarize_first_label_sample(self, path: Path) -> dict:
+    def _summarize_first_label_sample(self, path: Path, selected_index: int | None = None) -> dict:
         if not path.exists():
             return {"available": False, "path": str(path)}
 
@@ -787,7 +878,16 @@ class DriveDreamer2Backend(GenerationBackend):
         if not data:
             return {"available": False, "path": str(path), "reason": "empty_data"}
 
-        sample = data[0]
+        sample_index = int(selected_index or 0)
+        if sample_index < 0 or sample_index >= len(data):
+            return {
+                "available": False,
+                "path": str(path),
+                "selected_label_index": sample_index,
+                "reason": "selected_index_out_of_range",
+            }
+
+        sample = data[sample_index]
         boxes3d = sample.get("boxes3d")
         ori_labels3d = list(sample.get("ori_labels3d", []))
         labels3d = list(sample.get("labels3d", []))
@@ -801,6 +901,11 @@ class DriveDreamer2Backend(GenerationBackend):
         return {
             "available": True,
             "path": str(path),
+            "selected_label_index": sample_index,
+            "sample_token": sample.get("sample_token"),
+            "scene_token": sample.get("scene_token"),
+            "cam_type": sample.get("cam_type"),
+            "frame_idx": sample.get("frame_idx"),
             "scene_description": sample.get("scene_description"),
             "boxes3d_shape": list(boxes3d.shape) if hasattr(boxes3d, "shape") else None,
             "boxes3d_dtype": str(boxes3d.dtype) if hasattr(boxes3d, "dtype") else None,

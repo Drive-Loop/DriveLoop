@@ -193,4 +193,4 @@ def test_runner_carries_alignment_feedback_to_next_backend_request():
     trace = backend.requests[1].condition["dd2_condition"]["executable_condition"]["trace_metadata"]
     assert trace["alignment_feedback"]["status"] == "measured_failed"
     assert trace["alignment_feedback"]["control_level"] == "text_feedback_only"
-    assert trace["tensor_control_ready"] is True
+    assert trace["tensor_control_ready"] is False

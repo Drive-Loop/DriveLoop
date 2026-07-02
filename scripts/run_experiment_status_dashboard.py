@@ -192,8 +192,43 @@ def build_dashboard(
         and candidate70_target_track.get("observation_count") == candidate70_frame_count
     )
 
-    gpu_smoke_allowed = readiness.get("gpu_smoke_allowed") is True
-    semantic_claim_allowed_by_readiness = readiness.get("semantic_claim_allowed") is True
+    legacy_gpu_smoke_allowed = readiness.get("gpu_smoke_allowed") is True
+    candidate70_readiness_active = bool(candidate70_gpu_readiness_gate) and (
+        candidate70_gpu_readiness_gate.get("schema_version") == "driveloop_candidate70_gpu_readiness_gate.v0"
+        or "readiness_status" in candidate70_gpu_readiness_gate
+        or "gpu_smoke_allowed" in candidate70_gpu_readiness_gate
+    )
+    candidate70_gate_gpu_smoke_allowed = candidate70_gpu_readiness_gate.get("gpu_smoke_allowed") is True
+    gpu_smoke_allowed = (
+        candidate70_gate_gpu_smoke_allowed if candidate70_readiness_active else legacy_gpu_smoke_allowed
+    )
+    active_gpu_smoke_readiness_source = (
+        "candidate70_gpu_readiness_gate" if candidate70_readiness_active else "legacy_gpu_smoke_readiness_gate"
+    )
+    legacy_scenario_id = readiness.get("scenario_id") or manifest.get("scenario_id")
+    legacy_prompt = readiness.get("prompt") or manifest.get("prompt")
+    candidate70_scenario_id = (
+        candidate70_gpu_readiness_gate.get("scenario_id")
+        or candidate70_gpu_smoke_plan_draft.get("scenario_id")
+    )
+    candidate70_prompt = (
+        candidate70_gpu_smoke_plan_draft.get("prompt")
+        or candidate70_gpu_smoke_plan_draft.get("accepted_prompt")
+        or candidate70_gpu_smoke_plan_draft.get("selected_prompt")
+    )
+    active_scenario_id = (
+        (candidate70_scenario_id or legacy_scenario_id)
+        if candidate70_readiness_active
+        else legacy_scenario_id
+    )
+    active_prompt = (
+        (candidate70_prompt or legacy_prompt)
+        if candidate70_readiness_active
+        else legacy_prompt
+    )
+    semantic_claim_allowed_by_readiness = (
+        False if candidate70_readiness_active else readiness.get("semantic_claim_allowed") is True
+    )
     candidate_status = manifest.get("candidate_status", "unknown")
     alignment_interpretation = alignment_eval.get("interpretation", {})
     video_semantic_claim = alignment_interpretation.get(
@@ -203,23 +238,39 @@ def build_dashboard(
 
     runtime_changed = runtime_compare.get("runtime_tensor_hash_changed", {})
     motion_claim = motion_gap.get("claim", {})
+    if not isinstance(motion_claim, dict):
+        motion_claim = {}
+    motion_control_status = motion_gap.get("control_path_status", {})
+    if not isinstance(motion_control_status, dict):
+        motion_control_status = {}
     velocity_claim = velocity_audit.get("claim", {})
 
     dashboard_status = "pre_gpu_ready" if gpu_smoke_allowed else "pre_gpu_blocked"
-    if candidate_status == "candidate_video_only":
-        dashboard_status = "candidate_generated"
-    if bundle_status == "review_ready":
-        dashboard_status = "review_ready"
-    if bundle_status == "measured_ready":
-        dashboard_status = "measured_ready"
+    if not candidate70_readiness_active or candidate70_gate_gpu_smoke_allowed:
+        if candidate_status == "candidate_video_only":
+            dashboard_status = "candidate_generated"
+        if bundle_status == "review_ready":
+            dashboard_status = "review_ready"
+        if bundle_status == "measured_ready":
+            dashboard_status = "measured_ready"
 
     return {
         "schema_version": "driveloop_experiment_status_dashboard.v0",
-        "scenario_id": readiness.get("scenario_id") or manifest.get("scenario_id"),
-        "prompt": readiness.get("prompt") or manifest.get("prompt"),
+        "scenario_id": active_scenario_id,
+        "prompt": active_prompt,
         "dashboard_status": dashboard_status,
         "summary": {
             "gpu_smoke_allowed": gpu_smoke_allowed,
+            "legacy_gpu_smoke_allowed": legacy_gpu_smoke_allowed,
+            "active_gpu_smoke_readiness_source": active_gpu_smoke_readiness_source,
+            "active_scenario_id": active_scenario_id,
+            "active_prompt": active_prompt,
+            "legacy_scenario_id": legacy_scenario_id,
+            "legacy_prompt": legacy_prompt,
+            "candidate70_scenario_id": candidate70_scenario_id,
+            "candidate70_prompt": candidate70_prompt,
+            "candidate70_prompt_id": candidate70_gpu_smoke_plan_draft.get("selected_prompt_id"),
+            "candidate70_readiness_active": candidate70_readiness_active,
             "candidate_status": candidate_status,
             "bundle_status": bundle_status,
             "video_semantic_claim": video_semantic_claim,
@@ -228,6 +279,10 @@ def build_dashboard(
             "source_candidate_support_allowed": candidate_audit.get("allowed") is True,
             "object_transfer_status": prompt_object_transfer_audit.get("status", "unknown"),
             "trajectory_runtime_surface_status": trajectory_runtime_surface_audit.get("status", "unknown"),
+            "motion_gap_semantic_lane_change_claim": motion_claim.get("semantic_lane_change_claim"),
+            "motion_gap_semantic_success_claim_allowed": motion_claim.get("semantic_success_claim_allowed"),
+            "motion_gap_boxes3d_target_override": motion_control_status.get("boxes3d_target_override"),
+            "motion_gap_velocity_motion_control": motion_control_status.get("velocity_motion_control"),
             "runtime_surface_code_audit_status": runtime_surface_code_audit.get("status", "unknown"),
             "motion_metadata_runtime_status": motion_metadata_runtime_status,
             "motion_metadata_claim": motion_metadata.get("claim", "unknown"),
@@ -289,7 +344,22 @@ def build_dashboard(
         },
         "audit_signals": {
             "runtime_tensor_hash_changed": runtime_changed,
+            "active_gpu_smoke_readiness_source": active_gpu_smoke_readiness_source,
+            "active_scenario_id": active_scenario_id,
+            "active_prompt": active_prompt,
+            "legacy_scenario_id": legacy_scenario_id,
+            "legacy_prompt": legacy_prompt,
+            "candidate70_scenario_id": candidate70_scenario_id,
+            "candidate70_prompt": candidate70_prompt,
+            "candidate70_prompt_id": candidate70_gpu_smoke_plan_draft.get("selected_prompt_id"),
+            "legacy_gpu_smoke_allowed": legacy_gpu_smoke_allowed,
             "lane_change_motion_tensor_control": motion_claim.get("lane_change_motion_tensor_control"),
+            "semantic_lane_change_claim": motion_claim.get("semantic_lane_change_claim"),
+            "motion_gap_semantic_success_claim_allowed": motion_claim.get("semantic_success_claim_allowed"),
+            "motion_gap_control_path_status": motion_control_status,
+            "boxes3d_target_override": motion_control_status.get("boxes3d_target_override"),
+            "velocity_motion_control": motion_control_status.get("velocity_motion_control"),
+            "image_box_condition": motion_control_status.get("image_box_condition"),
             "velocity_consumed_by_dd2_runtime": velocity_claim.get("velocity_consumed_by_dd2_runtime"),
             "trajectory_or_temporal_motion_verified": False,
             "prompt_conditional_candidate_allowed": candidate_audit.get("allowed") is True,

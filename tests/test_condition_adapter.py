@@ -35,7 +35,7 @@ def test_condition_adapter_builds_executable_condition_schema():
     executable = condition.executable_condition
 
     assert executable["schema_version"] == "dd2_executable_condition.v0"
-    assert executable["target_backend"] == "drivedreamer2_mini"
+    assert executable["target_backend"] == "drivedreamer2_runtime"
     assert executable["text_control"]["prompt"] == condition.text_prompt
 
     assert executable["environment_controls"]["weather"] == "fog"
@@ -55,9 +55,9 @@ def test_condition_adapter_builds_executable_condition_schema():
     assert "low_visibility" in executable["risk_controls"]["long_tail_tags"]
 
     trace = executable["trace_metadata"]
-    assert trace["structural_control_level"] == "tensor_override_contract"
-    assert trace["tensor_control_ready"] is True
-    assert "mini_dataset_structural_inputs_required" in trace["limitations"]
+    assert trace["structural_control_level"] == "runtime_surface_contract"
+    assert trace["tensor_control_ready"] is False
+    assert "runtime_structural_surfaces_observed_not_overridden" in trace["limitations"]
 
 def test_executable_condition_normalizes_cyclist_actor_category():
     request = DriveLoopRequest(
@@ -95,8 +95,8 @@ def test_executable_condition_includes_mini_structural_input_plan():
 
     structural_plan = condition.executable_condition["structural_input_plan"]
 
-    assert structural_plan["target_dataset"] == "drivedreamer2_mini"
-    assert structural_plan["control_level"] == "tensor_override_contract"
+    assert structural_plan["target_dataset"] == "drivedreamer2_runtime"
+    assert structural_plan["control_level"] == "runtime_surface_contract"
 
     assert structural_plan["scene_description"]["source"] == "text_control.prompt"
     assert structural_plan["scene_description"]["value"] == condition.text_prompt
@@ -104,11 +104,11 @@ def test_executable_condition_includes_mini_structural_input_plan():
     assert structural_plan["labels"]["source"] == "actor_controls.category"
     assert structural_plan["labels"]["values"] == ["car", "pedestrian"]
 
-    assert structural_plan["image_hdmap"]["source"] == "mini_dataset_baseline"
-    assert structural_plan["image_box"]["source"] == "derived_from_boxes3d_override"
-    assert structural_plan["image_box"]["override_ready"] is True
-    assert structural_plan["boxes3d"]["source"] == "executable_condition_tensor_override"
-    assert structural_plan["boxes3d"]["override_ready"] is True
+    assert structural_plan["image_hdmap"]["source"] == "runtime_dataset_baseline"
+    assert structural_plan["image_box"]["source"] == "derived_from_runtime_boxes3d_canvas"
+    assert structural_plan["image_box"]["override_ready"] is False
+    assert structural_plan["boxes3d"]["source"] == "runtime_dataset_baseline"
+    assert structural_plan["boxes3d"]["override_ready"] is False
 
     assert "trajectory_tensor_override_not_implemented" in structural_plan["limitations"]
     assert "hdmap_tensor_override_requires_explicit_verified_source" in structural_plan["limitations"]
@@ -134,8 +134,8 @@ def test_executable_condition_carries_alignment_feedback_as_audit_trace_only():
     trace = condition.executable_condition["trace_metadata"]
     feedback = trace["alignment_feedback"]
 
-    assert trace["tensor_control_ready"] is True
-    assert trace["structural_control_level"] == "tensor_override_contract"
+    assert trace["tensor_control_ready"] is False
+    assert trace["structural_control_level"] == "runtime_surface_contract"
     assert feedback["schema_version"] == "driveloop_alignment_feedback.v0"
     assert feedback["status"] == "measured_failed"
     assert feedback["control_level"] == "text_feedback_only"
@@ -158,5 +158,5 @@ def test_executable_condition_includes_trajectory_control_contract_for_lane_chan
     assert "lane_change" in contract["requested_motions"]
     assert contract["requested_maneuvers"][0]["type"] == "lane_change_or_cut_in"
     assert "per_frame_actor_boxes3d" in contract["required_runtime_surfaces"]
-    assert contract["current_runtime_surfaces"]["velocities"] == "dataset_surface_not_dd2_runtime_input"
+    assert contract["current_runtime_surfaces"]["velocities"] == "dataset_surface_observed_not_dd2_condition_tensor"
     assert "cannot prove lane-change video semantics" in contract["claim_boundary"]

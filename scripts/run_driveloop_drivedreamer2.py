@@ -17,6 +17,11 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--output-dir", default="outputs/driveloop/drivedreamer2_backend_demo")
     parser.add_argument("--config-name", default="drivedreamer2_img_cond_mini_local")
     parser.add_argument("--dd2-batch-skip", type=int, default=0)
+    parser.add_argument("--source-candidate-id", default=None)
+    parser.add_argument("--sample-token", default=None)
+    parser.add_argument("--scene-token", default=None)
+    parser.add_argument("--instance-token", default=None)
+    parser.add_argument("--source-identity-summary", default=None)
     parser.add_argument("--baseline-dataset-dir", default=None)
     parser.add_argument("--baseline-output-dir", default=None)
     parser.add_argument("--audit-only", action="store_true")
@@ -43,6 +48,11 @@ def main() -> None:
         baseline_dataset_dir=args.baseline_dataset_dir or "/data/projects/DriveLoop/data/processed/nuscenes/v1.0-mini/cam_all_val/v0.0.2",
         audit_only=args.audit_only,
         batch_skip=args.dd2_batch_skip,
+        source_candidate_id=args.source_candidate_id,
+        sample_token=args.sample_token,
+        scene_token=args.scene_token,
+        instance_token=args.instance_token,
+        source_identity_summary_path=args.source_identity_summary,
     )
 
     result = DriveLoopRunner(backend=backend, config=config).run(request)

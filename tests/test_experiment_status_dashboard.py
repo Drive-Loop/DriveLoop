@@ -38,6 +38,7 @@ def test_dashboard_reports_pre_gpu_ready_without_semantic_claim(tmp_path):
         prompt_object_transfer_audit_path=write_json(tmp_path / "object_transfer.json", {"status": "partially_verified"}),
         trajectory_runtime_surface_audit_path=write_json(tmp_path / "trajectory_surface.json", {"status": "not_runtime_connected"}),
         runtime_surface_code_audit_path=write_json(tmp_path / "runtime_surface_code.json", {"status": "not_runtime_connected"}),
+        candidate70_gpu_readiness_gate_path=tmp_path / "missing_candidate70_gate.json",
     )
 
     assert dashboard["dashboard_status"] == "pre_gpu_ready"
@@ -73,6 +74,7 @@ def test_dashboard_promotes_candidate_and_review_states(tmp_path):
         claim_table_path=tmp_path / "claim.md",
         candidate_audit_path=write_json(tmp_path / "candidate_audit_review.json", {"allowed": True, "status": "allowed"}),
         failure_taxonomy_path=write_json(tmp_path / "taxonomy_review.json", {"taxonomy_labels": ["object_identity_failed"], "intervention_hints": ["audit object transfer"]}),
+        candidate70_gpu_readiness_gate_path=tmp_path / "missing_candidate70_gate.json",
     )
 
     assert dashboard["dashboard_status"] == "review_ready"
@@ -86,7 +88,20 @@ def test_dashboard_surfaces_audit_signals(tmp_path):
     manifest = write_json(tmp_path / "manifest.json", {})
     bundle = write_json(tmp_path / "bundle.json", {})
     runtime = write_json(tmp_path / "runtime.json", {"runtime_tensor_hash_changed": {"prompt_embed": True}})
-    motion = write_json(tmp_path / "motion.json", {"claim": {"lane_change_motion_tensor_control": "not_verified"}})
+    motion = write_json(tmp_path / "motion.json", {
+            "claim": {
+                "lane_change_motion_tensor_control": "not_verified",
+                "semantic_lane_change_claim": "not_allowed",
+                "semantic_success_claim_allowed": False,
+            },
+            "control_path_status": {
+                "trajectory_tensor": "not_implemented",
+                "semantic_lane_change_claim": "not_allowed",
+                "boxes3d_target_override": "not_applied",
+                "velocity_motion_control": "observed_only_not_condition_tensor",
+                "image_box_condition": "connected",
+            },
+        })
     velocity = write_json(tmp_path / "velocity.json", {"claim": {"velocity_consumed_by_dd2_runtime": False}})
 
     dashboard = build_dashboard(
@@ -150,6 +165,7 @@ def test_dashboard_surfaces_measured_failed_alignment_eval(tmp_path):
         velocity_audit_path=tmp_path / "velocity.json",
         evidence_index_path=tmp_path / "index.md",
         claim_table_path=tmp_path / "claim.md",
+        candidate70_gpu_readiness_gate_path=tmp_path / "missing_candidate70_gate.json",
     )
 
     assert dashboard["dashboard_status"] == "measured_ready"
@@ -627,3 +643,123 @@ def test_dashboard_surfaces_candidate70_gpu_smoke_plan_draft(tmp_path):
     assert dashboard["claim_boundary"]["candidate70_gpu_smoke_plan_is_not_gpu_approval"] is True
     assert dashboard["claim_boundary"]["candidate70_gpu_smoke_plan_must_not_run_while_gate_blocked"] is True
     assert dashboard["sources"]["candidate70_gpu_smoke_plan_draft"]["exists"] is True
+
+
+def test_dashboard_candidate70_gate_overrides_legacy_measured_ready(tmp_path):
+    readiness = write_json(
+        tmp_path / "readiness.json",
+        {
+            "scenario_id": "legacy_case",
+            "prompt": "legacy prompt",
+            "gpu_smoke_allowed": True,
+            "semantic_claim_allowed": False,
+        },
+    )
+    manifest = write_json(
+        tmp_path / "manifest.json",
+        {"candidate_status": "candidate_video_only", "video_semantic_claim": "not_measured"},
+    )
+    bundle = write_json(tmp_path / "bundle.json", {"bundle_status": "measured_ready"})
+    alignment = write_json(
+        tmp_path / "alignment.json",
+        {"interpretation": {"video_semantic_claim": "measured_failed"}},
+    )
+    candidate70_gate = write_json(
+        tmp_path / "candidate70_gate.json",
+        {
+            "schema_version": "driveloop_candidate70_gpu_readiness_gate.v0",
+            "readiness_status": "blocked",
+            "gpu_smoke_allowed": False,
+            "blockers": ["runtime_motion_control_not_connected"],
+            "claim_boundary": {
+                "candidate70_readiness_gate_is_not_gpu_approval": True,
+                "candidate70_readiness_gate_is_not_video_semantic_success": True,
+                "accepted_prompt_required_before_generate": True,
+            },
+        },
+    )
+
+    dashboard = build_dashboard(
+        readiness_path=readiness,
+        manifest_path=manifest,
+        bundle_validation_path=bundle,
+        alignment_eval_path=alignment,
+        runtime_compare_path=tmp_path / "runtime.json",
+        motion_gap_path=tmp_path / "motion.json",
+        velocity_audit_path=tmp_path / "velocity.json",
+        evidence_index_path=tmp_path / "index.md",
+        claim_table_path=tmp_path / "claim.md",
+        candidate_audit_path=write_json(tmp_path / "candidate.json", {"allowed": True, "status": "allowed"}),
+        failure_taxonomy_path=write_json(tmp_path / "taxonomy.json", {"taxonomy_labels": [], "intervention_hints": []}),
+        prompt_object_transfer_audit_path=tmp_path / "transfer.json",
+        trajectory_runtime_surface_audit_path=tmp_path / "trajectory.json",
+        runtime_surface_code_audit_path=tmp_path / "runtime_surface.json",
+        motion_metadata_runtime_audit_path=tmp_path / "motion_runtime.json",
+        actor_identity_surface_audit_path=tmp_path / "actor_identity.json",
+        candidate70_converter_identity_summary_path=tmp_path / "identity.json",
+        candidate70_converter_actor_track_audit_path=tmp_path / "actor_track.json",
+        candidate70_hdmap_raster_probe_path=tmp_path / "hdmap_probe.json",
+        candidate70_hdmap_replacement_surface_audit_path=tmp_path / "hdmap_replace.json",
+        candidate70_dry_run_replacement_surface_audit_path=tmp_path / "hdmap_dry.json",
+        candidate70_gpu_readiness_gate_path=candidate70_gate,
+        candidate70_gpu_smoke_plan_draft_path=tmp_path / "plan.json",
+        candidate70_source_sample_binding_readiness_path=tmp_path / "binding.json",
+    )
+
+    assert dashboard["dashboard_status"] == "pre_gpu_blocked"
+    assert dashboard["summary"]["gpu_smoke_allowed"] is False
+    assert dashboard["summary"]["legacy_gpu_smoke_allowed"] is True
+    assert dashboard["summary"]["active_gpu_smoke_readiness_source"] == "candidate70_gpu_readiness_gate"
+    assert dashboard["summary"]["candidate70_readiness_active"] is True
+    assert dashboard["summary"]["candidate70_gpu_smoke_allowed"] is False
+    assert dashboard["summary"]["video_semantic_claim"] == "measured_failed"
+    assert dashboard["audit_signals"]["active_gpu_smoke_readiness_source"] == "candidate70_gpu_readiness_gate"
+
+
+def test_dashboard_uses_candidate70_identity_when_candidate70_gate_is_active(tmp_path):
+    from scripts.run_experiment_status_dashboard import build_dashboard
+
+    def write_json(path, payload):
+        import json
+
+        path.write_text(json.dumps(payload), encoding="utf-8")
+        return path
+
+    candidate70_prompt = "night urban street with a motorcycle making a visible cut-in from the left toward the ego vehicle, panoramic multi-view video."
+
+    dashboard = build_dashboard(
+        readiness_path=write_json(tmp_path / "legacy_gate.json", {"scenario_id": "legacy_case", "prompt": "legacy prompt", "gpu_smoke_allowed": True, "semantic_claim_allowed": True}),
+        manifest_path=write_json(tmp_path / "manifest.json", {"scenario_id": "legacy_manifest", "prompt": "manifest prompt", "candidate_status": "candidate_video_only", "video_semantic_claim": "not_measured"}),
+        bundle_validation_path=write_json(tmp_path / "bundle.json", {"bundle_status": "measured_ready"}),
+        alignment_eval_path=write_json(tmp_path / "alignment.json", {"interpretation": {"video_semantic_claim": "measured_failed"}}),
+        runtime_compare_path=write_json(tmp_path / "runtime_compare.json", {"runtime_tensor_hash_changed": {}}),
+        motion_gap_path=write_json(tmp_path / "motion_gap.json", {"claim": {"semantic_lane_change_claim": "not_allowed", "semantic_success_claim_allowed": False}, "control_path_status": {}}),
+        velocity_audit_path=write_json(tmp_path / "velocity.json", {"claim": {}}),
+        evidence_index_path=tmp_path / "index.md",
+        claim_table_path=tmp_path / "claim.md",
+        candidate_audit_path=write_json(tmp_path / "candidate_audit.json", {}),
+        failure_taxonomy_path=write_json(tmp_path / "taxonomy.json", {}),
+        prompt_object_transfer_audit_path=write_json(tmp_path / "object_transfer.json", {}),
+        trajectory_runtime_surface_audit_path=write_json(tmp_path / "trajectory.json", {}),
+        runtime_surface_code_audit_path=write_json(tmp_path / "runtime_surface.json", {}),
+        motion_metadata_runtime_audit_path=write_json(tmp_path / "motion_metadata.json", {"motion_metadata": {}}),
+        actor_identity_surface_audit_path=write_json(tmp_path / "actor_identity.json", {"claim": {}}),
+        candidate70_converter_identity_summary_path=write_json(tmp_path / "candidate70_identity.json", {}),
+        candidate70_converter_actor_track_audit_path=write_json(tmp_path / "candidate70_tracks.json", {}),
+        candidate70_hdmap_raster_probe_path=write_json(tmp_path / "candidate70_hdmap.json", {}),
+        candidate70_hdmap_replacement_surface_audit_path=write_json(tmp_path / "candidate70_hdmap_replace.json", {}),
+        candidate70_dry_run_replacement_surface_audit_path=write_json(tmp_path / "candidate70_hdmap_dry.json", {}),
+        candidate70_gpu_readiness_gate_path=write_json(tmp_path / "candidate70_gate.json", {"schema_version": "driveloop_candidate70_gpu_readiness_gate.v0", "scenario_id": "candidate70_night_cut_in_gpu_smoke", "readiness_status": "blocked", "gpu_smoke_allowed": False, "blockers": []}),
+        candidate70_gpu_smoke_plan_draft_path=write_json(tmp_path / "candidate70_plan.json", {"scenario_id": "candidate70_night_cut_in_gpu_smoke", "prompt": candidate70_prompt, "selected_prompt_id": "c70_pos_001"}),
+        candidate70_source_sample_binding_readiness_path=write_json(tmp_path / "candidate70_source_binding.json", {}),
+    )
+
+    assert dashboard["scenario_id"] == "candidate70_night_cut_in_gpu_smoke"
+    assert dashboard["prompt"] == candidate70_prompt
+    assert dashboard["dashboard_status"] == "pre_gpu_blocked"
+    assert dashboard["summary"]["active_gpu_smoke_readiness_source"] == "candidate70_gpu_readiness_gate"
+    assert dashboard["summary"]["active_scenario_id"] == "candidate70_night_cut_in_gpu_smoke"
+    assert dashboard["summary"]["active_prompt"] == candidate70_prompt
+    assert dashboard["summary"]["legacy_scenario_id"] == "legacy_case"
+    assert dashboard["summary"]["legacy_prompt"] == "legacy prompt"
+    assert dashboard["summary"]["candidate70_prompt_id"] == "c70_pos_001"

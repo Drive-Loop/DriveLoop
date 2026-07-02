@@ -19,7 +19,20 @@ def test_lane_change_motion_is_not_runtime_connected_with_static_boxes_only():
         "daytime road where a vehicle performs a lane change",
         backend_summary_with_static_boxes(),
         velocity_audit={"claim": {"velocity_consumed_by_dd2_runtime": False}},
-        motion_gap={"claim": {"lane_change_motion_tensor_control": "not_verified"}},
+        motion_gap={
+            "claim": {
+                "lane_change_motion_tensor_control": "not_verified",
+                "semantic_lane_change_claim": "not_allowed",
+                "semantic_success_claim_allowed": False,
+            },
+            "control_path_status": {
+                "trajectory_tensor": "not_implemented",
+                "semantic_lane_change_claim": "not_allowed",
+                "boxes3d_target_override": "not_applied",
+                "velocity_motion_control": "observed_only_not_condition_tensor",
+                "image_box_condition": "connected",
+            },
+        },
     )
 
     assert audit["requested_motions"] == ["lane_change"]

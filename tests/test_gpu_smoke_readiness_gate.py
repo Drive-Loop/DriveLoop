@@ -29,7 +29,20 @@ def test_gpu_smoke_readiness_gate_allows_candidate_video_only(tmp_path: Path):
             }
         },
     )
-    write_json(motion_gap, {"claim": {"lane_change_motion_tensor_control": "not_verified"}})
+    write_json(motion_gap, {
+            "claim": {
+                "lane_change_motion_tensor_control": "not_verified",
+                "semantic_lane_change_claim": "not_allowed",
+                "semantic_success_claim_allowed": False,
+            },
+            "control_path_status": {
+                "trajectory_tensor": "not_implemented",
+                "semantic_lane_change_claim": "not_allowed",
+                "boxes3d_target_override": "not_applied",
+                "velocity_motion_control": "observed_only_not_condition_tensor",
+                "image_box_condition": "connected",
+            },
+        })
     write_json(velocity_surface, {"claim": {"velocity_consumed_by_dd2_runtime": False}})
     trajectory_contract.write_text("contract", encoding="utf-8")
     config.write_text("config", encoding="utf-8")
