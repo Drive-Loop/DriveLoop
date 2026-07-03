@@ -756,3 +756,37 @@ def test_drivedreamer2_runner_exposes_baseline_output_dir():
 
     assert 'parser.add_argument("--baseline-output-dir", default=None)' in script
     assert "baseline_output_dir=args.baseline_output_dir or" in script
+
+
+def test_override_candidate_plan_supports_explicit_boxes3d_probe_without_missing_label():
+    backend = DriveDreamer2Backend(
+        force_boxes3d_probe=True,
+        boxes3d_probe_category="motorcycle",
+    )
+    plan = backend._build_override_candidate_plan(
+        structural_input_plan={
+            "image_hdmap": {"source": "runtime_dataset_baseline"},
+            "image_box": {"source": "runtime_dataset_baseline"},
+            "boxes3d": {"source": "runtime_dataset_baseline"},
+        },
+        structural_request_diff={
+            "available": True,
+            "missing_requested_labels": [],
+            "extra_baseline_labels": [],
+            "requested_scene_description": "night motorcycle cut in",
+            "baseline_scene_description": "night road with motorcycle",
+            "scene_description_changed": True,
+        },
+        baseline_structural_snapshot={},
+    )
+
+    assert plan["requires_box_synthesis"] is True
+    assert plan["force_boxes3d_probe"] is True
+    assert plan["boxes3d_probe_category"] == "motorcycle"
+    assert {"type": "probe_target_box", "label": "motorcycle"} in plan["actor_label_actions"]
+
+    box_plan = plan["box_synthesis_plan"]
+    assert box_plan["available"] is True
+    assert box_plan["actors_to_synthesize"][0]["category"] == "motorcycle"
+    assert box_plan["actors_to_synthesize"][0]["source_action"] == "probe_target_box"
+    assert box_plan["box_synthesis_draft"]["draft_boxes3d"][0]["category"] == "motorcycle"

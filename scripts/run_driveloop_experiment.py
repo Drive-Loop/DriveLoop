@@ -29,6 +29,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--baseline-dataset-dir", default="/data/projects/DriveLoop/data/processed/nuscenes/v1.0-mini/cam_all_val/v0.0.2")
     parser.add_argument("--baseline-output-dir", default="/data/projects/DriveLoop/outputs/drivedreamer2_img_cond_mini")
     parser.add_argument("--audit-only", action="store_true")
+    parser.add_argument("--force-boxes3d-probe", action="store_true")
+    parser.add_argument("--boxes3d-probe-category", default=None)
     parser.add_argument("--timeout-seconds", type=int, default=None)
     args = parser.parse_args(argv)
 
@@ -50,6 +52,8 @@ def main(argv: list[str] | None = None) -> int:
             dd2_instance_token=args.instance_token,
             dd2_source_identity_summary=args.source_identity_summary,
             dd2_timeout_seconds=args.timeout_seconds,
+            dd2_force_boxes3d_probe=args.force_boxes3d_probe,
+            dd2_boxes3d_probe_category=args.boxes3d_probe_category,
         ),
     ).run_cases(load_experiment_cases(args.cases))
     print(json.dumps({

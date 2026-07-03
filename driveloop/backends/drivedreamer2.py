@@ -38,6 +38,8 @@ class DriveDreamer2Backend(GenerationBackend):
         source_selector_hz_factor: int = 3,
         source_selector_video_split_rate: int = 1,
         source_selector_multiview: bool = True,
+        force_boxes3d_probe: bool = False,
+        boxes3d_probe_category: Optional[str] = None,
     ) -> None:
         self.project_root = Path(project_root).resolve()
         self.config_name = config_name
@@ -57,6 +59,8 @@ class DriveDreamer2Backend(GenerationBackend):
         self.source_selector_hz_factor = source_selector_hz_factor
         self.source_selector_video_split_rate = source_selector_video_split_rate
         self.source_selector_multiview = source_selector_multiview
+        self.force_boxes3d_probe = force_boxes3d_probe
+        self.boxes3d_probe_category = boxes3d_probe_category
 
     def generate(self, request: DriveLoopRequest, iteration: int) -> Generation:
         run_artifact_dir = self.artifact_dir
@@ -425,7 +429,6 @@ class DriveDreamer2Backend(GenerationBackend):
             }
             for label in structural_request_diff.get("extra_baseline_labels", [])
         )
-
         scene_description_action = {
             "type": "keep_baseline_text",
             "target_value": structural_request_diff.get("baseline_scene_description"),
@@ -436,9 +439,26 @@ class DriveDreamer2Backend(GenerationBackend):
                 "target_value": structural_request_diff.get("requested_scene_description"),
             }
 
+        boxes3d_plan = structural_input_plan.get("boxes3d", {})
+        force_boxes3d_probe = (
+            boxes3d_plan.get("force_probe") is True
+            if isinstance(boxes3d_plan, dict)
+            else False
+        ) or self.force_boxes3d_probe
+        boxes3d_probe_category = (
+            boxes3d_plan.get("probe_category")
+            if isinstance(boxes3d_plan, dict)
+            else None
+        ) or self.boxes3d_probe_category or "motorcycle"
+        probe_actor_labels = [str(boxes3d_probe_category)] if force_boxes3d_probe else []
+        actor_label_actions.extend(
+            {"type": "probe_target_box", "label": label}
+            for label in probe_actor_labels
+        )
+
         requires_box_synthesis = bool(
             structural_request_diff.get("missing_requested_labels")
-        )
+        ) or force_boxes3d_probe
 
         control_level = (
             "tensor_override_runtime"
@@ -453,10 +473,13 @@ class DriveDreamer2Backend(GenerationBackend):
             "scene_description_action": scene_description_action,
             "actor_label_actions": actor_label_actions,
             "requires_box_synthesis": requires_box_synthesis,
+            "force_boxes3d_probe": force_boxes3d_probe,
+            "boxes3d_probe_category": boxes3d_probe_category if force_boxes3d_probe else None,
             "box_synthesis_plan": self._build_box_synthesis_plan(
                 structural_request_diff=structural_request_diff,
                 requires_box_synthesis=requires_box_synthesis,
                 baseline_structural_snapshot=baseline_structural_snapshot,
+                probe_actor_labels=probe_actor_labels,
             ),
             "requires_hdmap_override": structural_input_plan.get("image_hdmap", {}).get("source")
             != "runtime_dataset_baseline",
@@ -476,6 +499,7 @@ class DriveDreamer2Backend(GenerationBackend):
         structural_request_diff: dict,
         requires_box_synthesis: bool,
         baseline_structural_snapshot: dict | None = None,
+        probe_actor_labels: list[str] | None = None,
     ) -> dict:
         if not requires_box_synthesis:
             return {
@@ -483,15 +507,32 @@ class DriveDreamer2Backend(GenerationBackend):
                 "reason": "box_synthesis_not_required",
             }
 
-        actors_to_synthesize = [
-            {
-                "category": label,
-                "source_action": "add_actor_label",
-                "confidence": "low",
-                "reason": "missing_requested_label",
-            }
-            for label in structural_request_diff.get("missing_requested_labels", [])
-        ]
+        actors_to_synthesize = []
+        seen_actor_labels = set()
+        for label in structural_request_diff.get("missing_requested_labels", []):
+            if label in seen_actor_labels:
+                continue
+            seen_actor_labels.add(label)
+            actors_to_synthesize.append(
+                {
+                    "category": label,
+                    "source_action": "add_actor_label",
+                    "confidence": "low",
+                    "reason": "missing_requested_label",
+                }
+            )
+        for label in probe_actor_labels or []:
+            if label in seen_actor_labels:
+                continue
+            seen_actor_labels.add(label)
+            actors_to_synthesize.append(
+                {
+                    "category": label,
+                    "source_action": "probe_target_box",
+                    "confidence": "audit_only",
+                    "reason": "explicit_boxes3d_probe",
+                }
+            )
         placement_policy = "front_adjacent_lane_cut_in"
         box_template_source = "class_default_dimensions"
 

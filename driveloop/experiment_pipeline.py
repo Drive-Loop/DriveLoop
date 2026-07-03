@@ -51,6 +51,8 @@ class ExperimentPipelineConfig:
     dd2_instance_token: str | None = None
     dd2_source_identity_summary: Any = None
     dd2_timeout_seconds: int | None = None
+    dd2_force_boxes3d_probe: bool = False
+    dd2_boxes3d_probe_category: str | None = None
 
 
 def load_experiment_cases(path: Path | str) -> list[ExperimentCase]:
@@ -112,6 +114,8 @@ class ExperimentPipeline:
                 instance_token=config.dd2_instance_token,
                 source_identity_summary_path=config.dd2_source_identity_summary,
                 timeout_seconds=config.dd2_timeout_seconds,
+                force_boxes3d_probe=config.dd2_force_boxes3d_probe,
+                boxes3d_probe_category=config.dd2_boxes3d_probe_category,
             )
         raise ValueError(f"unsupported experiment backend: {config.backend_name}")
 

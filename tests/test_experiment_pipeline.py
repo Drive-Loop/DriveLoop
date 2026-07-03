@@ -143,3 +143,21 @@ def test_experiment_pipeline_public_api_exports():
     assert PublicExperimentPipeline is ExperimentPipeline
     assert PublicExperimentPipelineConfig is ExperimentPipelineConfig
     assert public_load_experiment_cases is load_experiment_cases
+
+
+def test_experiment_pipeline_config_passes_boxes3d_probe_to_dd2_backend():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        pipeline = ExperimentPipeline(
+            output_dir=root / "run",
+            config=ExperimentPipelineConfig(
+                backend_name="drivedreamer2",
+                dd2_audit_only=True,
+                dd2_force_boxes3d_probe=True,
+                dd2_boxes3d_probe_category="motorcycle",
+            ),
+        )
+        backend = pipeline.backend_factory(root / "artifacts")
+
+    assert backend.force_boxes3d_probe is True
+    assert backend.boxes3d_probe_category == "motorcycle"

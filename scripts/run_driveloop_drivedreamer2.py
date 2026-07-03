@@ -25,6 +25,8 @@ def parse_args() -> argparse.Namespace:
     parser.add_argument("--baseline-dataset-dir", default=None)
     parser.add_argument("--baseline-output-dir", default=None)
     parser.add_argument("--audit-only", action="store_true")
+    parser.add_argument("--force-boxes3d-probe", action="store_true")
+    parser.add_argument("--boxes3d-probe-category", default=None)
     return parser.parse_args()
 
 
@@ -53,6 +55,8 @@ def main() -> None:
         scene_token=args.scene_token,
         instance_token=args.instance_token,
         source_identity_summary_path=args.source_identity_summary,
+        force_boxes3d_probe=args.force_boxes3d_probe,
+        boxes3d_probe_category=args.boxes3d_probe_category,
     )
 
     result = DriveLoopRunner(backend=backend, config=config).run(request)
