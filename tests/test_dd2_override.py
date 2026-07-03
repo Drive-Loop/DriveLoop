@@ -342,3 +342,59 @@ def test_apply_dd2_override_rejects_hdmap_replacement_hash_mismatch(tmp_path):
     assert hdmap_skip["mode"] == "replace_from_path"
     assert hdmap_skip["reason"] == "sha256_mismatch"
     assert hdmap_skip["actual_sha256"] != "0" * 64
+
+
+def test_per_frame_append_matches_sample_identity_before_frame_idx_only_fallback():
+    import numpy as np
+
+    from driveloop.dd2_override import apply_dd2_override_to_sample
+
+    sample = {
+        "frame_idx": 144,
+        "cam_type": "cam_front",
+        "sample_token": "sample-a",
+        "scene_token": "scene-a",
+        "boxes3d": np.zeros((0, 9), dtype=np.float32),
+        "ori_labels3d": [],
+        "labels3d": [],
+    }
+    override = {
+        "schema_version": "driveloop_dd2_override.v0",
+        "boxes3d": {
+            "per_frame_append": [
+                {
+                    "frame_idx": 144,
+                    "sample_identity": {
+                        "cam_type": "cam_front_left",
+                        "frame_idx": 144,
+                        "sample_token": "sample-a",
+                    },
+                    "category": "motorcycle",
+                    "box3d": [1, 2, 3, 0.8, 1.4, 2.2, 0, 0, 0],
+                },
+                {
+                    "relative_frame_idx": 0,
+                    "frame_idx": 144,
+                    "sample_identity": {
+                        "cam_type": "cam_front",
+                        "frame_idx": 144,
+                        "sample_token": "sample-a",
+                    },
+                    "category": "motorcycle",
+                    "box3d": [4, 5, 6, 0.8, 1.4, 2.2, 0, 0, 0],
+                },
+            ]
+        },
+    }
+
+    updated, audit = apply_dd2_override_to_sample(sample, override)
+
+    assert updated["boxes3d"].shape == (1, 9)
+    assert audit["changed"]["boxes3d"] is True
+    applied = [item for item in audit["applied"] if item.get("mode") == "per_frame_append"]
+    assert len(applied) == 1
+    assert applied[0]["accepted_count"] == 1
+    assert applied[0]["skipped_non_matching_count"] == 1
+    accepted = applied[0]["accepted_entries"][0]
+    assert accepted["sample_identity"]["cam_type"] == "cam_front"
+    assert accepted["relative_frame_idx"] == 0

@@ -126,6 +126,7 @@ class DriveDreamer2Backend(GenerationBackend):
             dd2_prompt=dd2_prompt,
             structural_input_plan=structural_input_plan,
             override_candidate_plan=override_candidate_plan,
+            source_sample_binding=source_sample_binding,
         )
         audit_path = run_artifact_dir / f"dd2_runtime_input_audit_{iteration:02d}.json"
         override_audit_path = run_artifact_dir / f"dd2_override_audit_{iteration:02d}.jsonl"
@@ -141,6 +142,8 @@ class DriveDreamer2Backend(GenerationBackend):
             env["DRIVELOOP_DD2_AUDIT_ONLY"] = "1"
         if effective_batch_skip is not None:
             env["DRIVELOOP_DD2_BATCH_SKIP"] = str(effective_batch_skip)
+        if source_sample_binding.get("ready") is True:
+            env["DRIVELOOP_DD2_SOURCE_BOUND"] = "1"
         if override_json.get("available"):
             env["DRIVELOOP_DD2_OVERRIDE_JSON"] = json.dumps(override_json, sort_keys=True)
             env["DRIVELOOP_DD2_OVERRIDE_AUDIT_PATH"] = str(override_audit_path)
@@ -276,11 +279,135 @@ class DriveDreamer2Backend(GenerationBackend):
             multiview=self.source_selector_multiview,
         )
 
+    def _build_source_bound_sample_identities(
+        self,
+        source_sample_binding: dict | None,
+    ) -> list[dict]:
+        if not isinstance(source_sample_binding, dict) or source_sample_binding.get("ready") is not True:
+            return []
+
+        labels_path_value = source_sample_binding.get("labels_path")
+        dd2_batch_skip = source_sample_binding.get("dd2_batch_skip")
+        if labels_path_value is None or dd2_batch_skip is None:
+            return []
+
+        try:
+            from scripts.run_dd2_batch_sampler_audit import (
+                candidate_camera_starts,
+                load_records,
+                selected_frame_indices,
+            )
+
+            labels_path = Path(labels_path_value)
+            records = load_records(labels_path)
+            starts = candidate_camera_starts(
+                records,
+                frame_num=self.source_selector_frame_num,
+                hz_factor=self.source_selector_hz_factor,
+                video_split_rate=self.source_selector_video_split_rate,
+                multiview=self.source_selector_multiview,
+            )
+            selected_indices = selected_frame_indices(
+                starts[int(dd2_batch_skip)],
+                frame_num=self.source_selector_frame_num,
+                hz_factor=self.source_selector_hz_factor,
+            )
+        except Exception as exc:
+            return [
+                {
+                    "available": False,
+                    "reason": "source_bound_frame_mapping_failed",
+                    "error": f"{type(exc).__name__}: {exc}",
+                }
+            ]
+
+        identities = []
+        for position, record_index in enumerate(selected_indices):
+            if record_index < 0 or record_index >= len(records):
+                continue
+            record = records[record_index]
+            identities.append(
+                {
+                    "relative_step": int(position % self.source_selector_frame_num),
+                    "record_index": int(record_index),
+                    "frame_idx": record.get("frame_idx"),
+                    "cam_type": record.get("cam_type"),
+                    "sample_token": record.get("sample_token"),
+                    "scene_token": record.get("scene_token"),
+                }
+            )
+        return identities
+
+    def _map_per_frame_actor_boxes_to_source_bound_samples(
+        self,
+        per_frame_boxes: list[dict],
+        source_sample_binding: dict | None,
+    ) -> tuple[list[dict], dict]:
+        identities = self._build_source_bound_sample_identities(source_sample_binding)
+        mapping_errors = [item for item in identities if item.get("available") is False]
+        valid_identities = [item for item in identities if item.get("available") is not False]
+
+        if not per_frame_boxes:
+            return [], {"available": False, "reason": "no_per_frame_actor_boxes3d"}
+        if not valid_identities:
+            return (
+                [dict(entry) for entry in per_frame_boxes],
+                {
+                    "available": False,
+                    "reason": "no_source_bound_sample_identity_mapping",
+                    "errors": mapping_errors,
+                },
+            )
+
+        identities_by_step: dict[int, list[dict]] = {}
+        for identity in valid_identities:
+            identities_by_step.setdefault(int(identity["relative_step"]), []).append(identity)
+
+        mapped_entries = []
+        unmapped_relative_steps = []
+        for entry in per_frame_boxes:
+            relative_step = int(entry.get("frame_idx"))
+            matches = identities_by_step.get(relative_step, [])
+            if not matches:
+                unmapped_relative_steps.append(relative_step)
+                continue
+
+            for identity in matches:
+                mapped = dict(entry)
+                mapped["relative_frame_idx"] = relative_step
+                mapped["frame_idx"] = identity.get("frame_idx")
+                mapped["sample_identity"] = {
+                    "cam_type": identity.get("cam_type"),
+                    "frame_idx": identity.get("frame_idx"),
+                    "sample_token": identity.get("sample_token"),
+                    "scene_token": identity.get("scene_token"),
+                }
+                mapped["source_record_index"] = identity.get("record_index")
+                mapped["frame_mapping"] = {
+                    "mode": "source_bound_relative_step_to_sample_identity",
+                    "relative_step": relative_step,
+                }
+                mapped_entries.append(mapped)
+
+        return (
+            mapped_entries,
+            {
+                "available": True,
+                "mode": "source_bound_relative_step_to_sample_identity",
+                "source_identity_count": len(valid_identities),
+                "input_per_frame_count": len(per_frame_boxes),
+                "mapped_entry_count": len(mapped_entries),
+                "unmapped_relative_frame_idx": sorted(set(unmapped_relative_steps)),
+                "claim_boundary": "Frame mapping connects structural actor boxes to source-bound DD2 samples; it is not video semantic proof.",
+            },
+        )
+
     def _build_override_json(
         self,
         dd2_prompt: str | None,
         structural_input_plan: dict,
         override_candidate_plan: dict,
+        source_sample_binding: dict | None = None,
     ) -> dict:
         if not isinstance(structural_input_plan, dict) or not structural_input_plan:
             return {
@@ -326,6 +453,19 @@ class DriveDreamer2Backend(GenerationBackend):
                     "motion_surface": entry.get("motion_surface"),
                     "maneuver": entry.get("maneuver"),
                 }
+            )
+
+        actor_motion_frame_mapping = {
+            "available": False,
+            "reason": "no_actor_motion_per_frame_entries",
+        }
+        if per_frame_append_boxes:
+            (
+                per_frame_append_boxes,
+                actor_motion_frame_mapping,
+            ) = self._map_per_frame_actor_boxes_to_source_bound_samples(
+                per_frame_append_boxes,
+                source_sample_binding,
             )
 
         scene_description = structural_input_plan.get("scene_description", {})
@@ -375,6 +515,7 @@ class DriveDreamer2Backend(GenerationBackend):
                     if append_boxes or per_frame_append_boxes or structural_input_plan.get("image_hdmap", {}).get("source") != "runtime_dataset_baseline"
                     else "runtime_surface_observation"
                 ),
+                "actor_motion_frame_mapping": actor_motion_frame_mapping,
                 "limitations": [
                     "boxes3d_override_not_applied" if not append_boxes and not per_frame_append_boxes else "box_positions_are_draft_until_projection_and_scene_geometry_are_verified",
                     "actor_motion_surface_not_applied" if not per_frame_append_boxes else "per_frame_actor_boxes3d_runtime_surface_connected",

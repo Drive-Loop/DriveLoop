@@ -31,8 +31,10 @@ def test_build_report_points_to_video_and_contact_sheet():
         prompt="daytime urban road with a motorcycle changing lane from the left",
     )
 
-    assert report["status"] == "measured"
+    assert report["status"] == "not_measured"
     assert report["source"] == "manual_review_frame_pack_v0"
     assert report["review_scope"]["video"] == "outputs/example/iteration_00.mp4"
     assert report["review_scope"]["contact_sheet"] == "outputs/example/contact_sheet.jpg"
     assert report["checks"][0]["name"] == "object_presence.motorcycle"
+    assert report["semantic_success_claim_allowed"] is False
+    assert report["claim_boundary"]["template_is_not_measured_review"] is True

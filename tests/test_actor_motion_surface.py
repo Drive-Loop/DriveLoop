@@ -106,3 +106,61 @@ def test_backend_override_json_carries_actor_motion_surface_to_per_frame_append(
     assert len(override_json["boxes3d"]["per_frame_append"]) == 4
     assert override_json["audit"]["control_level"] == "tensor_override_runtime"
     assert "per_frame_actor_boxes3d_runtime_surface_connected" in override_json["audit"]["limitations"]
+
+
+def test_backend_maps_actor_motion_surface_to_source_bound_sample_identity():
+    backend = DriveDreamer2Backend()
+    backend._build_source_bound_sample_identities = lambda binding: [
+        {"relative_step": 0, "record_index": 24, "cam_type": "cam_front", "frame_idx": 144, "sample_token": "s0", "scene_token": "scene"},
+        {"relative_step": 1, "record_index": 25, "cam_type": "cam_front", "frame_idx": 145, "sample_token": "s1", "scene_token": "scene"},
+        {"relative_step": 2, "record_index": 26, "cam_type": "cam_front", "frame_idx": 146, "sample_token": "s2", "scene_token": "scene"},
+        {"relative_step": 3, "record_index": 27, "cam_type": "cam_front", "frame_idx": 147, "sample_token": "s3", "scene_token": "scene"},
+    ]
+
+    actor_motion_plan = build_actor_motion_plan(
+        actor_controls=[
+            {
+                "actor_id": "actor_00",
+                "category": "motorcycle",
+                "source_category": "motorcycle",
+            }
+        ],
+        relations=["left"],
+        motion_primitives=["cut_in"],
+        executable_controls={"target_object_support": {"category": "motorcycle"}},
+    )
+    structural_input_plan = {
+        "scene_description": {
+            "source": "text_control.prompt",
+            "value": "realistic night urban street with a motorcycle cut-in.",
+        },
+        "image_hdmap": {"source": "runtime_dataset_baseline"},
+        "image_box": {"source": "derived_from_boxes3d_override"},
+        "boxes3d": {"source": "executable_condition_tensor_override"},
+    }
+    candidate_plan = backend._build_override_candidate_plan(
+        structural_input_plan=structural_input_plan,
+        structural_request_diff={
+            "available": True,
+            "missing_requested_labels": [],
+            "extra_baseline_labels": [],
+            "baseline_scene_description": "baseline",
+            "requested_scene_description": "realistic night urban street with a motorcycle cut-in.",
+            "scene_description_changed": True,
+        },
+        baseline_structural_snapshot={},
+        actor_motion_plan=actor_motion_plan,
+    )
+
+    override_json = backend._build_override_json(
+        dd2_prompt="realistic night urban street with a motorcycle cut-in.",
+        structural_input_plan=structural_input_plan,
+        override_candidate_plan=candidate_plan,
+        source_sample_binding={"ready": True},
+    )
+
+    mapped = override_json["boxes3d"]["per_frame_append"]
+    assert [entry["relative_frame_idx"] for entry in mapped] == [0, 1, 2, 3]
+    assert [entry["frame_idx"] for entry in mapped] == [144, 145, 146, 147]
+    assert all(entry["sample_identity"]["cam_type"] == "cam_front" for entry in mapped)
+    assert override_json["audit"]["actor_motion_frame_mapping"]["mapped_entry_count"] == 4

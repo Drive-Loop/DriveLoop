@@ -130,3 +130,40 @@ def test_script_evaluation_marks_failed_external_alignment_report(tmp_path: Path
 
     assert payload["evaluation"]["diagnosis"]["passed"] is False
     assert payload["interpretation"]["video_semantic_claim"] == "measured_failed"
+
+
+def test_script_evaluation_rejects_not_measured_report_template(tmp_path: Path):
+    video_path = tmp_path / "iteration_00.mp4"
+    video_path.write_bytes(b"fake video bytes")
+    report_path = tmp_path / "alignment_report_template.json"
+    report_path.write_text(
+        json.dumps(
+            {
+                "status": "not_measured",
+                "source": "manual_review_frame_pack_v0",
+                "checks": [
+                    {
+                        "name": "object_presence.motorcycle",
+                        "required": True,
+                        "passed": False,
+                        "score": 0.0,
+                    }
+                ],
+            }
+        ),
+        encoding="utf-8",
+    )
+
+    generation = build_generation(
+        Namespace(
+            prompt="daytime urban road with a motorcycle changing lane from the left",
+            scenario_id="unit_not_measured_template",
+            video_path=str(video_path),
+            alignment_report=str(report_path),
+        )
+    )
+
+    payload = evaluate_generation(generation, pass_threshold=0.8)
+
+    assert payload["evaluation"]["diagnosis"]["passed"] is False
+    assert payload["interpretation"]["video_semantic_claim"] == "not_measured"

@@ -176,13 +176,30 @@ def read_override_audit(path: str | Path) -> dict[str, Any]:
     }
 
 
-def _frame_idx_matches(expected: Any, actual: Any) -> bool:
+def _identity_value_matches(expected: Any, actual: Any) -> bool:
     if expected is None or actual is None:
         return False
     try:
         return int(expected) == int(actual)
     except (TypeError, ValueError):
-        return str(expected) == str(actual)
+        return str(expected).lower() == str(actual).lower()
+
+
+def _frame_idx_matches(expected: Any, actual: Any) -> bool:
+    return _identity_value_matches(expected, actual)
+
+
+def _sample_identity_matches(expected: dict[str, Any], data_dict: dict[str, Any]) -> bool:
+    for key in ("cam_type", "frame_idx"):
+        if not _identity_value_matches(expected.get(key), data_dict.get(key)):
+            return False
+
+    for key in ("sample_token", "scene_token"):
+        if key in expected and data_dict.get(key) is not None:
+            if not _identity_value_matches(expected.get(key), data_dict.get(key)):
+                return False
+
+    return True
 
 
 def _select_per_frame_append_entries(
@@ -200,6 +217,20 @@ def _select_per_frame_append_entries(
         if not isinstance(entry, dict):
             skipped.append({"reason": "per_frame_entry_must_be_dict"})
             continue
+
+        sample_identity = entry.get("sample_identity")
+        if isinstance(sample_identity, dict):
+            if not _sample_identity_matches(sample_identity, data_dict):
+                skipped.append({
+                    "reason": "sample_identity_mismatch",
+                    "entry_sample_identity": sample_identity,
+                    "sample_frame_idx": frame_idx,
+                    "sample_cam_type": data_dict.get("cam_type"),
+                })
+                continue
+            selected.append(entry)
+            continue
+
         if not _frame_idx_matches(entry.get("frame_idx"), frame_idx):
             skipped.append({
                 "reason": "frame_idx_mismatch",
@@ -249,6 +280,12 @@ def _append_boxes3d(
         }
         if "frame_idx" in entry:
             accepted_entry["frame_idx"] = entry.get("frame_idx")
+        if "relative_frame_idx" in entry:
+            accepted_entry["relative_frame_idx"] = entry.get("relative_frame_idx")
+        if "sample_identity" in entry:
+            accepted_entry["sample_identity"] = entry.get("sample_identity")
+        if "source_record_index" in entry:
+            accepted_entry["source_record_index"] = entry.get("source_record_index")
         accepted_entries.append(accepted_entry)
 
     if additions:

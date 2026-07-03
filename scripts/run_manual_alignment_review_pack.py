@@ -37,15 +37,21 @@ def default_checks() -> List[Dict[str, Any]]:
 
 def build_report(video_path: Path, contact_sheet: Path, prompt: str) -> Dict[str, Any]:
     return {
-        "status": "measured",
+        "status": "not_measured",
         "source": "manual_review_frame_pack_v0",
         "review_scope": {
             "video": str(video_path),
             "contact_sheet": str(contact_sheet),
             "prompt": prompt,
-            "note": "Template defaults to failed until a human reviewer inspects the frame pack and updates evidence.",
+            "note": "Template defaults to not_measured until a human reviewer inspects the frame pack and updates evidence.",
         },
         "checks": default_checks(),
+        "semantic_success_claim_allowed": False,
+        "claim_boundary": {
+            "template_is_not_measured_review": True,
+            "manual_report_requires_reviewer_updates": True,
+            "semantic_success_claim_allowed": False,
+        },
     }
 
 

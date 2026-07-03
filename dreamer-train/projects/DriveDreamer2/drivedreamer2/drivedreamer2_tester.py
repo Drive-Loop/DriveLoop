@@ -82,7 +82,12 @@ class DriveDreamer2_Tester(Tester):
 
         target_batch_skip_requested = "DRIVELOOP_DD2_BATCH_SKIP" in os.environ
         target_batch_skip = int(os.environ.get("DRIVELOOP_DD2_BATCH_SKIP", "0"))
-        if target_batch_skip_requested and target_batch_skip > 0 and 'Video' in data_config.type:
+        source_bound_requested = os.environ.get("DRIVELOOP_DD2_SOURCE_BOUND") == "1"
+        if (
+            target_batch_skip_requested
+            and (target_batch_skip > 0 or source_bound_requested)
+            and 'Video' in data_config.type
+        ):
             selected_indices = _driveloop_selected_video_indices(
                 data_config,
                 batch_skip=target_batch_skip,
