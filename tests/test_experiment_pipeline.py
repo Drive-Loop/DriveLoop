@@ -94,6 +94,43 @@ def test_experiment_cli_runs_mock_pipeline():
     assert summary["case_count"] == 1
     assert summary["claim_boundary"]["experiment_summary_is_not_video_semantic_success"] is True
 
+
+def test_experiment_pipeline_builds_drivedreamer2_backend_factory():
+    from driveloop.backends import DriveDreamer2Backend
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        pipeline = ExperimentPipeline(
+            output_dir=root / "run",
+            config=ExperimentPipelineConfig(
+                backend_name="drivedreamer2",
+                dd2_project_root=".",
+                dd2_config_name="cfg",
+                dd2_baseline_output_dir="baseline_out",
+                dd2_baseline_dataset_dir="dataset",
+                dd2_audit_only=True,
+                dd2_batch_skip=7,
+                dd2_source_candidate_id="candidate70",
+                dd2_instance_token="instance-token",
+                dd2_source_identity_summary="summary.json",
+                dd2_timeout_seconds=12,
+            ),
+        )
+        backend = pipeline.backend_factory(root / "artifacts")
+
+    assert isinstance(backend, DriveDreamer2Backend)
+    assert backend.config_name == "cfg"
+    assert backend.artifact_dir == root / "artifacts"
+    assert backend.baseline_output_dir == Path("baseline_out")
+    assert backend.baseline_dataset_dir == Path("dataset")
+    assert backend.audit_only is True
+    assert backend.batch_skip == 7
+    assert backend.source_candidate_id == "candidate70"
+    assert backend.instance_token == "instance-token"
+    assert backend.source_identity_summary_path == Path("summary.json")
+    assert backend.timeout_seconds == 12
+
+
 def test_experiment_pipeline_public_api_exports():
     from driveloop import (
         ExperimentCase as PublicExperimentCase,

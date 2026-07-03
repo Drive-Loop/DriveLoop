@@ -6,7 +6,7 @@ from dataclasses import asdict, dataclass, field, is_dataclass
 from pathlib import Path
 from typing import Any, Callable, Iterable
 
-from driveloop.backends import MockGenerationBackend
+from driveloop.backends import DriveDreamer2Backend, MockGenerationBackend
 from driveloop.runner import DriveLoopRunner
 from driveloop.schema import DriveLoopConfig, DriveLoopRequest
 
@@ -39,6 +39,18 @@ class ExperimentPipelineConfig:
     max_iterations: int = 3
     target_score: float = 0.8
     backend_name: str = "mock"
+    dd2_project_root: Any = "."
+    dd2_config_name: str = "drivedreamer2_img_cond_mini_local"
+    dd2_baseline_output_dir: Any = "/data/projects/DriveLoop/outputs/drivedreamer2_img_cond_mini"
+    dd2_baseline_dataset_dir: Any = "/data/projects/DriveLoop/data/processed/nuscenes/v1.0-mini/cam_all_val/v0.0.2"
+    dd2_audit_only: bool = False
+    dd2_batch_skip: int = 0
+    dd2_source_candidate_id: str | None = None
+    dd2_sample_token: str | None = None
+    dd2_scene_token: str | None = None
+    dd2_instance_token: str | None = None
+    dd2_source_identity_summary: Any = None
+    dd2_timeout_seconds: int | None = None
 
 
 def load_experiment_cases(path: Path | str) -> list[ExperimentCase]:
@@ -76,9 +88,32 @@ class ExperimentPipeline:
     ) -> None:
         self.output_dir = Path(output_dir)
         self.config = config or ExperimentPipelineConfig()
-        self.backend_factory = backend_factory or (
-            lambda artifact_dir: MockGenerationBackend(output_dir=artifact_dir)
+        self.backend_factory = (
+            backend_factory
+            if backend_factory is not None
+            else self._build_backend_factory(self.config)
         )
+
+    def _build_backend_factory(self, config: ExperimentPipelineConfig) -> Callable[[Path], Any]:
+        if config.backend_name == "mock":
+            return lambda artifact_dir: MockGenerationBackend(output_dir=artifact_dir)
+        if config.backend_name == "drivedreamer2":
+            return lambda artifact_dir: DriveDreamer2Backend(
+                project_root=config.dd2_project_root,
+                config_name=config.dd2_config_name,
+                artifact_dir=artifact_dir,
+                baseline_output_dir=config.dd2_baseline_output_dir,
+                baseline_dataset_dir=config.dd2_baseline_dataset_dir,
+                audit_only=config.dd2_audit_only,
+                batch_skip=config.dd2_batch_skip,
+                source_candidate_id=config.dd2_source_candidate_id,
+                sample_token=config.dd2_sample_token,
+                scene_token=config.dd2_scene_token,
+                instance_token=config.dd2_instance_token,
+                source_identity_summary_path=config.dd2_source_identity_summary,
+                timeout_seconds=config.dd2_timeout_seconds,
+            )
+        raise ValueError(f"unsupported experiment backend: {config.backend_name}")
 
     def run_cases(self, cases: Iterable[ExperimentCase]) -> dict[str, Any]:
         case_list = list(cases)
@@ -95,6 +130,9 @@ class ExperimentPipeline:
             "claim_boundary": {
                 "experiment_summary_is_not_video_semantic_success": True,
                 "mock_backend_is_not_dd2_gpu_evidence": self.config.backend_name == "mock",
+                "dd2_audit_only_is_not_video_semantic_success": (
+                    self.config.backend_name == "drivedreamer2" and self.config.dd2_audit_only
+                ),
                 "semantic_success_requires_measured_passed_alignment_eval": True,
             },
             "cases": records,
@@ -129,8 +167,11 @@ class ExperimentPipeline:
                 f.write(json.dumps(attempt, ensure_ascii=False, default=_json_default) + "\n")
 
         accepted = any(attempt.get("status") == "accepted" for attempt in attempt_records)
+        backend_metadata = result.best_generation.metadata
+        dd2_audit_only = backend_metadata.get("dd2_audit_only") is True
         semantic_claim_allowed = (
             self.config.backend_name != "mock"
+            and not dd2_audit_only
             and bool(result.best_evaluation.diagnosis.passed)
         )
         record = {
@@ -146,11 +187,17 @@ class ExperimentPipeline:
             "claim_boundary": {
                 "experiment_case_record_is_not_video_semantic_success": True,
                 "mock_backend_is_not_dd2_gpu_evidence": self.config.backend_name == "mock",
+                "dd2_audit_only_is_not_video_semantic_success": dd2_audit_only,
                 "semantic_success_requires_measured_passed_alignment_eval": True,
                 "semantic_success_claim_allowed": semantic_claim_allowed,
                 "source_selection_ready": any(
                     attempt.get("source_selection", {}).get("ready") is True
                     for attempt in attempt_records
+                ),
+                "dd2_source_sample_binding_ready": (
+                    backend_metadata.get("dd2_source_sample_binding", {}).get("ready") is True
+                    if isinstance(backend_metadata.get("dd2_source_sample_binding"), dict)
+                    else False
                 ),
                 "perception_evaluation_enabled": bool(
                     case.metadata.get("perception_evaluation", {}).get("enabled")
