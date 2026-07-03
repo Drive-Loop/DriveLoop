@@ -56,8 +56,10 @@ def test_condition_adapter_builds_executable_condition_schema():
 
     trace = executable["trace_metadata"]
     assert trace["structural_control_level"] == "runtime_surface_contract"
-    assert trace["tensor_control_ready"] is False
-    assert "runtime_structural_surfaces_observed_not_overridden" in trace["limitations"]
+    assert trace["tensor_control_ready"] is True
+    assert trace["actor_motion_surface_ready"] is True
+    assert "actor_motion_connected_via_per_frame_boxes3d" in trace["limitations"]
+    assert "velocity_or_displacement_tensor_not_connected" in trace["limitations"]
 
 def test_executable_condition_normalizes_cyclist_actor_category():
     request = DriveLoopRequest(
@@ -134,7 +136,8 @@ def test_executable_condition_carries_alignment_feedback_as_audit_trace_only():
     trace = condition.executable_condition["trace_metadata"]
     feedback = trace["alignment_feedback"]
 
-    assert trace["tensor_control_ready"] is False
+    assert trace["tensor_control_ready"] is True
+    assert trace["actor_motion_surface_ready"] is True
     assert trace["structural_control_level"] == "runtime_surface_contract"
     assert feedback["schema_version"] == "driveloop_alignment_feedback.v0"
     assert feedback["status"] == "measured_failed"
@@ -153,8 +156,8 @@ def test_executable_condition_includes_trajectory_control_contract_for_lane_chan
     contract = condition.executable_condition["trajectory_control_contract"]
 
     assert contract["schema_version"] == "driveloop_trajectory_control_contract.v0"
-    assert contract["status"] == "not_runtime_connected"
-    assert contract["control_level"] == "contract_only"
+    assert contract["status"] == "runtime_connected_via_per_frame_actor_boxes3d"
+    assert contract["control_level"] == "per_frame_actor_boxes3d_surface"
     assert "lane_change" in contract["requested_motions"]
     assert contract["requested_maneuvers"][0]["type"] == "lane_change_or_cut_in"
     assert "per_frame_actor_boxes3d" in contract["required_runtime_surfaces"]
@@ -184,4 +187,4 @@ def test_executable_condition_carries_structured_motorcycle_longtail_controls():
     trajectory = condition.executable_condition["trajectory_control_contract"]
     assert "lane_change" in trajectory["requested_motions"]
     assert trajectory["requested_maneuvers"][0]["type"] == "lane_change_or_cut_in"
-    assert trajectory["status"] == "not_runtime_connected"
+    assert trajectory["status"] == "runtime_connected_via_per_frame_actor_boxes3d"

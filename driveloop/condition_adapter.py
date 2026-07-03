@@ -3,6 +3,7 @@ from __future__ import annotations
 from dataclasses import dataclass, field
 from typing import Any, Dict, List, Optional
 
+from driveloop.actor_motion import build_actor_motion_plan
 from driveloop.schema import LongTailConditionPlan, SceneSpecification
 
 
@@ -101,6 +102,12 @@ class DriveDreamer2ConditionAdapter:
             text_prompt=text_prompt,
             actor_controls=actor_controls,
         )
+        actor_motion_plan = build_actor_motion_plan(
+            actor_controls=actor_controls,
+            relations=relations,
+            motion_primitives=motion_primitives,
+            executable_controls=executable_controls,
+        )
 
         trace_metadata: Dict[str, Any] = {
             "structural_control_level": "runtime_surface_contract",
@@ -113,6 +120,28 @@ class DriveDreamer2ConditionAdapter:
                 "hdmap_tensor_control_requires_explicit_verified_source",
             ],
         }
+        actor_motion_surface_available = actor_motion_plan.get("available") is True
+        trace_metadata["actor_motion_surface_ready"] = actor_motion_surface_available
+        if actor_motion_surface_available:
+            trace_metadata["tensor_control_ready"] = True
+            trace_metadata["limitations"] = [
+                item
+                for item in trace_metadata["limitations"]
+                if item
+                not in {
+                    "runtime_structural_surfaces_observed_not_overridden",
+                    "boxes3d_override_not_applied",
+                    "trajectory_tensor_control_not_connected",
+                    "actor_track_identity_not_observed",
+                }
+            ]
+            trace_metadata["limitations"].extend(
+                [
+                    "actor_motion_connected_via_per_frame_boxes3d",
+                    "velocity_or_displacement_tensor_not_connected",
+                ]
+            )
+
         if isinstance(alignment_feedback, dict) and alignment_feedback:
             trace_metadata["alignment_feedback"] = {
                 "schema_version": alignment_feedback.get("schema_version"),
@@ -132,6 +161,7 @@ class DriveDreamer2ConditionAdapter:
             actor_controls=actor_controls,
             relations=relations,
             motion_primitives=motion_primitives,
+            actor_motion_plan=actor_motion_plan,
         )
 
         return {
@@ -142,6 +172,7 @@ class DriveDreamer2ConditionAdapter:
             },
             "structural_input_plan": structural_input_plan,
             "trajectory_control_contract": trajectory_control_contract,
+            "actor_motion_plan": actor_motion_plan,
             "environment_controls": {
                 "weather": environment.get("weather", "unspecified"),
                 "lighting": environment.get("lighting", "unspecified"),
@@ -162,6 +193,7 @@ class DriveDreamer2ConditionAdapter:
         actor_controls: List[Dict[str, Any]],
         relations: List[str],
         motion_primitives: List[str],
+        actor_motion_plan: Dict[str, Any] | None = None,
     ) -> Dict[str, Any]:
         requested_motions = list(dict.fromkeys(motion_primitives))
         requested_relations = list(dict.fromkeys(relations))
@@ -180,10 +212,20 @@ class DriveDreamer2ConditionAdapter:
                 }
             )
 
+        actor_motion_surface_available = (
+            isinstance(actor_motion_plan, dict)
+            and actor_motion_plan.get("available") is True
+            and actor_motion_plan.get("runtime_surface", {}).get("type") == "boxes3d.per_frame_append"
+        )
+
         return {
             "schema_version": "driveloop_trajectory_control_contract.v0",
-            "status": "not_runtime_connected",
-            "control_level": "contract_only",
+            "status": "runtime_connected_via_per_frame_actor_boxes3d"
+            if actor_motion_surface_available
+            else "not_runtime_connected",
+            "control_level": "per_frame_actor_boxes3d_surface"
+            if actor_motion_surface_available
+            else "contract_only",
             "actor_refs": [actor["actor_id"] for actor in actor_controls],
             "requested_motions": requested_motions,
             "requested_relations": requested_relations,
@@ -196,14 +238,26 @@ class DriveDreamer2ConditionAdapter:
                 "temporal_consistency_audit",
             ],
             "current_runtime_surfaces": {
-                "boxes3d": "runtime_dataset_surface_observed_not_override",
-                "image_box": "derived_from_runtime_boxes3d_canvas_not_target_control",
+                "boxes3d": "per_frame_runtime_override_surface_connected"
+                if actor_motion_surface_available
+                else "runtime_dataset_surface_observed_not_override",
+                "image_box": "derived_from_per_frame_boxes3d_after_override"
+                if actor_motion_surface_available
+                else "derived_from_runtime_boxes3d_canvas_not_target_control",
+                "per_frame_actor_boxes3d": "boxes3d.per_frame_append"
+                if actor_motion_surface_available
+                else "not_observed",
                 "velocities": "dataset_surface_observed_not_dd2_condition_tensor",
-                "actor_track_identity": "not_observed",
+                "actor_track_identity": "synthetic_drive_loop_actor_track"
+                if actor_motion_surface_available
+                else "not_observed",
                 "hdmap_lane_geometry": "runtime_dataset_baseline",
             },
             "claim_boundary": (
-                "This contract records the evidence required for trajectory control; "
+                "This contract is connected to DD2 through per-frame actor boxes3d structural conditioning; "
+                "it does not provide velocity/displacement tensors and cannot prove lane-change video semantics."
+                if actor_motion_surface_available
+                else "This contract records the evidence required for trajectory control; "
                 "it is not connected to DD2 runtime tensors and cannot prove lane-change video semantics."
             ),
         }

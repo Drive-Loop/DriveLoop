@@ -236,7 +236,7 @@ def test_runner_records_paper_attempt_state():
     assert attempt.dd2_condition["text_prompt"].startswith("night realistic autonomous driving scene")
     assert attempt.dd2_condition["executable_condition"]["schema_version"] == "dd2_executable_condition.v0"
     assert attempt.condition_package["schema_version"] == "driveloop_attempt_condition_package.v0"
-    assert "trajectory_control" in attempt.condition_package["unsupported_controls"]
+    assert "trajectory_control" not in attempt.condition_package["unsupported_controls"]
     assert attempt.generation == generation
     assert attempt.evaluation == evaluation
     assert attempt.claim_boundary["attempt_record_is_not_video_semantic_success"] is True

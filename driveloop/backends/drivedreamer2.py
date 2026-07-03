@@ -10,6 +10,7 @@ from pathlib import Path
 from typing import Optional
 
 from driveloop.backends.base import GenerationBackend
+from driveloop.actor_motion import build_actor_motion_surface_plan
 from driveloop.dd2_override import read_override_audit
 from driveloop.schema import DriveLoopRequest, Generation
 from driveloop.source_sample_binding import build_source_sample_binding
@@ -92,6 +93,11 @@ class DriveDreamer2Backend(GenerationBackend):
             if isinstance(executable_condition, dict)
             else {}
         )
+        actor_motion_plan = (
+            executable_condition.get("actor_motion_plan", {})
+            if isinstance(executable_condition, dict)
+            else {}
+        )
 
         runtime_sample_selector = self._build_runtime_sample_selector(request)
         source_sample_binding = self._build_source_sample_binding(runtime_sample_selector)
@@ -114,6 +120,7 @@ class DriveDreamer2Backend(GenerationBackend):
             structural_input_plan=structural_input_plan,
             structural_request_diff=structural_request_diff,
             baseline_structural_snapshot=baseline_structural_snapshot,
+            actor_motion_plan=actor_motion_plan,
         )
         override_json = self._build_override_json(
             dd2_prompt=dd2_prompt,
@@ -205,6 +212,7 @@ class DriveDreamer2Backend(GenerationBackend):
                 "dd2_source_sample_binding": source_sample_binding,
                 "dd2_prompt": str(dd2_prompt) if dd2_prompt else None,
                 "dd2_executable_condition": executable_condition,
+                "dd2_actor_motion_plan": actor_motion_plan,
                 "dd2_condition_schema_version": executable_condition.get("schema_version")
                 if isinstance(executable_condition, dict)
                 else None,
@@ -299,6 +307,27 @@ class DriveDreamer2Backend(GenerationBackend):
                 }
             )
 
+        per_frame_append_boxes = []
+        actor_motion_surface_plan = (
+            override_candidate_plan.get("actor_motion_surface_plan", {})
+            if isinstance(override_candidate_plan, dict)
+            else {}
+        )
+        for entry in actor_motion_surface_plan.get("per_frame_boxes3d", []):
+            per_frame_append_boxes.append(
+                {
+                    "frame_idx": entry.get("frame_idx"),
+                    "actor_id": entry.get("actor_id"),
+                    "synthetic_track_id": entry.get("synthetic_track_id"),
+                    "category": entry.get("category"),
+                    "box3d": list(entry.get("box3d", [])),
+                    "source": entry.get("source", "actor_motion_plan.per_frame_actor_boxes3d"),
+                    "provenance": entry.get("provenance", "driveloop_actor_motion_surface"),
+                    "motion_surface": entry.get("motion_surface"),
+                    "maneuver": entry.get("maneuver"),
+                }
+            )
+
         scene_description = structural_input_plan.get("scene_description", {})
         scene_value = scene_description.get("value") if isinstance(scene_description, dict) else dd2_prompt
 
@@ -314,8 +343,9 @@ class DriveDreamer2Backend(GenerationBackend):
                 else "text_control.prompt",
             },
             "boxes3d": {
-                "mode": "append",
+                "mode": "append_and_per_frame_append" if per_frame_append_boxes else "append",
                 "append": append_boxes,
+                "per_frame_append": per_frame_append_boxes,
                 "source": structural_input_plan.get("boxes3d", {}).get(
                     "source",
                     "executable_condition_tensor_override",
@@ -342,11 +372,12 @@ class DriveDreamer2Backend(GenerationBackend):
             "audit": {
                 "control_level": (
                     "tensor_override_runtime"
-                    if append_boxes or structural_input_plan.get("image_hdmap", {}).get("source") != "runtime_dataset_baseline"
+                    if append_boxes or per_frame_append_boxes or structural_input_plan.get("image_hdmap", {}).get("source") != "runtime_dataset_baseline"
                     else "runtime_surface_observation"
                 ),
                 "limitations": [
-                    "boxes3d_override_not_applied" if not append_boxes else "box_positions_are_draft_until_projection_and_scene_geometry_are_verified",
+                    "boxes3d_override_not_applied" if not append_boxes and not per_frame_append_boxes else "box_positions_are_draft_until_projection_and_scene_geometry_are_verified",
+                    "actor_motion_surface_not_applied" if not per_frame_append_boxes else "per_frame_actor_boxes3d_runtime_surface_connected",
                     "hdmap_kept_baseline_without_explicit_verified_override",
                 ],
             },
@@ -411,6 +442,7 @@ class DriveDreamer2Backend(GenerationBackend):
         structural_input_plan: dict,
         structural_request_diff: dict,
         baseline_structural_snapshot: dict | None = None,
+        actor_motion_plan: dict | None = None,
     ) -> dict:
         if not structural_request_diff.get("available", False):
             return {
@@ -459,10 +491,13 @@ class DriveDreamer2Backend(GenerationBackend):
         requires_box_synthesis = bool(
             structural_request_diff.get("missing_requested_labels")
         ) or force_boxes3d_probe
+        actor_motion_surface_plan = build_actor_motion_surface_plan(actor_motion_plan)
+        actor_motion_surface_available = actor_motion_surface_plan.get("available") is True
 
         control_level = (
             "tensor_override_runtime"
             if requires_box_synthesis
+            or actor_motion_surface_available
             or structural_input_plan.get("image_hdmap", {}).get("source") != "runtime_dataset_baseline"
             else "runtime_surface_observation"
         )
@@ -475,6 +510,7 @@ class DriveDreamer2Backend(GenerationBackend):
             "requires_box_synthesis": requires_box_synthesis,
             "force_boxes3d_probe": force_boxes3d_probe,
             "boxes3d_probe_category": boxes3d_probe_category if force_boxes3d_probe else None,
+            "actor_motion_surface_plan": actor_motion_surface_plan,
             "box_synthesis_plan": self._build_box_synthesis_plan(
                 structural_request_diff=structural_request_diff,
                 requires_box_synthesis=requires_box_synthesis,
