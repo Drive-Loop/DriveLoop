@@ -26,7 +26,10 @@ def test_runtime_surface_code_audit_records_negative_motion_surface(tmp_path):
         "'grounding_downsampler_input': grounding_downsampler_input\n"
         "'box_downsampler_input': box_downsampler_input\n"
         '"grounding_downsampler_input": tensor_summary\n'
-        '"box_downsampler_input": tensor_summary\n',
+        '"box_downsampler_input": tensor_summary\n'
+        "motion_metadata = batch_dict.get('motion_metadata', None)\n"
+        '"velocities_available_in_batch": tensor_summary\n'
+        '"velocities_shape": tensor_summary\n',
     )
     write(
         tmp_path / "dreamer-models/dreamer_models/pipelines/drivedreamer2/pipeline_drivedreamer2.py",
@@ -52,5 +55,8 @@ def test_runtime_surface_code_audit_records_negative_motion_surface(tmp_path):
     assert audit["surfaces"]["runtime_condition_inputs"]["status"] == "image_hdmap_and_image_box_downsamplers"
     assert audit["surfaces"]["static_box_canvas"]["status"] == "observed"
     assert audit["surfaces"]["dd2_runtime_input_dict"]["status"] == "downsamplers_only"
-    assert audit["surfaces"]["direct_motion_runtime_surface"]["status"] == "not_observed"
+    direct_surface = audit["surfaces"]["direct_motion_runtime_surface"]
+    assert direct_surface["status"] == "not_observed"
+    assert direct_surface["metadata_only_motion_terms_observed"] is True
+    assert direct_surface["interpretation"].startswith("velocity mentions observed")
     assert audit["claim_boundary"]["dataset_velocity_is_not_runtime_motion_control"] is True

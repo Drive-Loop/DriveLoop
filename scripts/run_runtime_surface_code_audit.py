@@ -74,18 +74,41 @@ def build_runtime_surface_code_audit(repo_root: Path = Path(".")) -> dict[str, A
     )
 
     runtime_text = "\n".join(read_text(path) for name, path in paths.items() if name in {"tester", "pipeline", "unet"})
-    runtime_has_direct_motion_surface = any(
-        token in runtime_text
-        for token in [
-            "trajectory_tensor",
-            "actor_trajectory",
-            "future_trajectory",
-            "actor_displacement",
-            "track_id",
-            "velocities",
-            "velocity_tensor",
-        ]
-    )
+    direct_motion_runtime_patterns = [
+        "input_dict.get('trajectory",
+        'input_dict.get("trajectory',
+        "input_dict.get('trajectories",
+        'input_dict.get("trajectories',
+        "input_dict.get('actor_trajectory",
+        'input_dict.get("actor_trajectory',
+        "input_dict.get('future_trajectory",
+        'input_dict.get("future_trajectory',
+        "input_dict.get('displacement",
+        'input_dict.get("displacement',
+        "input_dict.get('actor_displacement",
+        'input_dict.get("actor_displacement',
+        "input_dict.get('velocity",
+        'input_dict.get("velocity',
+        "input_dict.get('velocities",
+        'input_dict.get("velocities',
+        "input_dict['trajectory",
+        'input_dict["trajectory',
+        "input_dict['velocity",
+        'input_dict["velocity',
+        "'trajectory':",
+        '"trajectory":',
+        "'velocity':",
+        '"velocity":',
+        "'velocities':",
+        '"velocities":',
+    ]
+    metadata_only_motion_terms = [
+        "motion_metadata",
+        "velocities_available_in_batch",
+        "velocities_shape",
+    ]
+    runtime_has_direct_motion_surface = any(pattern in runtime_text for pattern in direct_motion_runtime_patterns)
+    runtime_has_motion_metadata_only = any(term in runtime_text for term in metadata_only_motion_terms)
 
     return {
         "schema_version": "driveloop_runtime_surface_code_audit.v0",
@@ -147,6 +170,9 @@ def build_runtime_surface_code_audit(repo_root: Path = Path(".")) -> dict[str, A
             },
             "direct_motion_runtime_surface": {
                 "status": "not_observed" if not runtime_has_direct_motion_surface else "needs_manual_review",
+                "interpretation": "velocity mentions observed in DD2 runtime are metadata-only unless a trajectory/velocity/displacement tensor is passed through input_dict and consumed by pipeline/UNet",
+                "runtime_consumption_patterns_checked": direct_motion_runtime_patterns,
+                "metadata_only_motion_terms_observed": runtime_has_motion_metadata_only,
                 "searched_terms": [
                     "trajectory_tensor",
                     "actor_trajectory",
