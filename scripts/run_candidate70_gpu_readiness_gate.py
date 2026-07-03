@@ -44,6 +44,9 @@ def build_candidate70_readiness_gate(
     accepted_prompt_selected = accepted_prompt_selection.get("accepted_prompt_selected") is True
     runtime_status = runtime_surface.get("status")
     trajectory_status = trajectory_surface.get("status")
+    trajectory_surfaces = trajectory_surface.get("surfaces", {})
+    trajectory_source_signals = trajectory_surface.get("source_signals", {})
+    trajectory_blockers = trajectory_surface.get("blockers", [])
     dry_run_claim = dry_run.get("claim", {})
 
     checks = {
@@ -54,6 +57,15 @@ def build_candidate70_readiness_gate(
         "accepted_prompt_for_generate": accepted_prompt_selection.get("accepted_for_generate") is True,
         "runtime_surface_not_connected": runtime_status == "not_runtime_connected",
         "trajectory_surface_not_connected": trajectory_status == "not_runtime_connected",
+        "boxes3d_target_override_applied": trajectory_source_signals.get("motion_gap_boxes3d_target_override") == "applied",
+        "image_box_condition_connected": trajectory_surfaces.get("box_condition", {}).get("available") is True,
+        "boxes3d_image_box_structural_override_ready": (
+            trajectory_source_signals.get("motion_gap_boxes3d_target_override") == "applied"
+            and trajectory_surfaces.get("box_condition", {}).get("available") is True
+        ),
+        "static_box_condition_is_not_temporal_motion_control": (
+            "static_box_condition_available_but_not_temporal_motion_control" in trajectory_blockers
+        ),
         "dry_run_raster_reaches_grounding_downsampler_input": dry_run_claim.get("candidate70_dry_run_raster_reaches_grounding_downsampler_input") is True,
         "true_lane_geometry_replacement_available": dry_run_claim.get("candidate70_true_lane_geometry_replacement_available") is True,
         "runtime_motion_control_connected": dry_run_claim.get("runtime_motion_control_connected") is True,
@@ -102,12 +114,14 @@ def build_candidate70_readiness_gate(
             "accepted_prompt_required_before_generate": True,
             "dry_run_raster_is_not_true_lane_geometry_replacement": True,
             "runtime_motion_control_required_before_lane_change_control_claim": True,
+            "boxes3d_image_box_structural_override_is_not_temporal_motion_control": True,
             "semantic_success_requires_explicit_measured_passed_review": True,
         },
         "next_required_steps": [
             "wire the accepted prompt into any GPU smoke command only after explicit user approval",
             "do not reuse the old daytime motorcycle_refined_candidate_gpu_smoke gate as candidate70 approval",
             "connect or explicitly mark unavailable candidate70 runtime motion control surfaces",
+            "keep boxes3d/image_box structural override separate from temporal motion-control claims",
             "obtain true lane-geometry replacement evidence before any HDMap override claim",
             "request explicit user approval before any short GPU smoke",
         ],
