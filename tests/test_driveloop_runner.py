@@ -1,5 +1,6 @@
 from __future__ import annotations
 
+import json
 import tempfile
 import unittest
 from pathlib import Path
@@ -25,8 +26,21 @@ class DriveLoopRunnerTest(unittest.TestCase):
             self.assertEqual(result.best_generation.iteration, 1)
             self.assertGreaterEqual(result.best_evaluation.score, 0.8)
             self.assertEqual(len(result.history), 2)
+            self.assertEqual(len(result.attempt_history), 2)
+            self.assertEqual(result.attempt_history[0].status, "needs_refinement")
+            self.assertEqual(result.attempt_history[1].status, "accepted")
             self.assertIn("realistic autonomous driving scene", result.best_generation.prompt)
-            self.assertTrue((root / "history" / "history.jsonl").exists())
+            history_path = root / "history" / "history.jsonl"
+            self.assertTrue(history_path.exists())
+            records = [json.loads(line) for line in history_path.read_text().splitlines()]
+            self.assertEqual(len(records), 2)
+            self.assertEqual(records[0]["attempt"]["status"], "needs_refinement")
+            self.assertEqual(records[1]["attempt"]["status"], "accepted")
+            self.assertEqual(
+                records[0]["attempt"]["condition_package"]["schema_version"],
+                "driveloop_attempt_condition_package.v0",
+            )
+            self.assertTrue(records[0]["attempt"]["claim_boundary"]["attempt_record_is_not_video_semantic_success"])
             self.assertTrue((root / "artifacts" / "iteration_01.txt").exists())
 
     def test_good_prompt_stops_after_one_iteration(self) -> None:
@@ -194,3 +208,75 @@ def test_runner_carries_alignment_feedback_to_next_backend_request():
     assert trace["alignment_feedback"]["status"] == "measured_failed"
     assert trace["alignment_feedback"]["control_level"] == "text_feedback_only"
     assert trace["tensor_control_ready"] is False
+
+def test_runner_records_paper_attempt_state():
+    with tempfile.TemporaryDirectory() as tmpdir:
+        root = Path(tmpdir)
+        backend = MockGenerationBackend(output_dir=root / "artifacts")
+        config = DriveLoopConfig(
+            max_iterations=1,
+            target_score=0.5,
+            output_dir=root / "history",
+        )
+        request = DriveLoopRequest(
+            prompt="night realistic autonomous driving scene with a motorcycle cut in"
+        )
+
+        result = DriveLoopRunner(backend=backend, config=config).run(request)
+
+    assert len(result.attempt_history) == 1
+    attempt = result.attempt_history[0]
+    generation, evaluation = result.history[0]
+
+    assert attempt.iteration == 0
+    assert attempt.request == request
+    assert attempt.scene_specification.prompt == request.prompt
+    assert "motorcycle" in [actor.category for actor in attempt.scene_specification.objects]
+    assert "cut_in" in attempt.scene_specification.motion_primitives
+    assert attempt.dd2_condition["text_prompt"].startswith("night realistic autonomous driving scene")
+    assert attempt.dd2_condition["executable_condition"]["schema_version"] == "dd2_executable_condition.v0"
+    assert attempt.condition_package["schema_version"] == "driveloop_attempt_condition_package.v0"
+    assert "trajectory_control" in attempt.condition_package["unsupported_controls"]
+    assert attempt.generation == generation
+    assert attempt.evaluation == evaluation
+    assert attempt.claim_boundary["attempt_record_is_not_video_semantic_success"] is True
+
+
+def test_runner_attempt_state_records_source_binding_failure():
+    from driveloop.backends.base import GenerationBackend
+    from driveloop.schema import Generation
+
+    class SourceBindingBackend(GenerationBackend):
+        def generate(self, request, iteration):
+            return Generation(
+                iteration=iteration,
+                prompt=request.prompt,
+                artifacts={},
+                metadata={
+                    "backend": "source_binding_test",
+                    "dd2_source_sample_binding": {
+                        "requested": True,
+                        "ready": False,
+                        "reason": "no_dd2_candidate_contains_requested_source_tokens",
+                        "claim_boundary": {
+                            "source_sample_binding_is_not_gpu_approval": True,
+                        },
+                    },
+                },
+            )
+
+    with tempfile.TemporaryDirectory() as tmpdir:
+        config = DriveLoopConfig(
+            max_iterations=1,
+            target_score=0.5,
+            output_dir=Path(tmpdir) / "history",
+        )
+        result = DriveLoopRunner(
+            backend=SourceBindingBackend(),
+            config=config,
+        ).run(DriveLoopRequest(prompt="rainy realistic autonomous driving scene with a vehicle cut in"))
+
+    attempt = result.attempt_history[0]
+    assert attempt.status == "source_binding_unavailable"
+    assert attempt.source_binding["ready"] is False
+    assert attempt.claim_boundary["source_binding_is_not_gpu_approval"] is True

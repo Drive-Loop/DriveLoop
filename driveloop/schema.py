@@ -75,8 +75,26 @@ class Refinement:
 
 
 @dataclass(frozen=True)
+class DriveLoopAttempt:
+    iteration: int
+    request: DriveLoopRequest
+    scene_specification: SceneSpecification
+    long_tail_condition_plan: LongTailConditionPlan
+    dd2_condition: Dict[str, Any]
+    condition_package: Dict[str, Any]
+    source_binding: Dict[str, Any]
+    generation: Generation
+    evaluation: Evaluation
+    refinement: Optional[Refinement]
+    status: str
+    source_selection: Dict[str, Any] = field(default_factory=dict)
+    claim_boundary: Dict[str, Any] = field(default_factory=dict)
+
+
+@dataclass(frozen=True)
 class DriveLoopResult:
     request: DriveLoopRequest
     best_generation: Generation
     best_evaluation: Evaluation
     history: List[Tuple[Generation, Evaluation]]
+    attempt_history: List[DriveLoopAttempt] = field(default_factory=list)

@@ -95,8 +95,8 @@ class CompositeEvaluator(BaseEvaluator):
         actions: List[str] = []
         passed = True
 
-        for idx, evaluation in enumerate(evaluations):
-            prefix = evaluation.__class__.__name__
+        for idx, (evaluator, evaluation) in enumerate(zip(self.evaluators, evaluations)):
+            prefix = evaluator.__class__.__name__
             for key, value in evaluation.metrics.items():
                 metrics[f"{idx}_{prefix}_{key}"] = value
             reasons.extend(evaluation.diagnosis.reasons)

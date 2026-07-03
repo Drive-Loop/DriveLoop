@@ -4,7 +4,7 @@ from dataclasses import asdict
 import json
 from pathlib import Path
 
-from driveloop.schema import Evaluation, Generation
+from driveloop.schema import DriveLoopAttempt, Evaluation, Generation
 
 
 class HistoryLogger:
@@ -15,10 +15,17 @@ class HistoryLogger:
         if not append and self.path.exists():
             self.path.unlink()
 
-    def write(self, generation: Generation, evaluation: Evaluation) -> None:
+    def write(
+        self,
+        generation: Generation,
+        evaluation: Evaluation,
+        attempt: DriveLoopAttempt | None = None,
+    ) -> None:
         record = {
             "generation": asdict(generation),
             "evaluation": asdict(evaluation),
         }
+        if attempt is not None:
+            record["attempt"] = asdict(attempt)
         with self.path.open("a", encoding="utf-8") as f:
             f.write(json.dumps(record, ensure_ascii=False) + "\n")

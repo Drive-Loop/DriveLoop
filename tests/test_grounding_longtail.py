@@ -60,3 +60,30 @@ def test_pedestrian_crossing_does_not_trigger_animal_crossing():
     assert "crossing" in spec.motion_primitives
     assert "animal_crossing" not in plan.tags
     assert all("animal crossing" not in suffix for suffix in plan.prompt_suffixes)
+
+
+def test_longtail_controller_structures_motorcycle_cut_in_lane_controls():
+    request = DriveLoopRequest(
+        prompt="foggy night road where a motorcycle cuts in from the left adjacent lane"
+    )
+
+    spec = RuleBasedGrounder().ground(request)
+    plan = LongTailController().build(spec)
+
+    assert "motorcycle" in {obj.category for obj in spec.objects}
+    assert "cut_in" in spec.motion_primitives
+    assert "left" in spec.relations
+
+    assert "vulnerable_road_user" in plan.tags
+    assert "motorcycle_cut_in" in plan.tags
+    assert "left_lane_relation" in plan.tags
+    assert "low_visibility" in plan.tags
+
+    controls = plan.executable_controls
+    assert "motorcycle" in controls["objects"]
+    assert "cut_in" in controls["motion"]
+    assert controls["target_object_support"]["category"] == "motorcycle"
+    assert controls["maneuvers"][0]["type"] == "cut_in"
+    assert controls["maneuvers"][0]["requires_lane_geometry"] is True
+    assert controls["lane_relations"][0]["from"] == "left_adjacent_lane"
+    assert "target_motorcycle_detectable" in controls["perception_requirements"]

@@ -160,3 +160,28 @@ def test_executable_condition_includes_trajectory_control_contract_for_lane_chan
     assert "per_frame_actor_boxes3d" in contract["required_runtime_surfaces"]
     assert contract["current_runtime_surfaces"]["velocities"] == "dataset_surface_observed_not_dd2_condition_tensor"
     assert "cannot prove lane-change video semantics" in contract["claim_boundary"]
+
+
+def test_executable_condition_carries_structured_motorcycle_longtail_controls():
+    request = DriveLoopRequest(
+        prompt="foggy night road where a motorcycle changes lane from the right adjacent lane"
+    )
+
+    spec = RuleBasedGrounder().ground(request)
+    plan = LongTailController().build(spec)
+    condition = DriveDreamer2ConditionAdapter().build(spec, plan)
+
+    controls = condition.executable_condition["risk_controls"]["executable_controls"]
+
+    assert "motorcycle_lane_change" in condition.long_tail_tags
+    assert "right_lane_relation" in condition.long_tail_tags
+    assert "motorcycle" in controls["objects"]
+    assert "lane_change" in controls["motion"]
+    assert controls["target_object_support"]["category"] == "motorcycle"
+    assert controls["maneuvers"][0]["type"] == "lane_change"
+    assert controls["lane_relations"][0]["from"] == "right_adjacent_lane"
+
+    trajectory = condition.executable_condition["trajectory_control_contract"]
+    assert "lane_change" in trajectory["requested_motions"]
+    assert trajectory["requested_maneuvers"][0]["type"] == "lane_change_or_cut_in"
+    assert trajectory["status"] == "not_runtime_connected"

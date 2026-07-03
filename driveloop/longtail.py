@@ -13,6 +13,11 @@ _SUPPORTED_TAGS = {
     "animal_crossing",
     "road_obstacle",
     "low_visibility",
+    "vulnerable_road_user",
+    "motorcycle_cut_in",
+    "motorcycle_lane_change",
+    "left_lane_relation",
+    "right_lane_relation",
 }
 
 _TAG_ALIASES = {
@@ -27,6 +32,15 @@ _TAG_ALIASES = {
     "obstacle": "road_obstacle",
     "debris": "road_obstacle",
     "poor visibility": "low_visibility",
+    "vulnerable road user": "vulnerable_road_user",
+    "motorcycle": "vulnerable_road_user",
+    "motorbike": "vulnerable_road_user",
+    "cut in": "motorcycle_cut_in",
+    "cut-in": "motorcycle_cut_in",
+    "lane change": "motorcycle_lane_change",
+    "lane-change": "motorcycle_lane_change",
+    "left lane": "left_lane_relation",
+    "right lane": "right_lane_relation",
 }
 
 
@@ -77,6 +91,60 @@ class LongTailController:
                 prompt_suffixes.append("low visibility conditions with difficult object perception")
                 postprocess_effects.append("low_visibility_filter")
                 executable_controls["visibility"] = "low"
+                executable_controls.setdefault("perception_requirements", []).append("target_object_visible_across_frames")
+            elif tag == "vulnerable_road_user":
+                prompt_suffixes.append("clear vulnerable road user visibility with the target actor unoccluded")
+                executable_controls.setdefault("objects", []).append("motorcycle")
+                executable_controls.setdefault("target_object_support", {})["category"] = "motorcycle"
+                executable_controls.setdefault("perception_requirements", []).append("target_motorcycle_detectable")
+            elif tag == "motorcycle_cut_in":
+                prompt_suffixes.append("a motorcycle performs a visible cut-in maneuver near the ego vehicle")
+                executable_controls.setdefault("objects", []).append("motorcycle")
+                executable_controls.setdefault("motion", []).append("cut_in")
+                executable_controls.setdefault("maneuvers", []).append(
+                    {
+                        "actor": "motorcycle",
+                        "type": "cut_in",
+                        "relation": "adjacent_lane_to_ego_lane",
+                        "requires_lane_geometry": True,
+                        "requires_temporal_evidence": True,
+                    }
+                )
+            elif tag == "motorcycle_lane_change":
+                prompt_suffixes.append("a motorcycle performs a visible lane change with lateral displacement")
+                executable_controls.setdefault("objects", []).append("motorcycle")
+                executable_controls.setdefault("motion", []).append("lane_change")
+                executable_controls.setdefault("maneuvers", []).append(
+                    {
+                        "actor": "motorcycle",
+                        "type": "lane_change",
+                        "relation": "adjacent_lane",
+                        "requires_lane_geometry": True,
+                        "requires_temporal_evidence": True,
+                    }
+                )
+            elif tag == "left_lane_relation":
+                prompt_suffixes.append("the target actor starts from the left adjacent lane")
+                executable_controls.setdefault("lane_relations", []).append(
+                    {
+                        "actor": "target",
+                        "from": "left_adjacent_lane",
+                        "to": "ego_lane",
+                    }
+                )
+            elif tag == "right_lane_relation":
+                prompt_suffixes.append("the target actor starts from the right adjacent lane")
+                executable_controls.setdefault("lane_relations", []).append(
+                    {
+                        "actor": "target",
+                        "from": "right_adjacent_lane",
+                        "to": "ego_lane",
+                    }
+                )
+
+        for key in ("objects", "motion", "perception_requirements"):
+            if key in executable_controls and isinstance(executable_controls[key], list):
+                executable_controls[key] = list(dict.fromkeys(executable_controls[key]))
 
         return LongTailConditionPlan(
             tags=tags,
@@ -109,6 +177,18 @@ class LongTailController:
 
         categories = {obj.category for obj in spec.objects}
         motions = set(spec.motion_primitives)
+        if "motorcycle" in categories:
+            resolved.append("vulnerable_road_user")
+            if "cut_in" in motions:
+                resolved.append("motorcycle_cut_in")
+            if "lane_change" in motions:
+                resolved.append("motorcycle_lane_change")
+
+        if "left" in spec.relations and ("cut_in" in motions or "lane_change" in motions):
+            resolved.append("left_lane_relation")
+        if "right" in spec.relations and ("cut_in" in motions or "lane_change" in motions):
+            resolved.append("right_lane_relation")
+
         if "animal" in categories and "crossing" in motions:
             resolved.append("animal_crossing")
         if "obstacle" in categories:

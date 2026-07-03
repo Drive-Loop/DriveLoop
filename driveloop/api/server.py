@@ -1,4 +1,5 @@
 import json
+from dataclasses import asdict, is_dataclass
 import tempfile
 from pathlib import Path
 from typing import Any, Dict, List, Optional
@@ -10,8 +11,9 @@ from pydantic import BaseModel, Field
 
 from driveloop.backends.drivedreamer2 import DriveDreamer2Backend
 from driveloop.backends.mock import MockGenerationBackend
-from driveloop.evaluators import RuleBasedEvaluator
+from driveloop.evaluators import BaseEvaluator, CompositeEvaluator, RuleBasedEvaluator
 from driveloop.intent.adapter import MultimodalInputBundle, RuleBasedIntentAdapter
+from driveloop.perception_video import PerceptionVideoEvaluator
 from driveloop.intent.providers import (
     ASRReviewAgent,
     AuditOnlyASRReviewAgent,
@@ -35,6 +37,7 @@ class HistoryRecord(BaseModel):
     iteration: int
     generation: Dict[str, Any]
     evaluation: Dict[str, Any]
+    attempt: Optional[Dict[str, Any]] = None
 
 
 class GenerateResponse(BaseModel):
@@ -88,6 +91,8 @@ app = FastAPI(title="DriveLoop API", version="0.1.0")
 
 
 def _to_dict(obj: Any) -> Dict[str, Any]:
+    if is_dataclass(obj):
+        return asdict(obj)
     if hasattr(obj, "model_dump"):
         return obj.model_dump()
     if hasattr(obj, "__dict__"):
@@ -238,6 +243,27 @@ async def transcribe_voice(audio: UploadFile = File(...)):
 
 
 
+def _build_evaluator(metadata: Dict[str, Any]) -> BaseEvaluator:
+    config = metadata.get("perception_evaluation")
+    if not isinstance(config, dict) or config.get("enabled") is not True:
+        return RuleBasedEvaluator()
+
+    target_labels = config.get("target_labels", [])
+    if not isinstance(target_labels, list):
+        target_labels = []
+
+    max_frames = config.get("max_frames")
+    return CompositeEvaluator([
+        RuleBasedEvaluator(),
+        PerceptionVideoEvaluator(
+            target_labels=[str(label) for label in target_labels],
+            pass_threshold=float(config.get("pass_threshold", 0.8)),
+            confidence_threshold=float(config.get("confidence_threshold", 0.25)),
+            max_frames=None if max_frames is None else int(max_frames),
+        ),
+    ])
+
+
 @app.post("/generate", response_model=GenerateResponse)
 def generate(request: GenerateRequest):
     scenario_id = request.scenario_id or f"api_{uuid4().hex[:8]}"
@@ -279,7 +305,7 @@ def generate(request: GenerateRequest):
 
     runner = DriveLoopRunner(
         backend=backend,
-        evaluator=RuleBasedEvaluator(),
+        evaluator=_build_evaluator(request.metadata),
         config=config,
     )
 
@@ -303,6 +329,7 @@ def generate(request: GenerateRequest):
             iteration=index,
             generation=_to_dict(generation),
             evaluation=_to_dict(evaluation),
+            attempt=_to_dict(result.attempt_history[index]) if index < len(result.attempt_history) else None,
         )
         for index, (generation, evaluation) in enumerate(result.history)
     ]

@@ -77,3 +77,89 @@ def test_refiner_preserves_existing_prompt_quality_refinement():
     assert "daytime clear weather" in refinement.prompt
     assert "surrounded by vehicles with a safe lane-change interaction" in refinement.prompt
     assert "panoramic multi-view video" in refinement.prompt
+
+
+def test_refiner_builds_perception_feedback_for_detector_failures():
+    request = DriveLoopRequest(prompt="night road with a motorcycle cut in")
+    evaluation = Evaluation(
+        score=0.2,
+        diagnosis=Diagnosis(
+            passed=False,
+            reasons=[
+                "low_detection_coverage",
+                "unstable_track_coverage",
+                "identity_inconsistent",
+            ],
+            suggested_actions=[
+                "make the target actor visible across more frames",
+                "reduce occlusion and keep motion temporally coherent",
+            ],
+        ),
+    )
+
+    refinement = RuleBasedRefiner().refine(request, evaluation)
+
+    assert "target actor remains large, visible, and unoccluded" in refinement.prompt
+    assert "continuous motion without occlusion" in refinement.prompt
+    assert "same target actor identity" in refinement.prompt
+
+    feedback = refinement.condition["perception_feedback"]
+    assert feedback["schema_version"] == "driveloop_perception_feedback.v0"
+    assert feedback["status"] == "measured_failed"
+    assert feedback["control_level"] == "text_and_condition_feedback"
+    assert feedback["failed_checks"] == [
+        "low_detection_coverage",
+        "unstable_track_coverage",
+        "identity_inconsistent",
+    ]
+
+
+def test_refiner_builds_source_selection_feedback_for_source_mismatch():
+    request = DriveLoopRequest(prompt="night road with a motorcycle cut in")
+    evaluation = Evaluation(
+        score=0.0,
+        diagnosis=Diagnosis(
+            passed=False,
+            reasons=[
+                "source_selection_unavailable",
+                "no_dd2_candidate_contains_requested_source_tokens",
+            ],
+            suggested_actions=[
+                "select another source candidate or rebuild the runtime dataset for the requested source tokens",
+            ],
+        ),
+    )
+
+    refinement = RuleBasedRefiner().refine(request, evaluation)
+
+    feedback = refinement.condition["source_selection_feedback"]
+    assert feedback["schema_version"] == "driveloop_source_selection_feedback.v0"
+    assert feedback["status"] == "source_unavailable"
+    assert feedback["policy"] == "select_alternate_source_or_rebuild_runtime_dataset_before_generation_retry"
+    assert "select or rebuild a source candidate before retrying generation" in refinement.notes
+
+
+def test_refiner_builds_runtime_control_feedback_for_unsupported_runtime_controls():
+    request = DriveLoopRequest(prompt="night road with a motorcycle lane change")
+    evaluation = Evaluation(
+        score=0.0,
+        diagnosis=Diagnosis(
+            passed=False,
+            reasons=[
+                "dd2_tensor_control_not_ready",
+                "dd2_structural_control_plan_only",
+                "unsupported_control:trajectory_control",
+            ],
+            suggested_actions=[
+                "connect actor, trajectory, and HDMap tensor-level structural overrides",
+            ],
+        ),
+    )
+
+    refinement = RuleBasedRefiner().refine(request, evaluation)
+
+    feedback = refinement.condition["runtime_control_feedback"]
+    assert feedback["schema_version"] == "driveloop_runtime_control_feedback.v0"
+    assert feedback["status"] == "runtime_control_unavailable"
+    assert "unsupported_control:trajectory_control" in feedback["failed_reasons"]
+    assert any("runtime controls are unavailable" in note for note in refinement.notes)
