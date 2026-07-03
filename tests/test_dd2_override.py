@@ -54,6 +54,112 @@ def test_apply_dd2_override_appends_boxes_and_records_changed_signature():
     assert audit["image_box_expected_changed"] is True
 
 
+def test_apply_dd2_override_appends_only_matching_per_frame_boxes():
+    sample = {
+        "frame_idx": 2,
+        "scene_description": "night road",
+        "boxes3d": np.zeros((0, 9), dtype=np.float32),
+        "ori_labels3d": [],
+        "labels3d": [],
+        "image_hdmap": np.ones((2, 2, 3), dtype=np.uint8),
+    }
+
+    updated, audit = apply_dd2_override_to_sample(
+        sample,
+        {
+            "schema_version": "driveloop_dd2_override.v0",
+            "boxes3d": {
+                "per_frame_append": [
+                    {
+                        "frame_idx": 1,
+                        "category": "car",
+                        "box3d": [1.0, 0.0, 8.0, 1.8, 1.6, 4.0, 0.0, 0.0, 0.0],
+                    },
+                    {
+                        "frame_idx": 2,
+                        "category": "motorcycle",
+                        "box3d": [6.0, -1.0, 18.0, 0.7, 1.5, 2.0, 0.0, 0.0, -0.2],
+                        "source": "unit_test_per_frame_trajectory",
+                        "provenance": "synthetic_temporal_box_condition",
+                    },
+                ],
+            },
+        },
+    )
+
+    assert updated["boxes3d"].shape == (1, 9)
+    assert updated["ori_labels3d"] == ["vehicle.motorcycle"]
+    assert updated["labels3d"] == [["vehicle", "motorcycle"]]
+    assert audit["changed"]["boxes3d"] is True
+    assert audit["image_box_expected_changed"] is True
+    per_frame_audit = next(item for item in audit["applied"] if item["mode"] == "per_frame_append")
+    assert per_frame_audit["frame_idx"] == 2
+    assert per_frame_audit["accepted_count"] == 1
+    assert per_frame_audit["accepted_entries"][0]["frame_idx"] == 2
+
+
+def test_apply_dd2_override_does_not_match_missing_frame_idx():
+    sample = {
+        "boxes3d": np.zeros((0, 9), dtype=np.float32),
+        "ori_labels3d": [],
+        "labels3d": [],
+        "image_hdmap": np.ones((2, 2, 3), dtype=np.uint8),
+    }
+
+    updated, audit = apply_dd2_override_to_sample(
+        sample,
+        {
+            "schema_version": "driveloop_dd2_override.v0",
+            "boxes3d": {
+                "per_frame_append": [
+                    {
+                        "category": "motorcycle",
+                        "box3d": [6.0, -1.0, 18.0, 0.7, 1.5, 2.0, 0.0, 0.0, -0.2],
+                    },
+                ],
+            },
+        },
+    )
+
+    assert updated["boxes3d"].shape == (0, 9)
+    assert audit["changed"]["boxes3d"] is False
+    skip = next(item for item in audit["skipped"] if item.get("mode") == "per_frame_append")
+    assert skip["reason"] == "no_matching_frame_idx"
+    assert skip["frame_idx"] is None
+
+
+def test_apply_dd2_override_skips_per_frame_boxes_without_matching_frame():
+    sample = {
+        "frame_idx": 3,
+        "boxes3d": np.zeros((0, 9), dtype=np.float32),
+        "ori_labels3d": [],
+        "labels3d": [],
+        "image_hdmap": np.ones((2, 2, 3), dtype=np.uint8),
+    }
+
+    updated, audit = apply_dd2_override_to_sample(
+        sample,
+        {
+            "schema_version": "driveloop_dd2_override.v0",
+            "boxes3d": {
+                "per_frame_append": [
+                    {
+                        "frame_idx": 2,
+                        "category": "motorcycle",
+                        "box3d": [6.0, -1.0, 18.0, 0.7, 1.5, 2.0, 0.0, 0.0, -0.2],
+                    },
+                ],
+            },
+        },
+    )
+
+    assert updated["boxes3d"].shape == (0, 9)
+    assert audit["changed"]["boxes3d"] is False
+    assert audit["image_box_expected_changed"] is False
+    skip = next(item for item in audit["skipped"] if item.get("mode") == "per_frame_append")
+    assert skip["reason"] == "no_matching_frame_idx"
+    assert skip["frame_idx"] == 3
+
 def test_apply_dd2_override_can_zero_hdmap_when_explicitly_requested():
     sample = {
         "boxes3d": np.zeros((0, 9), dtype=np.float32),
@@ -122,7 +228,6 @@ def test_override_audit_summary_does_not_double_count_image_box(tmp_path):
         "image_box": 1,
         "scene_description": 1,
     }
-
 
 
 def test_apply_dd2_override_replaces_hdmap_from_verified_path(tmp_path):

@@ -67,7 +67,30 @@ def apply_dd2_override_to_sample(
         updated, boxes_audit = _append_boxes3d(updated, append_entries)
         audit["applied"].append(boxes_audit)
     else:
-        audit["skipped"].append({"target": "boxes3d", "reason": "no_append_entries"})
+        audit["skipped"].append({"target": "boxes3d", "mode": "append", "reason": "no_append_entries"})
+
+    per_frame_append_entries = boxes3d.get("per_frame_append") if isinstance(boxes3d, dict) else None
+    if per_frame_append_entries:
+        selected_entries, skipped_entries = _select_per_frame_append_entries(updated, per_frame_append_entries)
+        if selected_entries:
+            updated, boxes_audit = _append_boxes3d(updated, selected_entries, mode="per_frame_append")
+            boxes_audit["frame_idx"] = updated.get("frame_idx")
+            boxes_audit["skipped_non_matching_count"] = len(skipped_entries)
+            audit["applied"].append(boxes_audit)
+        else:
+            audit["skipped"].append({
+                "target": "boxes3d",
+                "mode": "per_frame_append",
+                "reason": "no_matching_frame_idx",
+                "frame_idx": updated.get("frame_idx"),
+                "candidate_count": len(per_frame_append_entries) if isinstance(per_frame_append_entries, list) else None,
+            })
+    else:
+        audit["skipped"].append({
+            "target": "boxes3d",
+            "mode": "per_frame_append",
+            "reason": "no_per_frame_append_entries",
+        })
 
     image_hdmap = override_spec.get("image_hdmap", {})
     if isinstance(image_hdmap, dict) and image_hdmap.get("mode") == "zero":
@@ -153,7 +176,47 @@ def read_override_audit(path: str | Path) -> dict[str, Any]:
     }
 
 
-def _append_boxes3d(data_dict: dict[str, Any], append_entries: list[dict[str, Any]]) -> tuple[dict[str, Any], dict[str, Any]]:
+def _frame_idx_matches(expected: Any, actual: Any) -> bool:
+    if expected is None or actual is None:
+        return False
+    try:
+        return int(expected) == int(actual)
+    except (TypeError, ValueError):
+        return str(expected) == str(actual)
+
+
+def _select_per_frame_append_entries(
+    data_dict: dict[str, Any],
+    per_frame_append: Any,
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    frame_idx = data_dict.get("frame_idx")
+    selected: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+
+    if not isinstance(per_frame_append, list):
+        return selected, [{"reason": "per_frame_append_must_be_list"}]
+
+    for entry in per_frame_append:
+        if not isinstance(entry, dict):
+            skipped.append({"reason": "per_frame_entry_must_be_dict"})
+            continue
+        if not _frame_idx_matches(entry.get("frame_idx"), frame_idx):
+            skipped.append({
+                "reason": "frame_idx_mismatch",
+                "entry_frame_idx": entry.get("frame_idx"),
+                "sample_frame_idx": frame_idx,
+            })
+            continue
+        selected.append(entry)
+
+    return selected, skipped
+
+
+def _append_boxes3d(
+    data_dict: dict[str, Any],
+    append_entries: list[dict[str, Any]],
+    mode: str = "append",
+) -> tuple[dict[str, Any], dict[str, Any]]:
     updated = dict(data_dict)
     base_boxes = np.asarray(updated.get("boxes3d", np.zeros((0, 9))), dtype=np.float32)
     if base_boxes.ndim == 1:
@@ -179,11 +242,14 @@ def _append_boxes3d(data_dict: dict[str, Any], append_entries: list[dict[str, An
 
         labels.append(entry.get("ori_label") or _CATEGORY_TO_ORI_LABEL.get(category, str(category)))
         labels3d.append(entry.get("label3d") or _CATEGORY_TO_LABEL3D.get(category, [str(category)]))
-        accepted_entries.append({
+        accepted_entry = {
             "category": category,
             "source": entry.get("source", "unknown"),
             "provenance": entry.get("provenance", "unknown"),
-        })
+        }
+        if "frame_idx" in entry:
+            accepted_entry["frame_idx"] = entry.get("frame_idx")
+        accepted_entries.append(accepted_entry)
 
     if additions:
         additions_array = np.asarray(additions, dtype=np.float32)
@@ -193,7 +259,7 @@ def _append_boxes3d(data_dict: dict[str, Any], append_entries: list[dict[str, An
 
     return updated, {
         "target": "boxes3d",
-        "mode": "append",
+        "mode": mode,
         "accepted_count": len(accepted_entries),
         "skipped_count": len(skipped_entries),
         "accepted_entries": accepted_entries,
