@@ -102,3 +102,54 @@ def test_dd2_source_selector_records_failure_diagnosis(tmp_path: Path):
     assert selection.binding["reason"] == "no_dd2_candidate_contains_requested_source_tokens"
     assert selection.diagnosis["status"] == "failed"
     assert "select another source candidate" in selection.diagnosis["suggested_actions"][0]
+
+
+
+def test_dd2_source_selector_ranks_candidates_when_no_candidate_is_fixed(tmp_path: Path):
+    dataset = write_dataset(tmp_path / "dataset")
+    identity = write_identity(tmp_path / "identity" / "summary.json")
+
+    selection = DD2SourceSelector(
+        dataset,
+        identity_summary_path=identity,
+        frame_num=2,
+        hz_factor=1,
+        video_split_rate=1,
+        multiview=False,
+    ).select(
+        DriveLoopRequest(
+            prompt="night motorcycle cut in",
+            metadata={
+                "source_selection": {
+                    "candidates": [
+                        {
+                            "candidate_id": "car_day",
+                            "objects": ["car"],
+                            "lighting": ["day"],
+                            "motions": ["straight"],
+                            "has_hdmap": True,
+                            "has_actor_identity": True,
+                        },
+                        {
+                            "candidate_id": "candidate70",
+                            "objects": ["motorcycle"],
+                            "lighting": ["night"],
+                            "long_tail_tags": ["motorcycle_cut_in"],
+                            "motions": ["cut_in"],
+                            "has_hdmap": True,
+                            "has_actor_identity": True,
+                        },
+                    ],
+                }
+            },
+        ),
+        {"objects": [{"category": "motorcycle"}], "environment": {"lighting": "night"}},
+        {"resolved_tags": ["motorcycle_cut_in", "night"], "motion_primitives": ["cut_in"]},
+    )
+
+    assert selection.requested is True
+    assert selection.ready is True
+    assert selection.selector["source_candidate_id"] == "candidate70"
+    assert selection.backend_hints["source_candidate_id"] == "candidate70"
+    assert selection.diagnosis["source_ranking"]["best_candidate_id"] == "candidate70"
+    assert selection.claim_boundary["source_ranking_is_metadata_compatibility_only"] is True

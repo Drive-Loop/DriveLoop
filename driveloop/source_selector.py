@@ -6,6 +6,7 @@ from typing import Any, Iterable, Protocol
 
 from driveloop.schema import DriveLoopRequest, LongTailConditionPlan, SceneSpecification
 from driveloop.source_sample_binding import build_source_sample_binding
+from driveloop.source_ranking import rank_source_candidates
 
 
 def _as_dict(value: Any) -> dict[str, Any]:
@@ -135,6 +136,13 @@ class DD2SourceSelector:
             ),
         }
 
+        ranking = None
+        candidates = config.get("candidates") or metadata.get("source_candidates")
+        if isinstance(candidates, list) and candidates:
+            ranking = rank_source_candidates(candidates, scene_specification, condition_plan)
+            if not selector.get("source_candidate_id"):
+                selector["source_candidate_id"] = ranking.get("best_candidate_id")
+
         binding = build_source_sample_binding(
             self.dataset_dir,
             source_candidate_id=selector.get("source_candidate_id"),
@@ -168,12 +176,15 @@ class DD2SourceSelector:
             "reason": reason,
             "suggested_actions": self._suggested_actions(requested, ready, reason),
         }
+        if ranking is not None:
+            diagnosis["source_ranking"] = ranking
 
         claim_boundary = {
             "source_selection_is_not_gpu_approval": True,
             "source_selection_is_not_video_semantic_success": True,
             "source_binding_is_not_semantic_success": True,
             "semantic_success_requires_generation_and_evaluation": True,
+            "source_ranking_is_metadata_compatibility_only": ranking is not None,
         }
         binding_claim = binding.get("claim_boundary")
         if isinstance(binding_claim, dict):
