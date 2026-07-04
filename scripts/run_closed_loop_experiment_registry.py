@@ -11,6 +11,11 @@ if str(REPO_ROOT) not in sys.path:
     sys.path.insert(0, str(REPO_ROOT))
 
 from driveloop.longtail_coverage import build_longtail_control_coverage
+from driveloop.perception_metric_manifest import (
+    EQ15_METRIC_KEYS,
+    SCHEMA_VERSION as PERCEPTION_METRIC_MANIFEST_SCHEMA_VERSION,
+    build_perception_metric_manifest,
+)
 
 
 SCHEMA_VERSION = "driveloop_closed_loop_experiment_registry.v0"
@@ -82,6 +87,7 @@ def summarize_longtail_control_coverage(data: Any, source: str) -> dict[str, Any
             "missing_channels": {},
             "claim_boundary": {
                 "longtail_control_coverage_is_not_video_semantic_success": True,
+            "perception_metric_manifest_is_not_video_semantic_success": True,
             },
         }
 
@@ -174,6 +180,96 @@ def find_longtail_control_coverage_file(case_summary_path: Path | None) -> Path 
     return None
 
 
+def summarize_perception_metric_manifest(data: Any, source: str) -> dict[str, Any]:
+    payload = as_dict(data)
+    if payload.get("schema_version") == PERCEPTION_METRIC_MANIFEST_SCHEMA_VERSION:
+        metrics = as_dict(payload.get("metrics"))
+        return {
+            "schema_version": PERCEPTION_METRIC_MANIFEST_SCHEMA_VERSION,
+            "available": payload.get("available") is True,
+            "source": source,
+            "evaluator": payload.get("evaluator", "PerceptionVideoEvaluator"),
+            "perception_claim": payload.get("perception_claim", "not_available"),
+            "semantic_success_claim": payload.get("semantic_success_claim", "not_proven_by_perception_metrics_alone"),
+            "score": coerce_float(payload.get("score")),
+            "measured": payload.get("measured") is True,
+            "passed": payload.get("passed") is True,
+            "metrics_complete": payload.get("metrics_complete") is True,
+            "metrics": {key: coerce_float(metrics.get(key)) for key in EQ15_METRIC_KEYS},
+            "metric_source_keys": as_dict(payload.get("metric_source_keys")),
+            "missing_metrics": list(as_list(payload.get("missing_metrics"))),
+            "source_metric_prefixes": list(as_list(payload.get("source_metric_prefixes"))),
+            "claim_boundary": as_dict(payload.get("claim_boundary")),
+        }
+
+    manifest = build_perception_metric_manifest(payload, source=source)
+    return manifest
+
+
+def build_case_perception_metric_manifest(
+    row: dict[str, Any],
+    case_summary: dict[str, Any],
+    runner_summary: dict[str, Any],
+    perception_eval: dict[str, Any],
+    manifest_path: Path | None,
+) -> dict[str, Any]:
+    if manifest_path and manifest_path.exists():
+        return summarize_perception_metric_manifest(load_json(manifest_path), "artifact")
+
+    if perception_eval:
+        return summarize_perception_metric_manifest(perception_eval, "perception_eval")
+
+    for source, container in [
+        ("manifest_inline", row),
+        ("case_summary_inline", case_summary),
+        ("runner_summary_inline", runner_summary),
+    ]:
+        for key in ["perception_metric_manifest", "perception_eval", "perception_evaluation"]:
+            payload = as_dict(container.get(key))
+            if payload:
+                summary = summarize_perception_metric_manifest(payload, source)
+                if summary.get("available") is True or summary.get("perception_claim") != "not_available":
+                    return summary
+
+    attempts = as_dict(case_summary.get("attempts"))
+    for role in ["post_refinement_retry", "pre_refinement"]:
+        attempt = as_dict(attempts.get(role))
+        payload = {
+            "score": attempt.get("score"),
+            "metrics": as_dict(attempt.get("metrics")),
+            "diagnosis": as_dict(attempt.get("diagnosis")),
+        }
+        if payload["metrics"]:
+            return summarize_perception_metric_manifest(payload, f"case_summary_attempt_{role}")
+
+    return summarize_perception_metric_manifest({}, "not_available")
+
+
+def find_perception_metric_manifest_file(case_summary_path: Path | None) -> Path | None:
+    if not case_summary_path or not case_summary_path.exists():
+        return None
+
+    case_dir = case_summary_path.parent
+    candidates = [
+        case_dir / "perception_metric_manifest.json",
+        case_dir / "perception_metrics_manifest.json",
+        case_dir / "perception" / "perception_metric_manifest.json",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists() and as_dict(load_json(candidate)).get("schema_version") == PERCEPTION_METRIC_MANIFEST_SCHEMA_VERSION:
+            return candidate
+
+    for candidate in sorted(case_dir.rglob("*.json")):
+        name = candidate.name.lower()
+        if "perception" not in name or "manifest" not in name:
+            continue
+        if as_dict(load_json(candidate)).get("schema_version") == PERCEPTION_METRIC_MANIFEST_SCHEMA_VERSION:
+            return candidate
+
+    return None
+
+
 def alignment_summary(data: dict[str, Any]) -> dict[str, Any]:
     evaluation = as_dict(data.get("evaluation"))
     metrics = as_dict(evaluation.get("metrics"))
@@ -260,6 +356,7 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
     failed_alignment_path = resolve_path(row.get("failed_alignment_eval"), manifest_dir)
     retry_alignment_path = resolve_path(row.get("retry_alignment_eval"), manifest_dir)
     perception_eval_path = resolve_path(row.get("perception_eval"), manifest_dir)
+    perception_metric_manifest_path = resolve_path(row.get("perception_metric_manifest"), manifest_dir)
     baseline_summary_path = resolve_path(row.get("baseline_summary"), manifest_dir)
     longtail_coverage_path = resolve_path(row.get("longtail_control_coverage"), manifest_dir)
 
@@ -304,6 +401,13 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
         or "post_retry_alignment_review" in as_list(case_summary.get("evidence_chain"))
     )
     perception_passed = perception_passed_from(perception_eval)
+    perception_metric_manifest = build_case_perception_metric_manifest(
+        row=row,
+        case_summary=case_summary,
+        runner_summary=runner_summary,
+        perception_eval=perception_eval,
+        manifest_path=perception_metric_manifest_path,
+    )
 
     baseline_available = bool(row.get("baseline_available") or (baseline_summary_path and baseline_summary_path.exists()))
     strict_baseline_comparison_supported = bool(row.get("strict_baseline_comparison_supported"))
@@ -343,6 +447,7 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
         "evidence_level": level,
         "manual_review_used": manual_review_used,
         "perception_passed": perception_passed,
+        "perception_metric_manifest": perception_metric_manifest,
         "baseline_available": baseline_available,
         "strict_baseline_comparison_supported": strict_baseline_comparison_supported,
         "automatic_multiround_supported": automatic_multiround_supported,
@@ -358,6 +463,7 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
             "failed_alignment_eval": source_entry(failed_alignment_path),
             "retry_alignment_eval": source_entry(retry_alignment_path),
             "perception_eval": source_entry(perception_eval_path),
+            "perception_metric_manifest": source_entry(perception_metric_manifest_path),
             "baseline_summary": source_entry(baseline_summary_path),
             "longtail_control_coverage": source_entry(longtail_coverage_path),
         },
@@ -366,6 +472,7 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
             "duplicate_sources_are_not_counted_as_separate_cases": True,
             "auto_matched_alignment_eval_is_metadata_link_not_new_review": True,
             "longtail_control_coverage_is_not_video_semantic_success": True,
+            "perception_metric_manifest_is_not_video_semantic_success": True,
             "case_study_claim_allowed_means_single_case_evidence_only": paper_claim_allowed,
             "paper_claim_allowed_is_deprecated_use_case_study_claim_allowed": True,
             "strict_baseline_comparison_supported": strict_baseline_comparison_supported,
@@ -513,6 +620,10 @@ def discover_registry_cases(scan_root: Path) -> list[dict[str, Any]]:
         if coverage_path:
             row["longtail_control_coverage"] = path_string(coverage_path)
 
+        perception_manifest_path = find_perception_metric_manifest_file(path)
+        if perception_manifest_path:
+            row["perception_metric_manifest"] = path_string(perception_manifest_path)
+
         attach_alignment_eval_paths(row, data, alignment_index)
 
         rows.append(row)
@@ -580,6 +691,12 @@ def build_registry(manifest: dict[str, Any] | list[Any], manifest_dir: Path | No
         if as_dict(row.get("longtail_control_coverage")).get("available") is True
     ]
     longtail_scores = [score for score in longtail_scores if score is not None]
+    perception_metric_scores = [
+        coerce_float(as_dict(row.get("perception_metric_manifest")).get("score"))
+        for row in cases
+        if as_dict(row.get("perception_metric_manifest")).get("available") is True
+    ]
+    perception_metric_scores = [score for score in perception_metric_scores if score is not None]
 
     return {
         "raw_case_count": len(raw_cases),
@@ -594,6 +711,18 @@ def build_registry(manifest: dict[str, Any] | list[Any], manifest_dir: Path | No
         ),
         "automatic_multiround_supported_count": sum(1 for row in cases if row["automatic_multiround_supported"]),
         "perception_passed_count": sum(1 for row in cases if row["perception_passed"]),
+        "perception_metric_manifest_available_count": sum(
+            1 for row in cases if as_dict(row.get("perception_metric_manifest")).get("available") is True
+        ),
+        "perception_metric_manifest_measured_count": sum(
+            1 for row in cases if as_dict(row.get("perception_metric_manifest")).get("measured") is True
+        ),
+        "perception_metric_manifest_complete_count": sum(
+            1 for row in cases if as_dict(row.get("perception_metric_manifest")).get("metrics_complete") is True
+        ),
+        "perception_metric_manifest_mean_score": (
+            round(sum(perception_metric_scores) / len(perception_metric_scores), 6) if perception_metric_scores else None
+        ),
         "longtail_control_coverage_available_count": sum(
             1 for row in cases if as_dict(row.get("longtail_control_coverage")).get("available") is True
         ),
@@ -609,6 +738,7 @@ def build_registry(manifest: dict[str, Any] | list[Any], manifest_dir: Path | No
             "duplicate_closed_loop_summaries_are_collapsed": True,
             "auto_matched_alignment_evals_are_not_new_semantic_evidence": True,
             "registry_longtail_control_coverage_is_not_video_semantic_success": True,
+            "registry_perception_metric_manifest_is_not_video_semantic_success": True,
         },
     }
 
@@ -633,6 +763,8 @@ def render_markdown(registry: dict[str, Any]) -> str:
         f"- case_study_claim_allowed_count: `{registry.get('case_study_claim_allowed_count')}`",
         f"- longtail_control_coverage_available_count: `{registry.get('longtail_control_coverage_available_count')}`",
         f"- longtail_control_coverage_mean_score: `{registry.get('longtail_control_coverage_mean_score')}`",
+        f"- perception_metric_manifest_available_count: `{registry.get('perception_metric_manifest_available_count')}`",
+        f"- perception_metric_manifest_mean_score: `{registry.get('perception_metric_manifest_mean_score')}`",
         "",
         "| case | family | status | pre | retry | evidence | case-study claim | strict baseline | automatic loop | perception passed |",
         "|---|---|---|---:|---:|---|---:|---:|---:|---:|",

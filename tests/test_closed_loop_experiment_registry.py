@@ -533,3 +533,126 @@ def test_registry_computes_longtail_control_coverage_from_manifest_scene_and_pla
     assert longtail["missing_channels"] == {
         "motorcycle_cut_in": ["source_or_structural", "evaluation"]
     }
+
+
+
+def test_registry_records_perception_metric_manifest_from_eval_report(tmp_path):
+    summary = write_json(
+        tmp_path / "summary.json",
+        {
+            "schema_version": "driveloop_closed_loop_case_summary.v0",
+            "case_id": "case_with_perception_eval",
+            "closed_loop_status": "measured_passed",
+        },
+    )
+    perception_eval = write_json(
+        tmp_path / "perception_video_evaluation.json",
+        {
+            "schema_version": "driveloop_perception_video_eval.v0",
+            "evaluation": {
+                "score": 0.91,
+                "metrics": {
+                    "perception_measured": 1.0,
+                    "Q_cov": 1.0,
+                    "Q_conf": 0.91,
+                    "Q_track": 1.0,
+                    "Q_id": 1.0,
+                    "Q_box": 0.83,
+                },
+                "diagnosis": {"passed": True, "reasons": []},
+            },
+            "interpretation": {
+                "perception_claim": "measured_passed",
+                "semantic_success_claim": "not_proven_by_perception_metrics_alone",
+            },
+        },
+    )
+
+    registry = build_registry(
+        {
+            "cases": [
+                {
+                    "case_id": "case_with_perception_eval",
+                    "closed_loop_case_summary": str(summary),
+                    "perception_eval": str(perception_eval),
+                }
+            ]
+        }
+    )
+
+    row = registry["cases"][0]
+    manifest = row["perception_metric_manifest"]
+    assert manifest["available"] is True
+    assert manifest["source"] == "perception_eval"
+    assert manifest["perception_claim"] == "measured_passed"
+    assert manifest["metrics"]["Q_cov"] == 1.0
+    assert manifest["metrics_complete"] is True
+    assert manifest["measured"] is True
+    assert manifest["passed"] is True
+    assert row["perception_passed"] is True
+    assert row["sources"]["perception_metric_manifest"]["exists"] is False
+    assert registry["perception_metric_manifest_available_count"] == 1
+    assert registry["perception_metric_manifest_measured_count"] == 1
+    assert registry["perception_metric_manifest_complete_count"] == 1
+    assert registry["perception_metric_manifest_mean_score"] == 0.91
+    assert row["claim_boundary"]["perception_metric_manifest_is_not_video_semantic_success"] is True
+
+
+def test_registry_records_perception_metric_manifest_artifact(tmp_path):
+    summary = write_json(
+        tmp_path / "summary.json",
+        {
+            "schema_version": "driveloop_closed_loop_case_summary.v0",
+            "case_id": "case_with_perception_manifest",
+            "closed_loop_status": "measured_failed",
+        },
+    )
+    perception_manifest = write_json(
+        tmp_path / "perception_metric_manifest.json",
+        {
+            "schema_version": "driveloop_perception_metric_manifest.v0",
+            "available": True,
+            "source": "artifact",
+            "evaluator": "PerceptionVideoEvaluator",
+            "perception_claim": "measured_failed",
+            "semantic_success_claim": "not_proven_by_perception_metrics_alone",
+            "score": 0.42,
+            "measured": True,
+            "passed": False,
+            "metrics_complete": True,
+            "metrics": {
+                "Q_cov": 0.25,
+                "Q_conf": 0.8,
+                "Q_track": 0.25,
+                "Q_id": 1.0,
+                "Q_box": 1.0,
+            },
+            "missing_metrics": [],
+            "metric_source_keys": {},
+            "source_metric_prefixes": [],
+            "claim_boundary": {
+                "perception_metric_manifest_is_not_video_semantic_success": True,
+            },
+        },
+    )
+
+    registry = build_registry(
+        {
+            "cases": [
+                {
+                    "case_id": "case_with_perception_manifest",
+                    "closed_loop_case_summary": str(summary),
+                    "perception_metric_manifest": str(perception_manifest),
+                }
+            ]
+        }
+    )
+
+    row = registry["cases"][0]
+    manifest = row["perception_metric_manifest"]
+    assert manifest["available"] is True
+    assert manifest["source"] == "artifact"
+    assert manifest["perception_claim"] == "measured_failed"
+    assert manifest["score"] == 0.42
+    assert manifest["metrics"]["Q_cov"] == 0.25
+    assert row["sources"]["perception_metric_manifest"]["exists"] is True
