@@ -206,6 +206,31 @@ def summarize_perception_metric_manifest(data: Any, source: str) -> dict[str, An
     return manifest
 
 
+
+def build_case_automatic_closed_loop_manifest(*, manifest_path: Path | None) -> dict[str, Any]:
+    data = load_json(manifest_path) if manifest_path else {}
+    if not data:
+        return {
+            "available": False,
+            "source": source_entry(manifest_path),
+        }
+
+    return {
+        "available": True,
+        "source": source_entry(manifest_path),
+        "schema_version": data.get("schema_version"),
+        "loop_source": data.get("source"),
+        "automatic_loop_supported": bool(data.get("automatic_loop_supported")),
+        "automatic_multiround_supported": bool(data.get("automatic_multiround_supported")),
+        "attempt_count": data.get("attempt_count"),
+        "complete_transition_count": data.get("complete_transition_count"),
+        "blockers": as_list(data.get("blockers")),
+        "audit_only_detected": bool(data.get("audit_only_detected")),
+        "manual_review_dependency_detected": bool(data.get("manual_review_dependency_detected")),
+        "claim_boundary": as_dict(data.get("claim_boundary")),
+    }
+
+
 def build_case_perception_metric_manifest(
     row: dict[str, Any],
     case_summary: dict[str, Any],
@@ -357,6 +382,7 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
     retry_alignment_path = resolve_path(row.get("retry_alignment_eval"), manifest_dir)
     perception_eval_path = resolve_path(row.get("perception_eval"), manifest_dir)
     perception_metric_manifest_path = resolve_path(row.get("perception_metric_manifest"), manifest_dir)
+    automatic_closed_loop_manifest_path = resolve_path(row.get("automatic_closed_loop_manifest"), manifest_dir)
     baseline_summary_path = resolve_path(row.get("baseline_summary"), manifest_dir)
     longtail_coverage_path = resolve_path(row.get("longtail_control_coverage"), manifest_dir)
 
@@ -411,7 +437,13 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
 
     baseline_available = bool(row.get("baseline_available") or (baseline_summary_path and baseline_summary_path.exists()))
     strict_baseline_comparison_supported = bool(row.get("strict_baseline_comparison_supported"))
-    automatic_multiround_supported = bool(row.get("automatic_multiround_supported"))
+    automatic_closed_loop_manifest = build_case_automatic_closed_loop_manifest(
+        manifest_path=automatic_closed_loop_manifest_path,
+    )
+    automatic_multiround_supported = bool(
+        row.get("automatic_multiround_supported")
+        or automatic_closed_loop_manifest.get("automatic_multiround_supported")
+    )
 
     status = case_summary.get("closed_loop_status")
     level = evidence_level(status, retry_claim, artifact_manifest)
@@ -451,6 +483,7 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
         "baseline_available": baseline_available,
         "strict_baseline_comparison_supported": strict_baseline_comparison_supported,
         "automatic_multiround_supported": automatic_multiround_supported,
+        "automatic_closed_loop_manifest": automatic_closed_loop_manifest,
         "case_study_claim_allowed": paper_claim_allowed,
         "paper_claim_allowed": False,
         "longtail_control_coverage": longtail_control_coverage,
@@ -466,6 +499,7 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
             "perception_metric_manifest": source_entry(perception_metric_manifest_path),
             "baseline_summary": source_entry(baseline_summary_path),
             "longtail_control_coverage": source_entry(longtail_coverage_path),
+            "automatic_closed_loop_manifest": source_entry(automatic_closed_loop_manifest_path),
         },
         "claim_boundary": {
             "registry_record_is_not_video_semantic_success": True,
@@ -473,6 +507,7 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
             "auto_matched_alignment_eval_is_metadata_link_not_new_review": True,
             "longtail_control_coverage_is_not_video_semantic_success": True,
             "perception_metric_manifest_is_not_video_semantic_success": True,
+            "automatic_closed_loop_manifest_is_not_video_semantic_success": True,
             "case_study_claim_allowed_means_single_case_evidence_only": paper_claim_allowed,
             "paper_claim_allowed_is_deprecated_use_case_study_claim_allowed": True,
             "strict_baseline_comparison_supported": strict_baseline_comparison_supported,
@@ -710,6 +745,9 @@ def build_registry(manifest: dict[str, Any] | list[Any], manifest_dir: Path | No
             1 for row in cases if row["strict_baseline_comparison_supported"]
         ),
         "automatic_multiround_supported_count": sum(1 for row in cases if row["automatic_multiround_supported"]),
+        "automatic_closed_loop_manifest_available_count": sum(
+            1 for row in cases if as_dict(row.get("automatic_closed_loop_manifest")).get("available") is True
+        ),
         "perception_passed_count": sum(1 for row in cases if row["perception_passed"]),
         "perception_metric_manifest_available_count": sum(
             1 for row in cases if as_dict(row.get("perception_metric_manifest")).get("available") is True
@@ -739,6 +777,7 @@ def build_registry(manifest: dict[str, Any] | list[Any], manifest_dir: Path | No
             "auto_matched_alignment_evals_are_not_new_semantic_evidence": True,
             "registry_longtail_control_coverage_is_not_video_semantic_success": True,
             "registry_perception_metric_manifest_is_not_video_semantic_success": True,
+            "registry_automatic_closed_loop_manifest_is_not_video_semantic_success": True,
         },
     }
 

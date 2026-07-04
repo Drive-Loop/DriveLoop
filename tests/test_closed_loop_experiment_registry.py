@@ -656,3 +656,48 @@ def test_registry_records_perception_metric_manifest_artifact(tmp_path):
     assert manifest["score"] == 0.42
     assert manifest["metrics"]["Q_cov"] == 0.25
     assert row["sources"]["perception_metric_manifest"]["exists"] is True
+
+
+
+def test_registry_reads_automatic_closed_loop_manifest(tmp_path):
+    automatic = write_json(
+        tmp_path / "automatic_closed_loop_manifest.json",
+        {
+            "schema_version": "driveloop_automatic_closed_loop_manifest.v0",
+            "source": "DriveLoopRunner+MockGenerationBackend",
+            "automatic_loop_supported": True,
+            "automatic_multiround_supported": True,
+            "attempt_count": 2,
+            "complete_transition_count": 1,
+            "blockers": [],
+            "audit_only_detected": False,
+            "manual_review_dependency_detected": False,
+            "claim_boundary": {
+                "manifest_is_not_video_semantic_success": True,
+            },
+        },
+    )
+
+    registry = build_registry(
+        {
+            "cases": [
+                {
+                    "case_id": "mock_automatic_loop",
+                    "task_family": "mock_closed_loop",
+                    "automatic_closed_loop_manifest": str(automatic),
+                }
+            ]
+        },
+        tmp_path,
+    )
+
+    row = registry["cases"][0]
+    assert row["automatic_multiround_supported"] is True
+    assert row["automatic_closed_loop_manifest"]["available"] is True
+    assert row["automatic_closed_loop_manifest"]["attempt_count"] == 2
+    assert row["automatic_closed_loop_manifest"]["complete_transition_count"] == 1
+    assert row["sources"]["automatic_closed_loop_manifest"]["exists"] is True
+    assert registry["automatic_multiround_supported_count"] == 1
+    assert registry["automatic_closed_loop_manifest_available_count"] == 1
+    assert registry["claim_boundary"]["registry_automatic_closed_loop_manifest_is_not_video_semantic_success"] is True
+    assert "automate_generate_evaluate_diagnose_refine_regenerate_loop" not in row["remaining_work"]
