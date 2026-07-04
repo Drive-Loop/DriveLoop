@@ -133,3 +133,35 @@ def test_external_audit_only_env_allows_missing_baseline_video(monkeypatch, tmp_
     assert captured["env"]["DRIVELOOP_DD2_AUDIT_ONLY"] == "1"
     assert generation.metadata["dd2_audit_only"] is True
     assert generation.metadata["dd2_runtime_input_audit"]["audit_only"] is True
+
+
+
+def test_audit_only_preserves_existing_baseline_video(monkeypatch, tmp_path: Path):
+    dataset = _write_dataset(tmp_path / "dataset")
+    baseline_output_dir = tmp_path / "baseline"
+    baseline_output_dir.mkdir()
+    baseline_video = baseline_output_dir / "000000.mp4"
+    baseline_video.write_bytes(b"keep existing baseline video")
+
+    def fake_run(*args, **kwargs):
+        env = kwargs["env"]
+        audit_path = Path(env["DRIVELOOP_DD2_AUDIT_PATH"])
+        audit_path.parent.mkdir(parents=True, exist_ok=True)
+        audit_path.write_text('{"audit_only": true}', encoding="utf-8")
+        return SimpleNamespace(returncode=0)
+
+    monkeypatch.setattr("driveloop.backends.drivedreamer2.subprocess.run", fake_run)
+
+    backend = DriveDreamer2Backend(
+        project_root=tmp_path,
+        baseline_output_dir=baseline_output_dir,
+        baseline_dataset_dir=dataset,
+        artifact_dir=tmp_path / "artifacts",
+        audit_only=True,
+    )
+
+    generation = backend.generate(DriveLoopRequest(prompt="target prompt"), iteration=0)
+
+    assert baseline_video.read_bytes() == b"keep existing baseline video"
+    assert "video" not in generation.artifacts
+    assert generation.metadata["dd2_audit_only"] is True

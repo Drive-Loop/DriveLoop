@@ -70,8 +70,6 @@ class DriveDreamer2Backend(GenerationBackend):
         run_artifact_dir.mkdir(parents=True, exist_ok=True)
 
         baseline_video = self.baseline_output_dir / "000000.mp4"
-        if baseline_video.exists():
-            baseline_video.unlink()
 
         env = os.environ.copy()
         env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
@@ -136,6 +134,8 @@ class DriveDreamer2Backend(GenerationBackend):
         env["DRIVELOOP_DD2_AUDIT_PATH"] = str(audit_path)
         env["DRIVELOOP_DD2_DATA_OR_CONFIG"] = str(self.baseline_dataset_dir)
         effective_audit_only = self.audit_only or env.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1"
+        if baseline_video.exists() and not effective_audit_only:
+            baseline_video.unlink()
         if dd2_prompt:
             env["DRIVELOOP_DD2_PROMPT"] = str(dd2_prompt)
         if effective_audit_only:
