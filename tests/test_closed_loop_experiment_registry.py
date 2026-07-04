@@ -1,0 +1,443 @@
+from __future__ import annotations
+
+import json
+import subprocess
+import sys
+from pathlib import Path
+
+from scripts.run_closed_loop_experiment_registry import build_registry, discover_registry_cases, render_markdown
+
+
+def write_json(path: Path, data: dict) -> Path:
+    path.parent.mkdir(parents=True, exist_ok=True)
+    path.write_text(json.dumps(data), encoding="utf-8")
+    return path
+
+
+def alignment_eval(scenario_id: str, claim: str, score: float, passed: bool, checks: tuple[int, int]) -> dict:
+    return {
+        "generation": {
+            "prompt": "night urban street with a motorcycle making a visible cut-in from the left",
+            "metadata": {
+                "scenario_id": scenario_id,
+                "prompt_video_alignment": {
+                    "status": "measured",
+                    "source": "manual_review",
+                    "reviewer": "tester",
+                },
+            },
+        },
+        "evaluation": {
+            "score": score,
+            "metrics": {
+                "alignment_required_check_count": float(checks[1]),
+                "alignment_passed_required_check_count": float(checks[0]),
+            },
+            "diagnosis": {
+                "passed": passed,
+                "reasons": [] if passed else ["alignment_check_failed:maneuver"],
+            },
+        },
+        "interpretation": {
+            "video_semantic_claim": claim,
+        },
+    }
+
+
+def test_registry_promotes_measured_failed_to_passed_case_study(tmp_path):
+    failed = write_json(
+        tmp_path / "failed.json",
+        alignment_eval("candidate70_failed", "measured_failed", 0.361111, False, (3, 9)),
+    )
+    retry = write_json(
+        tmp_path / "retry.json",
+        alignment_eval("candidate70_retry", "measured_passed", 0.916667, True, (9, 9)),
+    )
+    summary = write_json(
+        tmp_path / "summary.json",
+        {
+            "schema_version": "driveloop_closed_loop_case_summary.v0",
+            "case_id": "candidate70_failed_to_passed",
+            "closed_loop_status": "measured_failed_to_measured_passed",
+            "attempts": {
+                "pre_refinement": {
+                    "video_semantic_claim": "measured_failed",
+                    "score": 0.361111,
+                    "passed_required_check_count": 3,
+                    "required_check_count": 9,
+                },
+                "post_refinement_retry": {
+                    "video_semantic_claim": "measured_passed",
+                    "score": 0.916667,
+                    "passed_required_check_count": 9,
+                    "required_check_count": 9,
+                },
+            },
+            "evidence_chain": [
+                "external_alignment_review",
+                "failure_taxonomy",
+                "refinement_proposal",
+                "post_retry_alignment_review",
+            ],
+            "claim_boundary": {
+                "closed_loop_case_is_not_strict_open_loop_baseline_comparison": True,
+            },
+            "remaining_work": ["repeat_closed_loop_protocol_on_more_long_tail_cases"],
+        },
+    )
+
+    registry = build_registry(
+        {
+            "cases": [
+                {
+                    "case_id": "candidate70",
+                    "task_family": "motorcycle_cut_in",
+                    "closed_loop_case_summary": str(summary),
+                    "failed_alignment_eval": str(failed),
+                    "retry_alignment_eval": str(retry),
+                }
+            ]
+        },
+        tmp_path,
+    )
+
+    row = registry["cases"][0]
+    assert registry["schema_version"] == "driveloop_closed_loop_experiment_registry.v0"
+    assert registry["case_study_evidence_count"] == 1
+    assert registry["case_study_claim_allowed_count"] == 1
+    assert registry["paper_claim_allowed_count"] == 0
+    assert row["evidence_level"] == "case_study_evidence"
+    assert row["case_study_claim_allowed"] is True
+    assert row["paper_claim_allowed"] is False
+    assert row["strict_baseline_comparison_supported"] is False
+    assert row["automatic_multiround_supported"] is False
+    assert row["pre_checks"] == "3/9"
+    assert row["retry_checks"] == "9/9"
+    assert "add_strict_open_loop_dd2_baseline_comparison" in row["remaining_work"]
+    assert row["claim_boundary"]["case_study_claim_allowed_means_single_case_evidence_only"] is True
+    assert row["claim_boundary"]["paper_claim_allowed_is_deprecated_use_case_study_claim_allowed"] is True
+
+
+def test_registry_does_not_upgrade_candidate_artifact_to_paper_claim(tmp_path):
+    manifest = write_json(
+        tmp_path / "artifact_manifest.json",
+        {
+            "schema_version": "driveloop_candidate_artifact_manifest.v0",
+            "scenario_id": "candidate_only",
+            "prompt": "motorcycle lane change",
+            "candidate_status": "candidate_video_only",
+            "video_semantic_claim": "not_measured",
+        },
+    )
+
+    registry = build_registry(
+        {
+            "cases": [
+                {
+                    "case_id": "candidate_only",
+                    "task_family": "motorcycle_lane_change",
+                    "artifact_manifest": str(manifest),
+                }
+            ]
+        },
+        tmp_path,
+    )
+
+    row = registry["cases"][0]
+    assert row["evidence_level"] == "candidate_artifact_only"
+    assert row["case_study_claim_allowed"] is False
+    assert row["paper_claim_allowed"] is False
+    assert row["pre_claim"] is None
+    assert row["retry_claim"] is None
+    assert registry["paper_claim_allowed_count"] == 0
+
+
+def test_markdown_renders_registry_table(tmp_path):
+    registry = build_registry(
+        {
+            "cases": [
+                {
+                    "case_id": "empty_case",
+                    "task_family": "smoke",
+                }
+            ]
+        },
+        tmp_path,
+    )
+    markdown = render_markdown(registry)
+
+    assert "# DriveLoop Closed-loop Experiment Registry" in markdown
+    assert "raw_case_count" in markdown
+    assert "deduplicated_case_count" in markdown
+    assert "| empty_case | smoke |" in markdown
+    assert "`registry_is_not_video_semantic_success`: `True`" in markdown
+
+
+def test_cli_writes_json_and_markdown(tmp_path):
+    summary = write_json(
+        tmp_path / "summary.json",
+        {
+            "schema_version": "driveloop_closed_loop_case_summary.v0",
+            "case_id": "candidate70",
+            "closed_loop_status": "measured_failed_to_measured_passed",
+            "attempts": {
+                "pre_refinement": {"video_semantic_claim": "measured_failed", "score": 0.3},
+                "post_refinement_retry": {"video_semantic_claim": "measured_passed", "score": 0.9},
+            },
+            "evidence_chain": ["external_alignment_review", "post_retry_alignment_review"],
+        },
+    )
+    manifest = write_json(
+        tmp_path / "registry_manifest.json",
+        {
+            "cases": [
+                {
+                    "case_id": "candidate70",
+                    "task_family": "motorcycle_cut_in",
+                    "closed_loop_case_summary": str(summary),
+                }
+            ]
+        },
+    )
+    output_json = tmp_path / "out" / "registry.json"
+    output_md = tmp_path / "out" / "registry.md"
+
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_closed_loop_experiment_registry.py",
+            "--manifest",
+            str(manifest),
+            "--output-json",
+            str(output_json),
+            "--output-md",
+            str(output_md),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    data = json.loads(output_json.read_text(encoding="utf-8"))
+    assert result.returncode == 0
+    assert data["case_study_claim_allowed_count"] == 1
+    assert data["paper_claim_allowed_count"] == 0
+    assert output_md.exists()
+
+
+
+def test_discover_registry_cases_from_scan_root(tmp_path):
+    summary = write_json(
+        tmp_path / "outputs" / "closed_loop_case_summary" / "candidate70_summary.json",
+        {
+            "schema_version": "driveloop_closed_loop_case_summary.v0",
+            "case_id": "candidate70_motorcycle_cut_in",
+            "closed_loop_status": "measured_failed_to_measured_passed",
+            "attempts": {
+                "pre_refinement": {"video_semantic_claim": "measured_failed", "score": 0.3},
+                "post_refinement_retry": {"video_semantic_claim": "measured_passed", "score": 0.9},
+            },
+            "evidence_chain": ["external_alignment_review", "post_retry_alignment_review"],
+        },
+    )
+    write_json(
+        tmp_path / "outputs" / "closed_loop_case_summary" / "ignore.json",
+        {"schema_version": "not_a_closed_loop_summary"},
+    )
+    write_json(
+        tmp_path / "outputs" / "closed_loop_case_summary" / "list_top_level.json",
+        [{"schema_version": "driveloop_closed_loop_case_summary.v0"}],
+    )
+
+    rows = discover_registry_cases(tmp_path / "outputs")
+    assert len(rows) == 1
+    assert rows[0]["case_id"] == "candidate70_motorcycle_cut_in"
+    assert rows[0]["task_family"] == "motorcycle_cut_in"
+    assert rows[0]["closed_loop_case_summary"] == str(summary)
+
+    registry = build_registry({"cases": rows}, tmp_path)
+    assert registry["case_count"] == 1
+    assert registry["case_study_claim_allowed_count"] == 1
+    assert registry["paper_claim_allowed_count"] == 0
+
+
+def test_cli_scan_root_writes_registry(tmp_path):
+    write_json(
+        tmp_path / "outputs" / "audit_only_closed_loop_runner" / "case_a" / "closed_loop_case_summary.json",
+        {
+            "schema_version": "driveloop_closed_loop_case_summary.v0",
+            "case_id": "case_a_motorcycle_cut_in",
+            "closed_loop_status": "measured_failed_to_measured_passed",
+            "attempts": {
+                "pre_refinement": {"video_semantic_claim": "measured_failed", "score": 0.2},
+                "post_refinement_retry": {"video_semantic_claim": "measured_passed", "score": 0.95},
+            },
+            "evidence_chain": ["external_alignment_review", "post_retry_alignment_review"],
+        },
+    )
+    write_json(
+        tmp_path / "outputs" / "audit_only_closed_loop_runner" / "case_a" / "runner_summary.json",
+        {
+            "schema_version": "driveloop_audit_only_closed_loop_runner.v0",
+            "claim_boundary": {"semantic_success_claim_allowed": False},
+        },
+    )
+
+    output_json = tmp_path / "registry.json"
+    output_md = tmp_path / "registry.md"
+    result = subprocess.run(
+        [
+            sys.executable,
+            "scripts/run_closed_loop_experiment_registry.py",
+            "--scan-root",
+            str(tmp_path / "outputs"),
+            "--output-json",
+            str(output_json),
+            "--output-md",
+            str(output_md),
+        ],
+        check=True,
+        capture_output=True,
+        text=True,
+    )
+
+    data = json.loads(output_json.read_text(encoding="utf-8"))
+    assert result.returncode == 0
+    assert data["case_count"] == 1
+    assert data["case_study_claim_allowed_count"] == 1
+    assert data["paper_claim_allowed_count"] == 0
+    assert data["cases"][0]["sources"]["runner_summary"]["exists"] is True
+    assert output_md.exists()
+
+
+
+def test_registry_deduplicates_candidate70_duplicate_summaries(tmp_path):
+    first = write_json(
+        tmp_path / "outputs" / "closed_loop_case_summary" / "candidate70_failed_to_passed_summary.json",
+        {
+            "schema_version": "driveloop_closed_loop_case_summary.v0",
+            "case_id": "candidate70_failed_to_passed",
+            "closed_loop_status": "measured_failed_to_measured_passed",
+            "attempts": {
+                "pre_refinement": {"video_semantic_claim": "measured_failed", "score": 0.361111},
+                "post_refinement_retry": {"video_semantic_claim": "measured_passed", "score": 0.916667},
+            },
+            "evidence_chain": ["external_alignment_review", "post_retry_alignment_review"],
+        },
+    )
+    second_dir = tmp_path / "outputs" / "audit_only_closed_loop_runner" / "candidate70"
+    second = write_json(
+        second_dir / "closed_loop_case_summary.json",
+        {
+            "schema_version": "driveloop_closed_loop_case_summary.v0",
+            "case_id": "candidate70_audit_only_failed_to_passed_runner",
+            "closed_loop_status": "measured_failed_to_measured_passed",
+            "attempts": {
+                "pre_refinement": {"video_semantic_claim": "measured_failed", "score": 0.361111},
+                "post_refinement_retry": {"video_semantic_claim": "measured_passed", "score": 0.916667},
+            },
+            "evidence_chain": ["external_alignment_review", "post_retry_alignment_review"],
+        },
+    )
+    write_json(
+        second_dir / "runner_summary.json",
+        {
+            "schema_version": "driveloop_audit_only_closed_loop_runner.v0",
+            "claim_boundary": {"semantic_success_claim_allowed": False},
+        },
+    )
+
+    rows = discover_registry_cases(tmp_path / "outputs")
+    assert len(rows) == 2
+
+    registry = build_registry({"cases": rows}, tmp_path)
+    assert registry["raw_case_count"] == 2
+    assert registry["case_count"] == 1
+    assert registry["deduplicated_case_count"] == 1
+    row = registry["cases"][0]
+    assert row["case_id"] == "candidate70_audit_only_failed_to_passed_runner"
+    assert row["sources"]["runner_summary"]["exists"] is True
+    assert row["duplicate_sources"][0]["path"] == str(first)
+    assert row["claim_boundary"]["duplicate_sources_are_not_counted_as_separate_cases"] is True
+    assert registry["claim_boundary"]["duplicate_closed_loop_summaries_are_collapsed"] is True
+
+
+
+def test_discovery_auto_links_alignment_evals_by_claim_score_and_checks(tmp_path):
+    outputs = tmp_path / "outputs"
+    failed_eval = write_json(
+        outputs / "prompt_video_alignment_eval" / "failed" / "prompt_video_alignment_evaluation.json",
+        alignment_eval("failed_scenario", "measured_failed", 0.361111, False, (3, 9)),
+    )
+    retry_eval = write_json(
+        outputs / "prompt_video_alignment_eval" / "retry" / "prompt_video_alignment_evaluation.json",
+        alignment_eval("retry_scenario", "measured_passed", 0.916667, True, (9, 9)),
+    )
+    write_json(
+        outputs / "closed_loop_case_summary" / "candidate70_summary.json",
+        {
+            "schema_version": "driveloop_closed_loop_case_summary.v0",
+            "case_id": "candidate70_motorcycle_cut_in",
+            "closed_loop_status": "measured_failed_to_measured_passed",
+            "attempts": {
+                "pre_refinement": {
+                    "video_semantic_claim": "measured_failed",
+                    "score": 0.361111,
+                    "passed_required_check_count": 3,
+                    "required_check_count": 9,
+                },
+                "post_refinement_retry": {
+                    "video_semantic_claim": "measured_passed",
+                    "score": 0.916667,
+                    "passed_required_check_count": 9,
+                    "required_check_count": 9,
+                },
+            },
+            "evidence_chain": ["external_alignment_review", "post_retry_alignment_review"],
+        },
+    )
+
+    rows = discover_registry_cases(outputs)
+    assert rows[0]["failed_alignment_eval"] == str(failed_eval)
+    assert rows[0]["retry_alignment_eval"] == str(retry_eval)
+
+    registry = build_registry({"cases": rows}, tmp_path)
+    row = registry["cases"][0]
+    assert row["scenario_id"] == "retry_scenario"
+    assert row["prompt"] == "night urban street with a motorcycle making a visible cut-in from the left"
+    assert row["sources"]["failed_alignment_eval"]["exists"] is True
+    assert row["sources"]["retry_alignment_eval"]["exists"] is True
+    assert row["claim_boundary"]["auto_matched_alignment_eval_is_metadata_link_not_new_review"] is True
+
+
+def test_discovery_keeps_ambiguous_alignment_matches_as_candidates(tmp_path):
+    outputs = tmp_path / "outputs"
+    write_json(
+        outputs / "prompt_video_alignment_eval" / "a" / "prompt_video_alignment_evaluation.json",
+        alignment_eval("failed_a", "measured_failed", 0.361111, False, (3, 9)),
+    )
+    write_json(
+        outputs / "prompt_video_alignment_eval" / "b" / "prompt_video_alignment_evaluation.json",
+        alignment_eval("failed_b", "measured_failed", 0.361111, False, (3, 9)),
+    )
+    write_json(
+        outputs / "closed_loop_case_summary" / "candidate70_summary.json",
+        {
+            "schema_version": "driveloop_closed_loop_case_summary.v0",
+            "case_id": "candidate70_motorcycle_cut_in",
+            "closed_loop_status": "incomplete_or_not_measured",
+            "attempts": {
+                "pre_refinement": {
+                    "video_semantic_claim": "measured_failed",
+                    "score": 0.361111,
+                    "passed_required_check_count": 3,
+                    "required_check_count": 9,
+                },
+            },
+            "evidence_chain": ["external_alignment_review"],
+        },
+    )
+
+    rows = discover_registry_cases(outputs)
+    assert "failed_alignment_eval" not in rows[0]
+    assert len(rows[0]["failed_alignment_eval_candidates"]) == 2
