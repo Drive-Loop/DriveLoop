@@ -163,6 +163,12 @@ def _select_target_actor(
     return actor_controls[0] if actor_controls else None
 
 
+def _linspace(start: float, end: float, count: int) -> list[float]:
+    if count <= 1:
+        return [start]
+    return [start + (end - start) * idx / (count - 1) for idx in range(count)]
+
+
 def _build_motion_frames(
     actor_id: str,
     category: str,
@@ -170,12 +176,14 @@ def _build_motion_frames(
     relations: list[str],
 ) -> list[dict[str, Any]]:
     direction = -1.0 if "left" in relations else 1.0
+    frame_count = 8
+
     if maneuver == "cut_in":
-        lateral_offsets = [1.2 * direction, 0.5 * direction, -0.1 * direction, -0.6 * direction]
-        longitudinal_offsets = [1.2, 0.8, 0.3, -0.2]
+        lateral_offsets = _linspace(1.6 * direction, -0.8 * direction, frame_count)
+        longitudinal_offsets = _linspace(2.0, -0.4, frame_count)
     else:
-        lateral_offsets = [-1.2 * direction, -0.4 * direction, 0.4 * direction, 1.2 * direction]
-        longitudinal_offsets = [1.0, 0.7, 0.4, 0.1]
+        lateral_offsets = _linspace(-1.6 * direction, 1.6 * direction, frame_count)
+        longitudinal_offsets = _linspace(1.8, 0.0, frame_count)
 
     return [
         {
@@ -186,5 +194,5 @@ def _build_motion_frames(
             "longitudinal_offset_m": longitudinal_offsets[idx],
             "yaw_rad": -0.25,
         }
-        for idx in range(4)
+        for idx in range(frame_count)
     ]

@@ -19,7 +19,7 @@ def test_condition_adapter_exposes_actor_motion_plan_for_cut_in():
     assert actor_motion_plan["available"] is True
     assert actor_motion_plan["runtime_surface"]["type"] == "boxes3d.per_frame_append"
     assert actor_motion_plan["target_actor"]["category"] == "motorcycle"
-    assert len(actor_motion_plan["runtime_surface"]["frames"]) == 4
+    assert len(actor_motion_plan["runtime_surface"]["frames"]) == 8
     assert trajectory_contract["status"] == "runtime_connected_via_per_frame_actor_boxes3d"
     assert trajectory_contract["current_runtime_surfaces"]["per_frame_actor_boxes3d"] == "boxes3d.per_frame_append"
     assert executable["trace_metadata"]["actor_motion_surface_ready"] is True
@@ -44,8 +44,8 @@ def test_actor_motion_surface_plan_builds_per_frame_boxes3d_entries():
     assert surface_plan["available"] is True
     assert surface_plan["status"] == "runtime_connected_via_per_frame_boxes3d"
     assert surface_plan["surface"] == "boxes3d.per_frame_append"
-    assert len(surface_plan["per_frame_boxes3d"]) == 4
-    assert {entry["frame_idx"] for entry in surface_plan["per_frame_boxes3d"]} == {0, 1, 2, 3}
+    assert len(surface_plan["per_frame_boxes3d"]) == 8
+    assert {entry["frame_idx"] for entry in surface_plan["per_frame_boxes3d"]} == set(range(8))
     assert all(len(entry["box3d"]) == 9 for entry in surface_plan["per_frame_boxes3d"])
 
 
@@ -103,7 +103,7 @@ def test_backend_override_json_carries_actor_motion_surface_to_per_frame_append(
     assert candidate_plan["actor_motion_surface_plan"]["available"] is True
     assert candidate_plan["actor_motion_surface_plan"]["surface"] == "boxes3d.per_frame_append"
     assert override_json["boxes3d"]["mode"] == "append_and_per_frame_append"
-    assert len(override_json["boxes3d"]["per_frame_append"]) == 4
+    assert len(override_json["boxes3d"]["per_frame_append"]) == 8
     assert override_json["audit"]["control_level"] == "tensor_override_runtime"
     assert "per_frame_actor_boxes3d_runtime_surface_connected" in override_json["audit"]["limitations"]
 
@@ -111,10 +111,15 @@ def test_backend_override_json_carries_actor_motion_surface_to_per_frame_append(
 def test_backend_maps_actor_motion_surface_to_source_bound_sample_identity():
     backend = DriveDreamer2Backend()
     backend._build_source_bound_sample_identities = lambda binding: [
-        {"relative_step": 0, "record_index": 24, "cam_type": "cam_front", "frame_idx": 144, "sample_token": "s0", "scene_token": "scene"},
-        {"relative_step": 1, "record_index": 25, "cam_type": "cam_front", "frame_idx": 145, "sample_token": "s1", "scene_token": "scene"},
-        {"relative_step": 2, "record_index": 26, "cam_type": "cam_front", "frame_idx": 146, "sample_token": "s2", "scene_token": "scene"},
-        {"relative_step": 3, "record_index": 27, "cam_type": "cam_front", "frame_idx": 147, "sample_token": "s3", "scene_token": "scene"},
+        {
+            "relative_step": step,
+            "record_index": 24 + step,
+            "cam_type": "cam_front",
+            "frame_idx": 144 + step * 3,
+            "sample_token": f"s{step}",
+            "scene_token": "scene",
+        }
+        for step in range(8)
     ]
 
     actor_motion_plan = build_actor_motion_plan(
@@ -160,7 +165,7 @@ def test_backend_maps_actor_motion_surface_to_source_bound_sample_identity():
     )
 
     mapped = override_json["boxes3d"]["per_frame_append"]
-    assert [entry["relative_frame_idx"] for entry in mapped] == [0, 1, 2, 3]
-    assert [entry["frame_idx"] for entry in mapped] == [144, 145, 146, 147]
+    assert [entry["relative_frame_idx"] for entry in mapped] == list(range(8))
+    assert [entry["frame_idx"] for entry in mapped] == [144 + step * 3 for step in range(8)]
     assert all(entry["sample_identity"]["cam_type"] == "cam_front" for entry in mapped)
-    assert override_json["audit"]["actor_motion_frame_mapping"]["mapped_entry_count"] == 4
+    assert override_json["audit"]["actor_motion_frame_mapping"]["mapped_entry_count"] == 8
