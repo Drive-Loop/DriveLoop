@@ -30,14 +30,28 @@ Useful environment setup:
 
 P0 is not a final semantic-success result. The accurate status is:
 
-- Structural runtime / input readiness for candidate70 is now addressed.
-- Source-bound actor motion is connected to DD2 runtime tensor surfaces through sample-identity matched per-frame boxes3d append.
-- Local-map-vector HDMap lane-geometry replacement reaches the DD2 grounding surface.
-- The candidate70 semantic/alignment review protocol is now defined and wired into the readiness gate.
-- The default candidate70 readiness gate remains blocked only by semantic_success_claim_not_allowed.
-- gpu_smoke_allowed remains false.
+- Candidate70 structural runtime/input readiness is addressed.
+- Candidate70 semantic/alignment review protocol is defined and wired into the readiness gate.
+- A short candidate70 GPU smoke was run with explicit approval.
+- The generated candidate video was reviewed with the 9-check candidate70 semantic protocol.
+- The measured prompt-video semantic result is `measured_failed`.
+- `semantic_success_claim_allowed` remains false.
 
-The correct short claim is: structural evidence and review protocol ready; semantic success not yet claimed.
+The correct short claim is: P0 engineering and evaluation loop is closed end-to-end, but candidate70 semantic success failed under measured review.
+
+Latest post-GPU semantic review evidence:
+
+- scenario_id: `candidate70_night_cut_in_gpu_smoke`
+- candidate video: generated and decodable
+- review pack: generated with 9 candidate70 semantic checks
+- alignment score: `0.361111`
+- alignment passed: `false`
+- video_semantic_claim: `measured_failed`
+- failed semantic checks include target motorcycle/scooter visibility, target actor tracking, visible cut-in from left, temporal lateral displacement, left/adjacent-lane-to-ego relation, and HDMap/visual maneuver alignment.
+
+Tracked detailed snapshot:
+
+- /data/projects/DriveLoop/DriveDreamer2/experiments/2026-07-04_current_p0_status_after_candidate70_gpu_smoke_measured_failed.md
 
 ## Latest Non-GPU Verification
 

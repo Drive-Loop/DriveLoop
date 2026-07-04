@@ -26,13 +26,34 @@ def sample_frame_indices(frame_count: int, num_frames: int) -> List[int]:
     return sorted(set(int(i * max(frame_count - 1, 0) / (num_frames - 1)) for i in range(num_frames)))
 
 
-def default_checks() -> List[Dict[str, Any]]:
+def _is_candidate70_prompt(prompt: str) -> bool:
+    normalized = prompt.lower().replace("_", " ").replace("-", " ")
+    return (
+        "candidate70" in normalized
+        or (
+            "night" in normalized
+            and "motorcycle" in normalized
+            and "cut in" in normalized
+        )
+    )
+
+
+def _legacy_default_checks(prompt: str = "") -> List[Dict[str, Any]]:
+    lighting_check = "lighting.night" if "night" in prompt.lower() else "lighting.daytime"
     return [
         {"name": "object_presence.motorcycle", "required": True, "passed": False, "score": 0.0, "evidence": "not_reviewed"},
         {"name": "spatial_relation.left_lane_change", "required": True, "passed": False, "score": 0.0, "evidence": "not_reviewed"},
-        {"name": "lighting.daytime", "required": True, "passed": False, "score": 0.0, "evidence": "not_reviewed"},
+        {"name": lighting_check, "required": True, "passed": False, "score": 0.0, "evidence": "not_reviewed"},
         {"name": "scene_type.urban_road", "required": True, "passed": False, "score": 0.0, "evidence": "not_reviewed"},
     ]
+
+
+def default_checks(prompt: str = "") -> List[Dict[str, Any]]:
+    if _is_candidate70_prompt(prompt):
+        from scripts.run_candidate70_semantic_alignment_protocol import required_semantic_checks
+
+        return required_semantic_checks()
+    return _legacy_default_checks(prompt)
 
 
 def build_report(video_path: Path, contact_sheet: Path, prompt: str) -> Dict[str, Any]:
@@ -45,7 +66,7 @@ def build_report(video_path: Path, contact_sheet: Path, prompt: str) -> Dict[str
             "prompt": prompt,
             "note": "Template defaults to not_measured until a human reviewer inspects the frame pack and updates evidence.",
         },
-        "checks": default_checks(),
+        "checks": default_checks(prompt),
         "semantic_success_claim_allowed": False,
         "claim_boundary": {
             "template_is_not_measured_review": True,
