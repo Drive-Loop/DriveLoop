@@ -22,6 +22,17 @@ DEFAULT_SOURCE_BOUND_ACTOR_MOTION_AUDIT = Path(
 DEFAULT_SEMANTIC_ALIGNMENT_PROTOCOL = Path(
     "outputs/driveloop/candidate70_semantic_alignment_protocol/candidate70_semantic_alignment_protocol.json"
 )
+DEFAULT_CLOSED_LOOP_STATUS = Path(
+    "outputs/driveloop/candidate70_closed_loop_status/candidate70_closed_loop_status.json"
+)
+DEFAULT_PERCEPTION_VIDEO_EVAL = Path(
+    "outputs/driveloop/perception_video_eval/"
+    "candidate70_night_cut_in_yolov8n_cpu_8f_motorcycle/"
+    "perception_video_evaluation.json"
+)
+DEFAULT_GPU_RETRY_APPROVAL = Path(
+    "outputs/driveloop/gpu_retry_approval/candidate70_gpu_retry_approval.json"
+)
 DEFAULT_OUTPUT = Path("outputs/driveloop/gpu_smoke_readiness/candidate70_gpu_readiness_gate.json")
 
 
@@ -373,6 +384,141 @@ def load_semantic_alignment_protocol_evidence(path: Optional[Path]) -> dict[str,
     return evidence
 
 
+def load_closed_loop_status_evidence(path: Optional[Path]) -> dict[str, Any]:
+    evidence: dict[str, Any] = {
+        "path": str(path) if path is not None else None,
+        "exists": False,
+        "perception_measured_failed_connected": False,
+        "perception_step_status": None,
+    }
+    if path is None:
+        return evidence
+
+    data = load_json(path)
+    steps = data.get("closed_loop_steps", [])
+    if not isinstance(steps, list):
+        steps = []
+    perception_step = next(
+        (
+            step for step in steps
+            if isinstance(step, dict) and step.get("step") == "automatic_perception_evaluation"
+        ),
+        {},
+    )
+    blockers = data.get("current_blockers", [])
+    if not isinstance(blockers, list):
+        blockers = []
+
+    connected = (
+        path.exists()
+        and data.get("semantic_success_claim_allowed") is False
+        and perception_step.get("status") == "measured_failed"
+        and perception_step.get("passed") is False
+        and "automatic_perception_evaluator_measured_failed" in blockers
+    )
+
+    evidence.update(
+        {
+            "exists": path.exists(),
+            "schema_version": data.get("schema_version"),
+            "semantic_success_claim_allowed": data.get("semantic_success_claim_allowed"),
+            "perception_measured_failed_connected": connected,
+            "perception_step_status": perception_step.get("status"),
+            "perception_step_passed": perception_step.get("passed"),
+            "current_blockers": blockers,
+        }
+    )
+    return evidence
+
+
+def load_perception_video_eval_evidence(path: Optional[Path]) -> dict[str, Any]:
+    evidence: dict[str, Any] = {
+        "path": str(path) if path is not None else None,
+        "exists": False,
+        "measured_failed": False,
+    }
+    if path is None:
+        return evidence
+
+    data = load_json(path)
+    evaluation = data.get("evaluation", {})
+    if not isinstance(evaluation, dict):
+        evaluation = {}
+    metrics = evaluation.get("metrics", {})
+    if not isinstance(metrics, dict):
+        metrics = {}
+    diagnosis = evaluation.get("diagnosis", {})
+    if not isinstance(diagnosis, dict):
+        diagnosis = {}
+    interpretation = data.get("interpretation", {})
+    if not isinstance(interpretation, dict):
+        interpretation = {}
+
+    measured_failed = (
+        path.exists()
+        and interpretation.get("perception_claim") == "measured_failed"
+        and metrics.get("perception_measured") == 1.0
+        and diagnosis.get("passed") is False
+    )
+
+    evidence.update(
+        {
+            "exists": path.exists(),
+            "schema_version": data.get("schema_version"),
+            "perception_claim": interpretation.get("perception_claim"),
+            "semantic_success_claim": interpretation.get("semantic_success_claim"),
+            "measured_failed": measured_failed,
+            "score": evaluation.get("score"),
+            "metrics": {
+                "Q_cov": metrics.get("Q_cov"),
+                "Q_conf": metrics.get("Q_conf"),
+                "Q_track": metrics.get("Q_track"),
+                "Q_id": metrics.get("Q_id"),
+                "Q_box": metrics.get("Q_box"),
+                "perception_frame_count": metrics.get("perception_frame_count"),
+                "perception_detection_count": metrics.get("perception_detection_count"),
+                "perception_track_count": metrics.get("perception_track_count"),
+            },
+            "diagnosis_reasons": diagnosis.get("reasons", []),
+        }
+    )
+    return evidence
+
+
+def load_gpu_retry_approval_evidence(path: Optional[Path]) -> dict[str, Any]:
+    evidence: dict[str, Any] = {
+        "path": str(path) if path is not None else None,
+        "exists": False,
+        "approved": False,
+    }
+    if path is None:
+        return evidence
+
+    data = load_json(path)
+    approved = (
+        path.exists()
+        and data.get("approved_for_candidate70_gpu_retry") is True
+        and data.get("scenario_id") == "candidate70_night_cut_in_gpu_smoke"
+        and data.get("requires_post_gpu_review") is True
+        and data.get("approval_is_not_semantic_success") is True
+    )
+
+    evidence.update(
+        {
+            "exists": path.exists(),
+            "schema_version": data.get("schema_version"),
+            "approved": approved,
+            "approved_for_candidate70_gpu_retry": data.get("approved_for_candidate70_gpu_retry") is True,
+            "scenario_id": data.get("scenario_id"),
+            "requires_post_gpu_review": data.get("requires_post_gpu_review") is True,
+            "approval_is_not_semantic_success": data.get("approval_is_not_semantic_success") is True,
+            "approved_by": data.get("approved_by"),
+            "approval_note": data.get("approval_note"),
+        }
+    )
+    return evidence
+
+
 def build_candidate70_readiness_gate(
     *,
     prompt_bank_audit_path: Path = DEFAULT_PROMPT_BANK_AUDIT,
@@ -383,6 +529,9 @@ def build_candidate70_readiness_gate(
     source_bound_actor_motion_audit_path: Optional[Path] = None,
     local_map_vector_hdmap_audit_path: Optional[Path] = None,
     semantic_alignment_protocol_path: Optional[Path] = DEFAULT_SEMANTIC_ALIGNMENT_PROTOCOL,
+    closed_loop_status_path: Optional[Path] = DEFAULT_CLOSED_LOOP_STATUS,
+    perception_video_eval_path: Optional[Path] = DEFAULT_PERCEPTION_VIDEO_EVAL,
+    gpu_retry_approval_path: Optional[Path] = DEFAULT_GPU_RETRY_APPROVAL,
 ) -> dict[str, Any]:
     prompt_bank = load_json(prompt_bank_audit_path)
     accepted_prompt_selection = load_json(accepted_prompt_selection_path)
@@ -392,6 +541,9 @@ def build_candidate70_readiness_gate(
     actor_motion_evidence = load_source_bound_actor_motion_evidence(source_bound_actor_motion_audit_path)
     local_map_vector_hdmap_evidence = load_local_map_vector_hdmap_evidence(local_map_vector_hdmap_audit_path)
     semantic_alignment_protocol_evidence = load_semantic_alignment_protocol_evidence(semantic_alignment_protocol_path)
+    closed_loop_status_evidence = load_closed_loop_status_evidence(closed_loop_status_path)
+    perception_video_eval_evidence = load_perception_video_eval_evidence(perception_video_eval_path)
+    gpu_retry_approval_evidence = load_gpu_retry_approval_evidence(gpu_retry_approval_path)
 
     supported_count = prompt_bank.get("candidate70_allowed_count")
     accepted_prompt_selected = accepted_prompt_selection.get("accepted_prompt_selected") is True
@@ -457,6 +609,14 @@ def build_candidate70_readiness_gate(
         "semantic_success_claim_allowed": dry_run_claim.get("semantic_success_claim_allowed") is True,
         "semantic_alignment_protocol_exists": semantic_alignment_protocol_evidence.get("exists") is True,
         "semantic_alignment_protocol_defined": semantic_alignment_protocol_evidence.get("protocol_defined") is True,
+        "closed_loop_status_exists": closed_loop_status_evidence.get("exists") is True,
+        "closed_loop_status_has_perception_measured_failed": (
+            closed_loop_status_evidence.get("perception_measured_failed_connected") is True
+        ),
+        "perception_video_eval_exists": perception_video_eval_evidence.get("exists") is True,
+        "perception_eval_measured_failed": perception_video_eval_evidence.get("measured_failed") is True,
+        "explicit_gpu_retry_approval_exists": gpu_retry_approval_evidence.get("exists") is True,
+        "explicit_gpu_retry_approved": gpu_retry_approval_evidence.get("approved") is True,
     }
 
     blockers = []
@@ -482,6 +642,36 @@ def build_candidate70_readiness_gate(
     if not checks["semantic_success_claim_allowed"]:
         blockers.append("semantic_success_claim_not_allowed")
 
+    retry_checks = {
+        "source_bound_actor_motion_full_coverage_verified": checks["source_bound_actor_motion_full_coverage_verified"],
+        "true_lane_geometry_replacement_available": checks["true_lane_geometry_replacement_available"],
+        "semantic_alignment_protocol_defined": checks["semantic_alignment_protocol_defined"],
+        "closed_loop_status_has_perception_measured_failed": checks["closed_loop_status_has_perception_measured_failed"],
+        "perception_eval_measured_failed": checks["perception_eval_measured_failed"],
+        "explicit_gpu_retry_approved": checks["explicit_gpu_retry_approved"],
+        "semantic_success_claim_allowed_remains_false": checks["semantic_success_claim_allowed"] is False,
+    }
+    retry_blockers = []
+    if not retry_checks["source_bound_actor_motion_full_coverage_verified"]:
+        retry_blockers.append("source_bound_actor_motion_full_coverage_not_verified")
+    if not retry_checks["true_lane_geometry_replacement_available"]:
+        retry_blockers.append("true_lane_geometry_replacement_not_available")
+    if not retry_checks["semantic_alignment_protocol_defined"]:
+        retry_blockers.append("semantic_alignment_protocol_not_defined")
+    if not retry_checks["closed_loop_status_has_perception_measured_failed"]:
+        retry_blockers.append("closed_loop_perception_measured_failed_not_connected")
+    if not retry_checks["perception_eval_measured_failed"]:
+        retry_blockers.append("perception_eval_measured_failed_missing")
+    if not retry_checks["explicit_gpu_retry_approved"]:
+        retry_blockers.append("explicit_gpu_retry_approval_missing")
+
+    if not retry_blockers:
+        retry_status = "allowed_after_explicit_user_approval"
+    elif "explicit_gpu_retry_approval_missing" in retry_blockers:
+        retry_status = "blocked_requires_explicit_user_approval"
+    else:
+        retry_status = "blocked_missing_non_gpu_evidence"
+
     return {
         "schema_version": "driveloop_candidate70_gpu_readiness_gate.v0",
         "candidate": "candidate70",
@@ -493,10 +683,23 @@ def build_candidate70_readiness_gate(
         "does_not_generate_video": True,
         "checks": checks,
         "blockers": blockers,
+        "gpu_retry_gate": {
+            "schema_version": "driveloop_candidate70_gpu_retry_gate.v0",
+            "status": retry_status,
+            "allowed": not retry_blockers,
+            "checks": retry_checks,
+            "blockers": retry_blockers,
+            "requires_explicit_user_approval": True,
+            "does_not_claim_semantic_success": True,
+            "requires_post_gpu_review": True,
+        },
         "evidence": {
             "source_bound_actor_motion": actor_motion_evidence,
             "local_map_vector_hdmap": local_map_vector_hdmap_evidence,
             "semantic_alignment_protocol": semantic_alignment_protocol_evidence,
+            "closed_loop_status": closed_loop_status_evidence,
+            "perception_video_eval": perception_video_eval_evidence,
+            "gpu_retry_approval": gpu_retry_approval_evidence,
         },
         "sources": {
             "prompt_bank_audit": source_entry(prompt_bank_audit_path),
@@ -507,6 +710,9 @@ def build_candidate70_readiness_gate(
             "source_bound_actor_motion_audit": source_entry(source_bound_actor_motion_audit_path),
             "local_map_vector_hdmap_audit": source_entry(local_map_vector_hdmap_audit_path),
             "semantic_alignment_protocol": source_entry(semantic_alignment_protocol_path),
+            "closed_loop_status": source_entry(closed_loop_status_path),
+            "perception_video_eval": source_entry(perception_video_eval_path),
+            "gpu_retry_approval": source_entry(gpu_retry_approval_path),
         },
         "claim_boundary": {
             "candidate70_readiness_gate_is_not_gpu_approval": True,
@@ -523,6 +729,9 @@ def build_candidate70_readiness_gate(
             "local_map_vector_hdmap_replacement_is_not_video_semantic_success": True,
             "semantic_alignment_protocol_is_not_video_semantic_success": True,
             "semantic_success_requires_explicit_measured_passed_review": True,
+            "explicit_gpu_retry_approval_required_before_generation": True,
+            "gpu_retry_gate_does_not_claim_semantic_success": True,
+            "perception_measured_failed_required_before_retry_refinement": True,
         },
         "next_required_steps": [
             "wire the accepted prompt into any GPU smoke command only after explicit user approval",
@@ -531,6 +740,7 @@ def build_candidate70_readiness_gate(
             "keep boxes3d/image_box structural override separate from video semantic-success claims",
             "run measured semantic/alignment evaluation before any semantic-success claim",
             "use the candidate70 semantic alignment protocol as the required review checklist after GPU smoke",
+            "attach an explicit candidate70 GPU retry approval artifact before any retry",
             "request explicit user approval before any short GPU smoke",
         ],
     }
@@ -551,6 +761,9 @@ def main() -> None:
     parser.add_argument("--source-bound-actor-motion-audit", type=Path, default=DEFAULT_SOURCE_BOUND_ACTOR_MOTION_AUDIT)
     parser.add_argument("--local-map-vector-hdmap-audit", type=Path, default=DEFAULT_LOCAL_MAP_VECTOR_HDMAP_AUDIT)
     parser.add_argument("--semantic-alignment-protocol", type=Path, default=DEFAULT_SEMANTIC_ALIGNMENT_PROTOCOL)
+    parser.add_argument("--closed-loop-status", type=Path, default=DEFAULT_CLOSED_LOOP_STATUS)
+    parser.add_argument("--perception-video-eval", type=Path, default=DEFAULT_PERCEPTION_VIDEO_EVAL)
+    parser.add_argument("--gpu-retry-approval", type=Path, default=DEFAULT_GPU_RETRY_APPROVAL)
     parser.add_argument("--output", type=Path, default=DEFAULT_OUTPUT)
     args = parser.parse_args()
 
@@ -563,6 +776,9 @@ def main() -> None:
         source_bound_actor_motion_audit_path=args.source_bound_actor_motion_audit,
         local_map_vector_hdmap_audit_path=args.local_map_vector_hdmap_audit,
         semantic_alignment_protocol_path=args.semantic_alignment_protocol,
+        closed_loop_status_path=args.closed_loop_status,
+        perception_video_eval_path=args.perception_video_eval,
+        gpu_retry_approval_path=args.gpu_retry_approval,
     )
     write_gate(args.output, gate)
     print(args.output)

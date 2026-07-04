@@ -541,3 +541,141 @@ def test_candidate70_gate_blocks_incomplete_source_bound_actor_motion_coverage(t
     assert "source_bound_actor_motion_full_coverage_not_verified" in gate["blockers"]
     assert gate["evidence"]["source_bound_actor_motion"]["coverage"]["expected_rows"] == 48
     assert gate["claim_boundary"]["source_bound_actor_motion_full_coverage_required_before_gpu_retry"] is True
+
+def write_candidate70_perception_measured_failed(path: Path):
+    write_json(
+        path,
+        {
+            "schema_version": "driveloop_perception_video_eval.v0",
+            "evaluation": {
+                "score": 0.0,
+                "metrics": {
+                    "perception_measured": 1.0,
+                    "perception_frame_count": 8.0,
+                    "Q_cov": 0.0,
+                    "Q_conf": 0.0,
+                    "Q_track": 0.0,
+                    "Q_id": 0.0,
+                    "Q_box": 0.0,
+                    "perception_detection_count": 0.0,
+                    "perception_track_count": 0.0,
+                },
+                "diagnosis": {
+                    "passed": False,
+                    "reasons": ["target_object_not_detected"],
+                },
+            },
+            "interpretation": {
+                "perception_claim": "measured_failed",
+                "semantic_success_claim": "not_proven_by_perception_metrics_alone",
+            },
+        },
+    )
+
+
+def write_candidate70_closed_loop_after_perception(path: Path):
+    write_json(
+        path,
+        {
+            "schema_version": "driveloop_candidate70_closed_loop_status.v0",
+            "semantic_success_claim_allowed": False,
+            "closed_loop_steps": [
+                {
+                    "step": "automatic_perception_evaluation",
+                    "status": "measured_failed",
+                    "passed": False,
+                }
+            ],
+            "current_blockers": [
+                "semantic_success_claim_not_allowed",
+                "automatic_perception_evaluator_measured_failed",
+            ],
+        },
+    )
+
+
+def write_candidate70_gpu_retry_approval(path: Path):
+    write_json(
+        path,
+        {
+            "schema_version": "driveloop_candidate70_gpu_retry_approval.v0",
+            "scenario_id": "candidate70_night_cut_in_gpu_smoke",
+            "approved_for_candidate70_gpu_retry": True,
+            "requires_post_gpu_review": True,
+            "approval_is_not_semantic_success": True,
+            "approved_by": "user",
+            "approval_note": "explicit short GPU retry approval for candidate70 gate test",
+        },
+    )
+
+
+def build_candidate70_retry_gate_fixture(tmp_path: Path, *, approval: bool = False):
+    prompt_bank = tmp_path / "prompt_bank.json"
+    accepted_prompt = tmp_path / "accepted_prompt.json"
+    runtime_surface = tmp_path / "runtime_surface.json"
+    trajectory_surface = tmp_path / "trajectory_surface.json"
+    dry_run = tmp_path / "dry_run.json"
+    actor_motion_root = tmp_path / "actor_motion_audit"
+    hdmap_audit = tmp_path / "local_map_vector_hdmap.json"
+    semantic_protocol = tmp_path / "semantic_protocol.json"
+    closed_loop = tmp_path / "closed_loop.json"
+    perception_eval = tmp_path / "perception_eval.json"
+    gpu_approval = tmp_path / "gpu_retry_approval.json"
+
+    write_json(prompt_bank, {"accepted_for_generate_count": 0, "candidate70_allowed_count": 4})
+    write_json(accepted_prompt, {"accepted_prompt_selected": True, "accepted_for_generate": False})
+    write_json(runtime_surface, {"status": "not_runtime_connected"})
+    write_json(trajectory_surface, {"status": "not_runtime_connected"})
+    write_json(dry_run, {"claim": {"semantic_success_claim_allowed": False}})
+    write_source_bound_actor_motion_evidence(actor_motion_root)
+    write_local_map_vector_hdmap_surface_audit(hdmap_audit)
+    write_candidate70_semantic_alignment_protocol(semantic_protocol)
+    write_candidate70_closed_loop_after_perception(closed_loop)
+    write_candidate70_perception_measured_failed(perception_eval)
+    if approval:
+        write_candidate70_gpu_retry_approval(gpu_approval)
+
+    return build_candidate70_readiness_gate(
+        prompt_bank_audit_path=prompt_bank,
+        accepted_prompt_selection_path=accepted_prompt,
+        runtime_surface_audit_path=runtime_surface,
+        trajectory_surface_audit_path=trajectory_surface,
+        dry_run_replacement_audit_path=dry_run,
+        source_bound_actor_motion_audit_path=actor_motion_root,
+        local_map_vector_hdmap_audit_path=hdmap_audit,
+        semantic_alignment_protocol_path=semantic_protocol,
+        closed_loop_status_path=closed_loop,
+        perception_video_eval_path=perception_eval,
+        gpu_retry_approval_path=gpu_approval,
+    )
+
+
+def test_candidate70_gpu_retry_gate_blocks_without_explicit_approval(tmp_path):
+    gate = build_candidate70_retry_gate_fixture(tmp_path, approval=False)
+
+    retry_gate = gate["gpu_retry_gate"]
+    assert retry_gate["allowed"] is False
+    assert retry_gate["status"] == "blocked_requires_explicit_user_approval"
+    assert retry_gate["checks"]["source_bound_actor_motion_full_coverage_verified"] is True
+    assert retry_gate["checks"]["true_lane_geometry_replacement_available"] is True
+    assert retry_gate["checks"]["semantic_alignment_protocol_defined"] is True
+    assert retry_gate["checks"]["closed_loop_status_has_perception_measured_failed"] is True
+    assert retry_gate["checks"]["perception_eval_measured_failed"] is True
+    assert retry_gate["checks"]["explicit_gpu_retry_approved"] is False
+    assert "explicit_gpu_retry_approval_missing" in retry_gate["blockers"]
+    assert gate["claim_boundary"]["explicit_gpu_retry_approval_required_before_generation"] is True
+
+
+def test_candidate70_gpu_retry_gate_allows_only_after_explicit_approval(tmp_path):
+    gate = build_candidate70_retry_gate_fixture(tmp_path, approval=True)
+
+    retry_gate = gate["gpu_retry_gate"]
+    assert retry_gate["allowed"] is True
+    assert retry_gate["status"] == "allowed_after_explicit_user_approval"
+    assert retry_gate["blockers"] == []
+    assert retry_gate["checks"]["explicit_gpu_retry_approved"] is True
+    assert retry_gate["checks"]["semantic_success_claim_allowed_remains_false"] is True
+    assert retry_gate["does_not_claim_semantic_success"] is True
+    assert retry_gate["requires_post_gpu_review"] is True
+    assert gate["evidence"]["gpu_retry_approval"]["approved"] is True
+    assert gate["claim_boundary"]["gpu_retry_gate_does_not_claim_semantic_success"] is True
