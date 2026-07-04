@@ -169,7 +169,7 @@ def test_candidate70_gate_records_boxes3d_structural_override_without_allowing_g
     assert gate["claim_boundary"]["boxes3d_image_box_structural_override_is_not_temporal_motion_control"] is True
 
 
-def write_source_bound_actor_motion_evidence(root: Path):
+def write_source_bound_actor_motion_evidence(root: Path, *, full_coverage: bool = True):
     write_json(
         root / "case_summary.json",
         {
@@ -180,6 +180,10 @@ def write_source_bound_actor_motion_evidence(root: Path):
             },
         },
     )
+
+    expected_rows = 48
+    mapped_count = expected_rows if full_coverage else 24
+    input_per_frame_count = 8 if full_coverage else 4
     write_json(
         root / "result.json",
         {
@@ -194,9 +198,9 @@ def write_source_bound_actor_motion_evidence(root: Path):
                             "actor_motion_frame_mapping": {
                                 "available": True,
                                 "mode": "source_bound_relative_step_to_sample_identity",
-                                "source_identity_count": 48,
-                                "input_per_frame_count": 4,
-                                "mapped_entry_count": 24,
+                                "source_identity_count": expected_rows,
+                                "input_per_frame_count": input_per_frame_count,
+                                "mapped_entry_count": mapped_count,
                                 "unmapped_relative_frame_idx": [],
                             },
                             "trace_metadata": {
@@ -210,43 +214,84 @@ def write_source_bound_actor_motion_evidence(root: Path):
             ]
         },
     )
+
     audit_path = root / "artifacts" / "dd2_override_audit_00.jsonl"
     audit_path.parent.mkdir(parents=True, exist_ok=True)
-    audit_path.write_text(
-        json.dumps(
-            {
-                "changed": {
-                    "boxes3d": True,
-                    "image_box": True,
-                    "image_hdmap": False,
-                    "scene_description": True,
-                },
-                "applied": [
-                    {"target": "scene_description", "mode": "replace", "source": "text_control.prompt"},
-                    {
-                        "target": "boxes3d",
-                        "mode": "per_frame_append",
-                        "accepted_count": 1,
-                        "accepted_entries": [
-                            {
-                                "relative_frame_idx": 0,
-                                "source_record_index": 24,
-                                "sample_identity": {
-                                    "cam_type": "cam_front",
-                                    "frame_idx": 144,
-                                    "sample_token": "sample",
-                                    "scene_token": "scene",
-                                },
-                            }
-                        ],
+
+    cameras = [
+        "cam_front",
+        "cam_front_left",
+        "cam_front_right",
+        "cam_back",
+        "cam_back_left",
+        "cam_back_right",
+    ]
+    row_count = expected_rows if full_coverage else 24
+    lines = []
+    for idx in range(row_count):
+        cam = cameras[idx % len(cameras)]
+        relative_idx = idx // len(cameras)
+        frame_idx = 144 + relative_idx * 3
+        lines.append(
+            json.dumps(
+                {
+                    "sample_identity": {"cam_type": cam, "frame_idx": frame_idx},
+                    "changed": {
+                        "boxes3d": True,
+                        "image_box": True,
+                        "image_hdmap": False,
+                        "scene_description": True,
                     },
-                ],
-                "skipped": [{"target": "image_hdmap", "reason": "no_verified_hdmap_override_source"}],
-            }
+                    "applied": [
+                        {"target": "scene_description", "mode": "replace", "source": "text_control.prompt"},
+                        {
+                            "target": "boxes3d",
+                            "mode": "per_frame_append",
+                            "accepted_count": 1,
+                            "accepted_entries": [
+                                {
+                                    "relative_frame_idx": relative_idx,
+                                    "source_record_index": idx,
+                                    "sample_identity": {
+                                        "cam_type": cam,
+                                        "frame_idx": frame_idx,
+                                        "sample_token": f"sample-{relative_idx}",
+                                        "scene_token": "scene",
+                                    },
+                                }
+                            ],
+                        },
+                    ],
+                    "skipped": [{"target": "image_hdmap", "reason": "no_verified_hdmap_override_source"}],
+                }
+            )
         )
-        + "\n",
-        encoding="utf-8",
-    )
+
+    if not full_coverage:
+        lines.append(
+            json.dumps(
+                {
+                    "sample_identity": {"cam_type": "cam_front", "frame_idx": 999},
+                    "changed": {"boxes3d": False, "image_box": False},
+                    "applied": [],
+                    "skipped": [
+                        {
+                            "target": "boxes3d",
+                            "mode": "per_frame_append",
+                            "reason": "no_matching_frame_idx",
+                        }
+                    ],
+                }
+            )
+        )
+
+    audit_path.write_text("\n".join(lines) + "\n", encoding="utf-8")
+
+    runtime_audit = root / "artifacts" / "dd2_runtime_input_audit_00.json"
+    write_json(runtime_audit, {"schema_version": "dd2_runtime_input_audit.v0", "audit_only": True})
+    paper_report = root / "artifacts" / "paper_alignment_report_00.json"
+    write_json(paper_report, {"schema_version": "driveloop_paper_alignment_report.v0"})
+
 
 
 def test_candidate70_gate_clears_motion_surface_blockers_with_source_bound_actor_motion_evidence(tmp_path):
@@ -291,6 +336,8 @@ def test_candidate70_gate_clears_motion_surface_blockers_with_source_bound_actor
     assert "semantic_success_claim_not_allowed" in gate["blockers"]
     assert gate["checks"]["source_bound_actor_motion_runtime_connected"] is True
     assert gate["checks"]["source_bound_actor_motion_sample_identity_verified"] is True
+    assert gate["checks"]["source_bound_actor_motion_full_coverage_verified"] is True
+    assert gate["evidence"]["source_bound_actor_motion"]["full_coverage_verified"] is True
     assert gate["evidence"]["source_bound_actor_motion"]["connected"] is True
     assert gate["claim_boundary"]["source_bound_actor_motion_audit_is_not_video_semantic_success"] is True
 
@@ -450,3 +497,47 @@ def test_candidate70_gate_records_semantic_alignment_protocol_evidence(tmp_path)
     assert gate["gpu_smoke_allowed"] is False
     assert "semantic_success_claim_not_allowed" in gate["blockers"]
     assert gate["claim_boundary"]["semantic_alignment_protocol_is_not_video_semantic_success"] is True
+
+
+def test_candidate70_gate_blocks_incomplete_source_bound_actor_motion_coverage(tmp_path):
+    prompt_bank = tmp_path / "prompt_bank.json"
+    accepted_prompt = tmp_path / "accepted_prompt.json"
+    runtime_surface = tmp_path / "runtime_surface.json"
+    trajectory_surface = tmp_path / "trajectory_surface.json"
+    dry_run = tmp_path / "dry_run.json"
+    actor_motion_root = tmp_path / "actor_motion_audit"
+    hdmap_audit = tmp_path / "local_map_vector_hdmap.json"
+
+    write_json(prompt_bank, {"accepted_for_generate_count": 0, "candidate70_allowed_count": 4})
+    write_json(accepted_prompt, {"accepted_prompt_selected": True, "accepted_for_generate": False})
+    write_json(runtime_surface, {"status": "not_runtime_connected"})
+    write_json(trajectory_surface, {"status": "not_runtime_connected"})
+    write_json(
+        dry_run,
+        {
+            "claim": {
+                "candidate70_dry_run_raster_reaches_grounding_downsampler_input": True,
+                "candidate70_true_lane_geometry_replacement_available": False,
+                "runtime_motion_control_connected": False,
+                "semantic_success_claim_allowed": False,
+            }
+        },
+    )
+    write_source_bound_actor_motion_evidence(actor_motion_root, full_coverage=False)
+    write_local_map_vector_hdmap_surface_audit(hdmap_audit)
+
+    gate = build_candidate70_readiness_gate(
+        prompt_bank_audit_path=prompt_bank,
+        accepted_prompt_selection_path=accepted_prompt,
+        runtime_surface_audit_path=runtime_surface,
+        trajectory_surface_audit_path=trajectory_surface,
+        dry_run_replacement_audit_path=dry_run,
+        source_bound_actor_motion_audit_path=actor_motion_root,
+        local_map_vector_hdmap_audit_path=hdmap_audit,
+    )
+
+    assert gate["gpu_smoke_allowed"] is False
+    assert gate["checks"]["source_bound_actor_motion_full_coverage_verified"] is False
+    assert "source_bound_actor_motion_full_coverage_not_verified" in gate["blockers"]
+    assert gate["evidence"]["source_bound_actor_motion"]["coverage"]["expected_rows"] == 48
+    assert gate["claim_boundary"]["source_bound_actor_motion_full_coverage_required_before_gpu_retry"] is True

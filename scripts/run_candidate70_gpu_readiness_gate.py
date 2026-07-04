@@ -17,8 +17,7 @@ DEFAULT_LOCAL_MAP_VECTOR_HDMAP_AUDIT = Path(
     "candidate70_lane_geometry_replacement_candidate_to_grounding_surface.json"
 )
 DEFAULT_SOURCE_BOUND_ACTOR_MOTION_AUDIT = Path(
-    "outputs/driveloop/p0_candidate70_source_bound_actor_motion_after_identity_fix/run/"
-    "p0_candidate70_source_bound_actor_motion_audit_only_after_identity_fix"
+    "outputs/driveloop/candidate70_8frame_actor_motion_audit_only"
 )
 DEFAULT_SEMANTIC_ALIGNMENT_PROTOCOL = Path(
     "outputs/driveloop/candidate70_semantic_alignment_protocol/candidate70_semantic_alignment_protocol.json"
@@ -56,6 +55,20 @@ def first_key(value: Any, key: str) -> Any:
     return None
 
 
+def find_artifact_file(root: Path, filename: str) -> Path:
+    direct = root / "artifacts" / filename
+    if direct.exists():
+        return direct
+
+    artifacts_dir = root / "artifacts"
+    if artifacts_dir.exists():
+        matches = sorted(artifacts_dir.glob(f"**/{filename}"))
+        if matches:
+            return matches[0]
+
+    return direct
+
+
 def load_source_bound_actor_motion_evidence(root: Optional[Path]) -> dict[str, Any]:
     evidence: dict[str, Any] = {
         "path": str(root) if root is not None else None,
@@ -70,13 +83,20 @@ def load_source_bound_actor_motion_evidence(root: Optional[Path]) -> dict[str, A
 
     result_path = root / "result.json"
     case_path = root / "case_summary.json"
-    override_path = root / "artifacts" / "dd2_override_audit_00.jsonl"
+    override_path = find_artifact_file(root, "dd2_override_audit_00.jsonl")
+    runtime_audit_path = find_artifact_file(root, "dd2_runtime_input_audit_00.json")
+    paper_report_path = find_artifact_file(root, "paper_alignment_report_00.json")
     evidence.update(
         {
             "exists": root.exists(),
             "result_exists": result_path.exists(),
             "case_summary_exists": case_path.exists(),
             "override_audit_exists": override_path.exists(),
+            "runtime_input_audit_exists": runtime_audit_path.exists(),
+            "paper_alignment_report_exists": paper_report_path.exists(),
+            "override_audit_path": str(override_path),
+            "runtime_input_audit_path": str(runtime_audit_path),
+            "paper_alignment_report_path": str(paper_report_path),
         }
     )
 
@@ -100,29 +120,64 @@ def load_source_bound_actor_motion_evidence(root: Optional[Path]) -> dict[str, A
                     evidence["override_audit_json_error"] = True
 
     changed_counts = Counter()
+    skip_reasons = Counter()
+    applied_camera_counts = Counter()
+    applied_frame_counts = Counter()
     applied_per_frame_append_count = 0
     sample_identity_applied_count = 0
+    per_frame_append_row_count = 0
+
     for row in rows:
         for target, changed in row.get("changed", {}).items():
             if changed:
                 changed_counts[target] += 1
+
         for item in row.get("applied", []):
             if item.get("target") == "boxes3d" and item.get("mode") == "per_frame_append":
+                per_frame_append_row_count += 1
                 accepted_entries = item.get("accepted_entries", [])
                 if isinstance(accepted_entries, list):
                     applied_per_frame_append_count += len(accepted_entries)
                     for entry in accepted_entries:
+                        if not isinstance(entry, dict):
+                            continue
+                        sample_identity = entry.get("sample_identity")
                         if (
-                            isinstance(entry, dict)
-                            and isinstance(entry.get("sample_identity"), dict)
+                            isinstance(sample_identity, dict)
                             and entry.get("relative_frame_idx") is not None
                             and entry.get("source_record_index") is not None
                         ):
                             sample_identity_applied_count += 1
+                            cam_type = sample_identity.get("cam_type")
+                            frame_idx = sample_identity.get("frame_idx")
+                            if cam_type is not None:
+                                applied_camera_counts[str(cam_type)] += 1
+                            if frame_idx is not None:
+                                applied_frame_counts[str(frame_idx)] += 1
                 else:
                     applied_per_frame_append_count += int(item.get("accepted_count") or 0)
 
-    connected = (
+        for item in row.get("skipped", []):
+            target = item.get("target", "unknown")
+            mode = item.get("mode", "unknown")
+            reason = item.get("reason", "unknown")
+            skip_reasons[f"{target}:{mode}:{reason}"] += 1
+
+    expected_coverage_rows = 48
+    no_matching_frame_idx_count = skip_reasons.get("boxes3d:per_frame_append:no_matching_frame_idx", 0)
+    full_coverage_verified = (
+        len(rows) == expected_coverage_rows
+        and changed_counts.get("boxes3d", 0) == expected_coverage_rows
+        and changed_counts.get("image_box", 0) == expected_coverage_rows
+        and per_frame_append_row_count == expected_coverage_rows
+        and applied_per_frame_append_count == expected_coverage_rows
+        and sample_identity_applied_count == expected_coverage_rows
+        and no_matching_frame_idx_count == 0
+        and runtime_audit_path.exists()
+        and paper_report_path.exists()
+    )
+
+    legacy_connected = (
         case.get("status") == "accepted"
         and source_binding.get("ready") is True
         and source_binding.get("selector", {}).get("source_candidate_id") == "candidate70"
@@ -136,6 +191,7 @@ def load_source_bound_actor_motion_evidence(root: Optional[Path]) -> dict[str, A
         and applied_per_frame_append_count > 0
         and sample_identity_applied_count > 0
     )
+    connected = legacy_connected or full_coverage_verified
 
     evidence.update(
         {
@@ -157,14 +213,32 @@ def load_source_bound_actor_motion_evidence(root: Optional[Path]) -> dict[str, A
                 "limitations": trace_metadata.get("limitations", []),
             },
             "override_entry_count": len(rows),
+            "expected_coverage_rows": expected_coverage_rows,
             "override_changed_counts": dict(changed_counts),
+            "applied_per_frame_append_row_count": per_frame_append_row_count,
             "applied_per_frame_append_count": applied_per_frame_append_count,
             "sample_identity_applied_count": sample_identity_applied_count,
+            "skip_reason_counts": dict(skip_reasons),
+            "applied_camera_counts": dict(applied_camera_counts),
+            "applied_frame_counts": dict(applied_frame_counts),
+            "no_matching_frame_idx_count": no_matching_frame_idx_count,
+            "full_coverage_verified": full_coverage_verified,
+            "coverage": {
+                "expected_rows": expected_coverage_rows,
+                "override_entry_count": len(rows),
+                "boxes3d_changed_count": changed_counts.get("boxes3d", 0),
+                "image_box_changed_count": changed_counts.get("image_box", 0),
+                "per_frame_append_row_count": per_frame_append_row_count,
+                "per_frame_append_count": applied_per_frame_append_count,
+                "sample_identity_applied_count": sample_identity_applied_count,
+                "no_matching_frame_idx_count": no_matching_frame_idx_count,
+            },
             "connected": connected,
             "claim_boundary": {
                 "source_bound_actor_motion_audit_is_not_gpu_approval": True,
                 "source_bound_actor_motion_audit_is_not_video_semantic_success": True,
                 "source_bound_actor_motion_surface_is_tensor_conditioning_not_semantic_proof": True,
+            "source_bound_actor_motion_full_coverage_required_before_gpu_retry": True,
                 "semantic_success_claim_allowed_by_this_evidence": False,
             },
         }
@@ -328,6 +402,7 @@ def build_candidate70_readiness_gate(
     trajectory_blockers = trajectory_surface.get("blockers", [])
     dry_run_claim = dry_run.get("claim", {})
     actor_motion_connected = actor_motion_evidence.get("connected") is True
+    actor_full_coverage_verified = actor_motion_evidence.get("full_coverage_verified") is True
     actor_changed_counts = actor_motion_evidence.get("override_changed_counts", {})
 
     boxes3d_image_box_structural_override_ready = (
@@ -335,11 +410,7 @@ def build_candidate70_readiness_gate(
             trajectory_source_signals.get("motion_gap_boxes3d_target_override") == "applied"
             and trajectory_surfaces.get("box_condition", {}).get("available") is True
         )
-        or (
-            actor_changed_counts.get("boxes3d", 0) > 0
-            and actor_changed_counts.get("image_box", 0) > 0
-            and actor_motion_evidence.get("sample_identity_applied_count", 0) > 0
-        )
+        or actor_full_coverage_verified
     )
 
     runtime_motion_control_connected = (
@@ -374,6 +445,7 @@ def build_candidate70_readiness_gate(
         "source_bound_actor_motion_audit_exists": actor_motion_evidence.get("exists") is True,
         "source_bound_actor_motion_runtime_connected": actor_motion_connected,
         "source_bound_actor_motion_sample_identity_verified": actor_motion_evidence.get("sample_identity_applied_count", 0) > 0,
+        "source_bound_actor_motion_full_coverage_verified": actor_full_coverage_verified,
         "source_bound_actor_motion_boxes3d_changed": actor_changed_counts.get("boxes3d", 0) > 0,
         "source_bound_actor_motion_image_box_changed": actor_changed_counts.get("image_box", 0) > 0,
         "dry_run_raster_reaches_grounding_downsampler_input": dry_run_claim.get("candidate70_dry_run_raster_reaches_grounding_downsampler_input") is True,
@@ -402,6 +474,11 @@ def build_candidate70_readiness_gate(
         blockers.append("true_lane_geometry_replacement_not_available")
     if not checks["runtime_motion_control_connected"]:
         blockers.append("runtime_motion_control_claim_not_allowed")
+    if (
+        checks["source_bound_actor_motion_audit_exists"]
+        and not checks["source_bound_actor_motion_full_coverage_verified"]
+    ):
+        blockers.append("source_bound_actor_motion_full_coverage_not_verified")
     if not checks["semantic_success_claim_allowed"]:
         blockers.append("semantic_success_claim_not_allowed")
 
@@ -441,6 +518,7 @@ def build_candidate70_readiness_gate(
             "source_bound_actor_motion_audit_is_not_gpu_approval": True,
             "source_bound_actor_motion_audit_is_not_video_semantic_success": True,
             "source_bound_actor_motion_surface_is_tensor_conditioning_not_semantic_proof": True,
+            "source_bound_actor_motion_full_coverage_required_before_gpu_retry": True,
             "local_map_vector_hdmap_replacement_is_not_gpu_approval": True,
             "local_map_vector_hdmap_replacement_is_not_video_semantic_success": True,
             "semantic_alignment_protocol_is_not_video_semantic_success": True,
