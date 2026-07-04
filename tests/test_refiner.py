@@ -163,3 +163,35 @@ def test_refiner_builds_runtime_control_feedback_for_unsupported_runtime_control
     assert feedback["status"] == "runtime_control_unavailable"
     assert "unsupported_control:trajectory_control" in feedback["failed_reasons"]
     assert any("runtime controls are unavailable" in note for note in refinement.notes)
+
+
+def test_refiner_adds_candidate70_semantic_protocol_constraints():
+    request = DriveLoopRequest(prompt="night urban road")
+    evaluation = Evaluation(
+        score=0.36,
+        diagnosis=Diagnosis(
+            passed=False,
+            reasons=[
+                "alignment_check_failed:object_presence.motorcycle_or_scooter_visible",
+                "alignment_check_failed:object_consistency.target_actor_trackable_across_frames",
+                "alignment_check_failed:maneuver.cut_in_from_left_toward_ego_visible",
+                "alignment_check_failed:temporal_motion.lateral_displacement_visible",
+                "alignment_check_failed:spatial_relation.starts_left_or_adjacent_lane_and_moves_toward_ego_path",
+                "alignment_check_failed:hdmap_alignment.lane_geometry_visually_consistent_with_scene",
+            ],
+            suggested_actions=["inspect failed alignment checks before making semantic claims"],
+        ),
+    )
+
+    refinement = RuleBasedRefiner().refine(request, evaluation)
+
+    assert "clearly visible motorcycle or scooter target" in refinement.prompt
+    assert "same target motorcycle remains trackable" in refinement.prompt
+    assert "visibly cuts in from the left toward the ego path" in refinement.prompt
+    assert "measurable lateral displacement" in refinement.prompt
+    assert "visible lane geometry stays consistent" in refinement.prompt
+
+    feedback = refinement.condition["alignment_feedback"]
+    assert feedback["status"] == "measured_failed"
+    assert "object_presence.motorcycle_or_scooter_visible" in feedback["failed_checks"]
+    assert "the same target motorcycle remains trackable across frames" in feedback["requested_visual_constraints"]

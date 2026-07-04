@@ -94,10 +94,26 @@ class RuleBasedRefiner:
     def _alignment_prompt_additions(self, evaluation: Evaluation) -> list[str]:
         additions: list[str] = []
         for check_name in self._failed_alignment_checks(evaluation):
+            normalized = check_name.lower()
             if check_name == "object_presence.motorcycle":
                 additions.append("a motorcycle must be visibly present")
+            elif (
+                "object_presence" in normalized
+                and ("motorcycle" in normalized or "scooter" in normalized)
+            ):
+                additions.append("a clearly visible motorcycle or scooter target remains large and unoccluded")
+            elif "object_consistency" in normalized or "trackable" in normalized:
+                additions.append("the same target motorcycle remains trackable across frames")
+            elif "cut_in" in normalized or "cut-in" in normalized:
+                additions.append("the motorcycle visibly cuts in from the left toward the ego path")
             elif check_name == "spatial_relation.left_lane_change":
                 additions.append("the motorcycle performs a visible lane change from the left")
+            elif "spatial_relation" in normalized:
+                additions.append("the target starts in the left or adjacent lane and moves toward the ego path")
+            elif "lateral_displacement" in normalized:
+                additions.append("the target motorcycle shows measurable lateral displacement over time")
+            elif "hdmap_alignment" in normalized:
+                additions.append("visible lane geometry stays consistent with the intended cut-in path")
             elif check_name == "lighting.daytime":
                 additions.append("clear daytime lighting")
             elif check_name == "scene_type.urban_road":

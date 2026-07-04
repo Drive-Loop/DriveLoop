@@ -8,12 +8,12 @@ from typing import Any
 
 DEFAULT_ALIGNMENT_EVAL = Path(
     "outputs/driveloop/prompt_video_alignment_eval/"
-    "motorcycle_refined_candidate_gpu_smoke_manual_review/"
+    "candidate70_night_cut_in_gpu_smoke/"
     "prompt_video_alignment_evaluation.json"
 )
 DEFAULT_CANDIDATE_AUDIT = Path(
     "outputs/driveloop/prompt_conditional_candidate_audit/"
-    "motorcycle_source_candidate_rank16_audit.json"
+    "motorcycle_source_candidate70_against_night_lane_change_cut_in_prompt_audit.json"
 )
 
 
@@ -31,21 +31,30 @@ def checks_from_alignment_eval(alignment_eval: dict[str, Any]) -> list[dict[str,
 
 
 def classify_failed_check(check: dict[str, Any]) -> list[str]:
-    name = str(check.get("name", ""))
+    name = str(check.get("name", "")).lower()
     evidence = str(check.get("evidence", "")).lower()
     labels: list[str] = []
 
     if "object_presence" in name:
         labels.append("object_identity_failed")
-    if "motorcycle" in name or "motorcycle" in evidence:
+    if "motorcycle" in name or "motorcycle" in evidence or "scooter" in name or "scooter" in evidence or "two-wheeler" in evidence:
         labels.append("motorcycle_identity_failed")
+    if "object_consistency" in name or "trackable" in name or "track" in evidence:
+        labels.append("tracking_identity_failed")
+    if "cut_in" in name or "cut-in" in name or "cut in" in evidence or "cut-in" in evidence:
+        labels.append("cut_in_motion_failed")
+        labels.append("lane_change_motion_failed")
     if "lane_change" in name or "lane change" in evidence or "lane-change" in evidence:
         labels.append("lane_change_motion_failed")
+    if "lateral_displacement" in name or "lateral displacement" in evidence:
+        labels.append("lateral_motion_failed")
     if "spatial_relation" in name:
         labels.append("spatial_relation_failed")
+    if "hdmap_alignment" in name:
+        labels.append("hdmap_alignment_failed")
     if "double solid" in evidence or "solid lines" in evidence:
         labels.append("road_marking_conflict")
-    if "not confident" in evidence or "uncertain" in evidence:
+    if "not confident" in evidence or "uncertain" in evidence or "not clearly visible" in evidence:
         labels.append("low_visual_confidence")
 
     return labels
@@ -78,16 +87,28 @@ def intervention_hints(labels: list[str], candidate_allowed: bool) -> list[str]:
             ]
         )
 
-    if "lane_change_motion_failed" in labels or "spatial_relation_failed" in labels:
+    if "tracking_identity_failed" in labels:
+        hints.extend(
+            [
+                "require the same target actor to remain trackable across sampled frames",
+                "consider detector/tracker or VLM-assisted identity review before another GPU run",
+            ]
+        )
+
+    if "cut_in_motion_failed" in labels or "lane_change_motion_failed" in labels or "spatial_relation_failed" in labels:
         hints.extend(
             [
                 "audit trajectory/temporal motion runtime surfaces before another GPU run",
                 "do not rely on static boxes3d alone for lane-change claims",
                 "check whether per-frame actor displacement or lane geometry can be connected",
+                "make the target two-wheeler larger, visible, and laterally displaced toward the ego path",
             ]
         )
 
-    if "road_marking_conflict" in labels:
+    if "lateral_motion_failed" in labels:
+        hints.append("require measurable lateral displacement across the reviewed frames")
+
+    if "road_marking_conflict" in labels or "hdmap_alignment_failed" in labels:
         hints.append("audit HDMap/lane geometry compatibility with requested lane change")
 
     if "low_visual_confidence" in labels:
