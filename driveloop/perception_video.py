@@ -2,6 +2,7 @@ from __future__ import annotations
 
 from dataclasses import asdict, dataclass, field
 from pathlib import Path
+import tempfile
 from typing import Any, Dict, Iterable, List, Protocol, Sequence, Tuple
 
 from driveloop.evaluators import BaseEvaluator
@@ -103,7 +104,28 @@ class UltralyticsYOLODetector:
         self.model = YOLO(str(weights))
 
     def detect(self, frame: Any, frame_index: int) -> List[Detection]:
-        results = self.model.predict(frame, verbose=False)
+        source = frame
+        temp_path: Path | None = None
+        if not isinstance(frame, (str, Path)):
+            try:
+                import cv2  # type: ignore
+                temp = tempfile.NamedTemporaryFile(suffix=".jpg", delete=False)
+                temp_path = Path(temp.name)
+                temp.close()
+                cv2.imwrite(str(temp_path), frame)
+                source = str(temp_path)
+            except Exception as exc:
+                raise RuntimeError("could not materialize frame for YOLO detector") from exc
+
+        try:
+            results = self.model.predict(source=source, verbose=False)
+        finally:
+            if temp_path is not None:
+                try:
+                    temp_path.unlink()
+                except FileNotFoundError:
+                    pass
+
         if not results:
             return []
         result = results[0]

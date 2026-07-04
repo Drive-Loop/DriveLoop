@@ -3,8 +3,10 @@ from __future__ import annotations
 from argparse import Namespace
 import json
 from pathlib import Path
+import sys
+from types import ModuleType, SimpleNamespace
 
-from driveloop.perception_video import Detection, PerceptionVideoEvaluator, SimpleIoUTracker
+from driveloop.perception_video import Detection, PerceptionVideoEvaluator, SimpleIoUTracker, UltralyticsYOLODetector
 from driveloop.schema import Generation
 from scripts.run_perception_video_eval import build_evaluator, build_generation
 
@@ -126,3 +128,36 @@ def test_perception_video_eval_script_loads_detection_json(tmp_path: Path):
     assert report["schema_version"] == "driveloop_perception_video_eval.v0"
     assert report["interpretation"]["perception_claim"] == "measured_passed"
     assert report["interpretation"]["semantic_success_claim"] == "not_proven_by_perception_metrics_alone"
+
+def test_ultralytics_detector_materializes_frame_to_temp_image_path(monkeypatch):
+    predicted_sources = []
+
+    def fake_imwrite(path, frame):
+        Path(path).write_bytes(b"fake image")
+        return True
+
+    fake_cv2 = ModuleType("cv2")
+    fake_cv2.imwrite = fake_imwrite
+
+    class FakeYOLO:
+        def __init__(self, weights):
+            self.weights = weights
+
+        def predict(self, source, verbose=False):
+            predicted_sources.append(source)
+            assert Path(source).exists()
+            return [SimpleNamespace(names={}, boxes=[])]
+
+    fake_ultralytics = ModuleType("ultralytics")
+    fake_ultralytics.YOLO = FakeYOLO
+
+    monkeypatch.setitem(sys.modules, "cv2", fake_cv2)
+    monkeypatch.setitem(sys.modules, "ultralytics", fake_ultralytics)
+
+    detector = UltralyticsYOLODetector("fake-yolov8n.pt")
+    detections = detector.detect(object(), frame_index=0)
+
+    assert detections == []
+    assert predicted_sources
+    assert predicted_sources[0].endswith(".jpg")
+    assert not Path(predicted_sources[0]).exists()
