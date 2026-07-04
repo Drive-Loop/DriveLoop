@@ -441,3 +441,95 @@ def test_discovery_keeps_ambiguous_alignment_matches_as_candidates(tmp_path):
     rows = discover_registry_cases(outputs)
     assert "failed_alignment_eval" not in rows[0]
     assert len(rows[0]["failed_alignment_eval_candidates"]) == 2
+
+
+
+def test_registry_records_longtail_control_coverage_artifact(tmp_path):
+    summary = write_json(
+        tmp_path / "summary.json",
+        {
+            "schema_version": "driveloop_closed_loop_case_summary.v0",
+            "case_id": "case_with_longtail_coverage",
+            "closed_loop_status": "measured_passed",
+        },
+    )
+    coverage = write_json(
+        tmp_path / "longtail_control_coverage.json",
+        {
+            "schema_version": "driveloop_longtail_control_coverage.v0",
+            "score": 0.5,
+            "tag_count": 1,
+            "covered_tag_count": 0,
+            "tags": [
+                {
+                    "tag": "motorcycle_cut_in",
+                    "covered": False,
+                    "missing_channels": ["evaluation"],
+                }
+            ],
+            "claim_boundary": {
+                "longtail_control_coverage_is_not_video_semantic_success": True,
+            },
+        },
+    )
+
+    registry = build_registry(
+        {
+            "cases": [
+                {
+                    "case_id": "case_with_longtail_coverage",
+                    "closed_loop_case_summary": str(summary),
+                    "longtail_control_coverage": str(coverage),
+                }
+            ]
+        }
+    )
+
+    row = registry["cases"][0]
+    longtail = row["longtail_control_coverage"]
+    assert longtail["available"] is True
+    assert longtail["source"] == "artifact"
+    assert longtail["score"] == 0.5
+    assert longtail["missing_channels"] == {"motorcycle_cut_in": ["evaluation"]}
+    assert row["sources"]["longtail_control_coverage"]["exists"] is True
+    assert registry["longtail_control_coverage_available_count"] == 1
+    assert registry["longtail_control_coverage_mean_score"] == 0.5
+    assert row["claim_boundary"]["longtail_control_coverage_is_not_video_semantic_success"] is True
+
+
+def test_registry_computes_longtail_control_coverage_from_manifest_scene_and_plan(tmp_path):
+    summary = write_json(
+        tmp_path / "summary.json",
+        {
+            "schema_version": "driveloop_closed_loop_case_summary.v0",
+            "case_id": "computed_longtail_coverage",
+            "closed_loop_status": "measured_failed",
+        },
+    )
+
+    registry = build_registry(
+        {
+            "cases": [
+                {
+                    "case_id": "computed_longtail_coverage",
+                    "closed_loop_case_summary": str(summary),
+                    "scene_specification": {
+                        "prompt": "a motorcycle cuts in from the left",
+                    },
+                    "condition_plan": {
+                        "tags": ["motorcycle_cut_in"],
+                        "prompt_suffixes": ["motorcycle cut in maneuver"],
+                    },
+                }
+            ]
+        }
+    )
+
+    row = registry["cases"][0]
+    longtail = row["longtail_control_coverage"]
+    assert longtail["available"] is True
+    assert longtail["source"] == "manifest_computed"
+    assert longtail["score"] == 0.0
+    assert longtail["missing_channels"] == {
+        "motorcycle_cut_in": ["source_or_structural", "evaluation"]
+    }

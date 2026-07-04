@@ -2,8 +2,15 @@ from __future__ import annotations
 
 import argparse
 import json
+import sys
 from pathlib import Path
 from typing import Any
+
+REPO_ROOT = Path(__file__).resolve().parents[1]
+if str(REPO_ROOT) not in sys.path:
+    sys.path.insert(0, str(REPO_ROOT))
+
+from driveloop.longtail_coverage import build_longtail_control_coverage
 
 
 SCHEMA_VERSION = "driveloop_closed_loop_experiment_registry.v0"
@@ -57,6 +64,114 @@ def check_count(metrics: dict[str, Any]) -> str | None:
     if passed is None or total is None:
         return None
     return f"{passed:g}/{total:g}"
+
+
+
+LONGTAIL_COVERAGE_SCHEMA_VERSION = "driveloop_longtail_control_coverage.v0"
+
+
+def summarize_longtail_control_coverage(data: Any, source: str) -> dict[str, Any]:
+    coverage = as_dict(data)
+    if coverage.get("schema_version") != LONGTAIL_COVERAGE_SCHEMA_VERSION:
+        return {
+            "available": False,
+            "source": "not_available",
+            "score": None,
+            "tag_count": 0,
+            "covered_tag_count": 0,
+            "missing_channels": {},
+            "claim_boundary": {
+                "longtail_control_coverage_is_not_video_semantic_success": True,
+            },
+        }
+
+    tags = [as_dict(row) for row in as_list(coverage.get("tags"))]
+    missing = {
+        str(row.get("tag")): list(as_list(row.get("missing_channels")))
+        for row in tags
+        if as_list(row.get("missing_channels"))
+    }
+
+    return {
+        "available": True,
+        "source": source,
+        "score": coerce_float(coverage.get("score")),
+        "tag_count": int(coverage.get("tag_count") or len(tags)),
+        "covered_tag_count": int(coverage.get("covered_tag_count") or 0),
+        "missing_channels": missing,
+        "claim_boundary": as_dict(coverage.get("claim_boundary")),
+    }
+
+
+def first_dict(container: dict[str, Any], keys: list[str]) -> dict[str, Any]:
+    for key in keys:
+        value = as_dict(container.get(key))
+        if value:
+            return value
+    return {}
+
+
+def build_case_longtail_control_coverage(
+    row: dict[str, Any],
+    case_summary: dict[str, Any],
+    runner_summary: dict[str, Any],
+    coverage_path: Path | None,
+) -> dict[str, Any]:
+    if coverage_path and coverage_path.exists():
+        return summarize_longtail_control_coverage(load_json(coverage_path), "artifact")
+
+    for source, container in [
+        ("manifest_inline", row),
+        ("case_summary_inline", case_summary),
+        ("runner_summary_inline", runner_summary),
+    ]:
+        coverage = as_dict(container.get("longtail_control_coverage"))
+        if coverage:
+            summary = summarize_longtail_control_coverage(coverage, source)
+            if summary["available"]:
+                return summary
+
+    for source, container in [
+        ("manifest_computed", row),
+        ("case_summary_computed", case_summary),
+        ("runner_summary_computed", runner_summary),
+    ]:
+        scene_specification = first_dict(container, ["scene_specification", "scene_spec", "scene"])
+        condition_plan = first_dict(container, ["condition_plan", "longtail_condition_plan", "long_tail_condition_plan"])
+        condition_package = first_dict(container, ["condition_package", "executable_condition", "dd2_condition"])
+
+        if scene_specification or condition_plan or condition_package:
+            coverage = build_longtail_control_coverage(scene_specification, condition_plan, condition_package)
+            if as_list(coverage.get("tags")):
+                return summarize_longtail_control_coverage(coverage, source)
+
+    return summarize_longtail_control_coverage({}, "not_available")
+
+
+def find_longtail_control_coverage_file(case_summary_path: Path | None) -> Path | None:
+    if not case_summary_path or not case_summary_path.exists():
+        return None
+
+    case_dir = case_summary_path.parent
+    candidates = [
+        case_dir / "longtail_control_coverage.json",
+        case_dir / "longtail_coverage.json",
+        case_dir / "long_tail_control_coverage.json",
+        case_dir / "coverage" / "longtail_control_coverage.json",
+    ]
+
+    for candidate in candidates:
+        if candidate.exists() and as_dict(load_json(candidate)).get("schema_version") == LONGTAIL_COVERAGE_SCHEMA_VERSION:
+            return candidate
+
+    for candidate in sorted(case_dir.rglob("*.json")):
+        name = candidate.name.lower()
+        if "longtail" not in name or "coverage" not in name:
+            continue
+        if as_dict(load_json(candidate)).get("schema_version") == LONGTAIL_COVERAGE_SCHEMA_VERSION:
+            return candidate
+
+    return None
 
 
 def alignment_summary(data: dict[str, Any]) -> dict[str, Any]:
@@ -146,6 +261,7 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
     retry_alignment_path = resolve_path(row.get("retry_alignment_eval"), manifest_dir)
     perception_eval_path = resolve_path(row.get("perception_eval"), manifest_dir)
     baseline_summary_path = resolve_path(row.get("baseline_summary"), manifest_dir)
+    longtail_coverage_path = resolve_path(row.get("longtail_control_coverage"), manifest_dir)
 
     case_summary = load_json(case_summary_path)
     runner_summary = load_json(runner_summary_path)
@@ -205,6 +321,13 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
     if not automatic_multiround_supported:
         remaining_work.append("automate_generate_evaluate_diagnose_refine_regenerate_loop")
 
+    longtail_control_coverage = build_case_longtail_control_coverage(
+        row=row,
+        case_summary=case_summary,
+        runner_summary=runner_summary,
+        coverage_path=longtail_coverage_path,
+    )
+
     return {
         "case_id": case_id,
         "task_family": task_family,
@@ -225,6 +348,7 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
         "automatic_multiround_supported": automatic_multiround_supported,
         "case_study_claim_allowed": paper_claim_allowed,
         "paper_claim_allowed": False,
+        "longtail_control_coverage": longtail_control_coverage,
         "remaining_work": sorted(set(remaining_work)),
         "sources": {
             "closed_loop_case_summary": source_entry(case_summary_path),
@@ -235,11 +359,13 @@ def build_case_record(row: dict[str, Any], manifest_dir: Path) -> dict[str, Any]
             "retry_alignment_eval": source_entry(retry_alignment_path),
             "perception_eval": source_entry(perception_eval_path),
             "baseline_summary": source_entry(baseline_summary_path),
+            "longtail_control_coverage": source_entry(longtail_coverage_path),
         },
         "claim_boundary": {
             "registry_record_is_not_video_semantic_success": True,
             "duplicate_sources_are_not_counted_as_separate_cases": True,
             "auto_matched_alignment_eval_is_metadata_link_not_new_review": True,
+            "longtail_control_coverage_is_not_video_semantic_success": True,
             "case_study_claim_allowed_means_single_case_evidence_only": paper_claim_allowed,
             "paper_claim_allowed_is_deprecated_use_case_study_claim_allowed": True,
             "strict_baseline_comparison_supported": strict_baseline_comparison_supported,
@@ -383,6 +509,10 @@ def discover_registry_cases(scan_root: Path) -> list[dict[str, Any]]:
         if runner_summary.exists():
             row["runner_summary"] = path_string(runner_summary)
 
+        coverage_path = find_longtail_control_coverage_file(path)
+        if coverage_path:
+            row["longtail_control_coverage"] = path_string(coverage_path)
+
         attach_alignment_eval_paths(row, data, alignment_index)
 
         rows.append(row)
@@ -444,6 +574,12 @@ def build_registry(manifest: dict[str, Any] | list[Any], manifest_dir: Path | No
     manifest_dir = manifest_dir or Path.cwd()
     raw_cases = [build_case_record(row, manifest_dir) for row in manifest_cases(manifest)]
     cases = deduplicate_case_records(raw_cases)
+    longtail_scores = [
+        coerce_float(as_dict(row.get("longtail_control_coverage")).get("score"))
+        for row in cases
+        if as_dict(row.get("longtail_control_coverage")).get("available") is True
+    ]
+    longtail_scores = [score for score in longtail_scores if score is not None]
 
     return {
         "raw_case_count": len(raw_cases),
@@ -458,6 +594,12 @@ def build_registry(manifest: dict[str, Any] | list[Any], manifest_dir: Path | No
         ),
         "automatic_multiround_supported_count": sum(1 for row in cases if row["automatic_multiround_supported"]),
         "perception_passed_count": sum(1 for row in cases if row["perception_passed"]),
+        "longtail_control_coverage_available_count": sum(
+            1 for row in cases if as_dict(row.get("longtail_control_coverage")).get("available") is True
+        ),
+        "longtail_control_coverage_mean_score": (
+            round(sum(longtail_scores) / len(longtail_scores), 6) if longtail_scores else None
+        ),
         "cases": cases,
         "claim_boundary": {
             "registry_is_not_video_semantic_success": True,
@@ -466,6 +608,7 @@ def build_registry(manifest: dict[str, Any] | list[Any], manifest_dir: Path | No
             "automatic_multiround_claim_requires_automatic_multiround_supported": True,
             "duplicate_closed_loop_summaries_are_collapsed": True,
             "auto_matched_alignment_evals_are_not_new_semantic_evidence": True,
+            "registry_longtail_control_coverage_is_not_video_semantic_success": True,
         },
     }
 
@@ -488,6 +631,8 @@ def render_markdown(registry: dict[str, Any]) -> str:
         f"- case_count: `{registry.get('case_count')}`",
         f"- case_study_evidence_count: `{registry.get('case_study_evidence_count')}`",
         f"- case_study_claim_allowed_count: `{registry.get('case_study_claim_allowed_count')}`",
+        f"- longtail_control_coverage_available_count: `{registry.get('longtail_control_coverage_available_count')}`",
+        f"- longtail_control_coverage_mean_score: `{registry.get('longtail_control_coverage_mean_score')}`",
         "",
         "| case | family | status | pre | retry | evidence | case-study claim | strict baseline | automatic loop | perception passed |",
         "|---|---|---|---:|---:|---|---:|---:|---:|---:|",
