@@ -222,6 +222,7 @@ class PerceptionVideoEvaluator(BaseEvaluator):
         pass_threshold: float = 0.8,
         max_frames: int | None = None,
         tracker_iou_threshold: float = 0.3,
+        static_motion_threshold: float = 0.5,
     ) -> None:
         self.detector = detector
         self.frame_reader = frame_reader or OpenCVFrameReader()
@@ -231,6 +232,7 @@ class PerceptionVideoEvaluator(BaseEvaluator):
         self.pass_threshold = pass_threshold
         self.max_frames = max_frames
         self.tracker_iou_threshold = tracker_iou_threshold
+        self.static_motion_threshold = static_motion_threshold
 
     def evaluate(self, generation: Generation) -> Evaluation:
         detections, frame_count, measured, setup_reasons = self._collect_detections(generation)
@@ -271,6 +273,7 @@ class PerceptionVideoEvaluator(BaseEvaluator):
             6,
         )
 
+        motion_px, motion_norm = self._dominant_motion(dominant)
         metrics.update({
             "Q_cov": q_cov,
             "Q_conf": q_conf,
@@ -280,6 +283,8 @@ class PerceptionVideoEvaluator(BaseEvaluator):
             "perception_detection_count": float(len(filtered)),
             "perception_track_count": float(len(tracks)),
             "perception_dominant_track_length": float(len(dominant.detections) if dominant else 0),
+            "perception_dominant_net_motion_px": float(motion_px) if motion_px is not None else -1.0,
+            "perception_dominant_motion_over_width": float(motion_norm) if motion_norm is not None else -1.0,
         })
 
         if not filtered:
@@ -300,6 +305,20 @@ class PerceptionVideoEvaluator(BaseEvaluator):
         if q_box < self.pass_threshold:
             reasons.append("unstable_bounding_boxes")
             actions.append("stabilize target object box position and scale")
+        request_implies_motion = bool(
+            (generation.metadata.get("scene_specification") or {}).get("motion_primitives")
+        )
+        if (
+            request_implies_motion
+            and dominant is not None
+            and len(dominant.detections) >= 3
+            and motion_norm is not None
+            and motion_norm < self.static_motion_threshold
+        ):
+            reasons.append("target_appears_static")
+            actions.append(
+                "increase visible target motion: strengthen maneuver wording or bind a source scene with existing target motion"
+            )
 
         passed = score >= self.pass_threshold and not reasons
         return Evaluation(score, metrics, Diagnosis(passed, list(dict.fromkeys(reasons)), list(dict.fromkeys(actions))))
@@ -414,6 +433,21 @@ class PerceptionVideoEvaluator(BaseEvaluator):
         for frame_index in sorted({d.frame_index for d in detections}):
             tracker.update(d for d in detections if d.frame_index == frame_index)
         return tracker.tracks
+
+    def _dominant_motion(self, dominant: Track | None):
+        """Net centroid displacement of the dominant track, normalized by mean box width."""
+        if dominant is None or len(dominant.detections) < 2:
+            return None, None
+        centroids = [
+            ((d.box[0] + d.box[2]) / 2.0, (d.box[1] + d.box[3]) / 2.0)
+            for d in dominant.detections
+        ]
+        net = (
+            (centroids[-1][0] - centroids[0][0]) ** 2
+            + (centroids[-1][1] - centroids[0][1]) ** 2
+        ) ** 0.5
+        mean_width = sum(max(d.box[2] - d.box[0], 1e-6) for d in dominant.detections) / len(dominant.detections)
+        return round(net, 3), round(net / mean_width, 6)
 
     def _coverage_score(self, detections: List[Detection], frame_count: int) -> float:
         return round(len({d.frame_index for d in detections}) / frame_count, 6) if frame_count > 0 else 0.0

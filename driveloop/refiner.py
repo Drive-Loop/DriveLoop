@@ -15,6 +15,7 @@ class RuleBasedRefiner:
         "unstable_track_coverage",
         "identity_inconsistent",
         "unstable_bounding_boxes",
+        "target_appears_static",
     }
     PERCEPTION_ESCALATION = [
         "the motorcycle rides in the left adjacent lane very close to the ego vehicle, large in the frame",
@@ -147,6 +148,10 @@ class RuleBasedRefiner:
             additions.append("the same target actor identity is preserved throughout the video")
         if "unstable_bounding_boxes" in reasons:
             additions.append("the target actor has stable scale and position changes across frames")
+        if "target_appears_static" in reasons:
+            additions.append(
+                "the target motorcycle is clearly moving, with visible lateral displacement across the frames, not parked and not stationary"
+            )
         return additions
 
     def _alignment_feedback(

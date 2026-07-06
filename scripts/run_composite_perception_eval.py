@@ -16,6 +16,8 @@ def main():
     parser.add_argument("--weights", default="yolov8m.pt")
     parser.add_argument("--confidence-threshold", type=float, default=0.25)
     parser.add_argument("--tracker", choices=["iou", "botsort"], default="iou")
+    parser.add_argument("--motion-required", action="store_true",
+                        help="treat the request as motion-implying so static targets are diagnosed")
     parser.add_argument("--out-root", default="outputs/driveloop/perception_video_eval")
     args = parser.parse_args()
 
@@ -29,7 +31,10 @@ def main():
         layout=CompositeVideoLayout(),
         confidence_threshold=args.confidence_threshold,
     )
-    generation = Generation(iteration=0, prompt=args.prompt, artifacts={"video": args.video}, metadata={})
+    metadata = {}
+    if args.motion_required:
+        metadata["scene_specification"] = {"motion_primitives": ["lane_change"]}
+    generation = Generation(iteration=0, prompt=args.prompt, artifacts={"video": args.video}, metadata=metadata)
     report = evaluator.build_report(generation)
     report["scenario_id"] = args.scenario_id
     report["detector_weights"] = args.weights
