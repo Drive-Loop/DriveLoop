@@ -131,8 +131,15 @@ def audit_only_detected(attempts: list[dict[str, Any]], source_payload: Any = No
         return True
     if pick(source, "claim_boundary.summary_does_not_generate_video") is True:
         return True
+    if pick(source, "metadata.dd2_audit_only") is True:
+        return True
+    if pick(source, "best_generation.metadata.dd2_audit_only") is True:
+        return True
 
     for attempt in attempts:
+        metadata = as_dict(attempt.get("metadata"))
+        if metadata.get("dd2_audit_only") is True:
+            return True
         claim = as_dict(attempt.get("claim_boundary"))
         if claim.get("runner_is_audit_only") is True:
             return True

@@ -93,3 +93,46 @@ def test_manifest_accepts_history_jsonl_records_with_prompt_refinement(tmp_path:
     assert manifest["schema_version"] == "driveloop_automatic_closed_loop_manifest.v0"
     assert manifest["automatic_multiround_supported"] is True
     assert manifest["transitions"][0]["prompt_changed"] is True
+
+
+
+def test_manifest_rejects_dd2_audit_only_history_as_automatic_loop(tmp_path: Path):
+    records = [
+        {
+            "generation": {
+                "iteration": 0,
+                "prompt": "generic driving video",
+                "artifacts": {"dd2_runtime_input_audit": "audit0.json"},
+                "metadata": {"backend": "drivedreamer2", "dd2_audit_only": True},
+            },
+            "evaluation": {
+                "score": 0.2,
+                "metrics": {},
+                "diagnosis": {
+                    "passed": False,
+                    "reasons": ["dd2_tensor_control_not_ready"],
+                    "suggested_actions": ["refine prompt and condition"],
+                },
+            },
+        },
+        {
+            "generation": {
+                "iteration": 1,
+                "prompt": "realistic autonomous driving scene with motorcycle cut-in",
+                "artifacts": {"dd2_runtime_input_audit": "audit1.json"},
+                "metadata": {"backend": "drivedreamer2", "dd2_audit_only": True},
+            },
+            "evaluation": {
+                "score": 0.95,
+                "metrics": {},
+                "diagnosis": {"passed": True, "reasons": [], "suggested_actions": []},
+            },
+        },
+    ]
+
+    manifest = build_automatic_closed_loop_manifest(records, target_score=0.8, source="dd2_audit_only_history")
+
+    assert manifest["audit_only_detected"] is True
+    assert manifest["automatic_loop_supported"] is False
+    assert manifest["automatic_multiround_supported"] is False
+    assert "audit_only_trace_does_not_execute_generation" in manifest["blockers"]
