@@ -34,7 +34,7 @@ def control_visibility_score(
     if scene_spec.motion_primitives:
         motion = metrics.get("perception_dominant_motion_over_width", -1.0)
         if motion is None or motion < 0:
-            channels["target_motion"] = 0.0  # 无可用轨迹 = 运动不可见
+            channels["target_motion"] = 0.0  # no usable track means the motion is not visible
         else:
             channels["target_motion"] = round(min(motion / _MOTION_FULL_CREDIT, 1.0), 6)
 

@@ -36,7 +36,7 @@ def test_guard_reverts_intent_dropping_rewrite(tmp_path):
     assert first.refinement is not None
     assert any("intent_guard_reverted_prompt" in n for n in first.refinement.notes)
     assert first.refinement.prompt == REQUEST.prompt
-    # 第二次尝试的 prompt 没有被改飞
+    # the second attempt keeps the original prompt
     assert result.attempt_history[1].request.prompt == REQUEST.prompt
 
 
