@@ -7,6 +7,7 @@ from driveloop.backends.base import GenerationBackend
 from driveloop.condition_adapter import DriveDreamer2ConditionAdapter
 from driveloop.evaluator import BaseEvaluator, RuleBasedEvaluator
 from driveloop.grounding import RuleBasedGrounder
+from driveloop.intent.providers import MultimodalPreprocessor
 from driveloop.logging import HistoryLogger
 from driveloop.longtail import LongTailController, control_coverage
 from driveloop.refiner import RuleBasedRefiner
@@ -21,6 +22,7 @@ from driveloop.schema import (
     Refinement,
 )
 from driveloop.source_selector import BaseSourceSelector, NoOpSourceSelector
+from driveloop.control_visibility import control_visibility_score
 from driveloop.utility import UtilityWeights, intent_consistency, task_utility
 
 
@@ -39,7 +41,9 @@ class DriveLoopRunner:
         self.backend = backend
         self.evaluator = evaluator or RuleBasedEvaluator()
         self.refiner = refiner or RuleBasedRefiner()
-        self.grounder = grounder or RuleBasedGrounder()
+        self.grounder = grounder or RuleBasedGrounder(
+            multimodal_preprocessor=MultimodalPreprocessor()
+        )
         self.longtail_controller = longtail_controller or LongTailController()
         self.condition_adapter = condition_adapter or DriveDreamer2ConditionAdapter()
         self.source_selector = source_selector or NoOpSourceSelector()
@@ -142,13 +146,23 @@ class DriveLoopRunner:
                     if self.config.utility_weights
                     else None
                 )
+                alignment_score = evaluation.metrics.get("alignment_score")
+                alignment_source = "measured_alignment"
+                if alignment_score is None:
+                    auto_ctrl = control_visibility_score(
+                        evaluation.metrics, scene_spec, condition_plan
+                    )
+                    if auto_ctrl["score"] is not None:
+                        alignment_score = auto_ctrl["score"]
+                        alignment_source = auto_ctrl["source"]
                 utility = task_utility(
                     evaluation.score,
                     condition_plan,
                     original_spec,
                     scene_spec,
-                    alignment_score=evaluation.metrics.get("alignment_score"),
+                    alignment_score=alignment_score,
                     weights=utility_weights,
+                    alignment_source=alignment_source,
                 )
                 evaluation = replace(
                     evaluation,

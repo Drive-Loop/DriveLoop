@@ -68,8 +68,10 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
             if callable(reset):
                 reset()
             payload_frames = []
+            brightness_sum = 0.0
             for frame_index, frame in enumerate(frames):
                 view = self.layout.extract_view(frame, view_index)
+                brightness_sum += float(view.mean())
                 detections = self.detector.detect(view, frame_index)
                 payload_frames.append({
                     "frame_index": frame_index,
@@ -95,6 +97,10 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
             )
             evaluation = super().evaluate(view_generation)
             view_scores[view_index] = evaluation.score
+            view_brightness = round(brightness_sum / max(len(frames), 1), 3)
+            if not hasattr(self, "_view_brightness"):
+                self._view_brightness = {}
+            self._view_brightness[view_index] = view_brightness
             if best_evaluation is None or evaluation.score > best_evaluation.score:
                 best_evaluation = evaluation
                 best_view = view_index
@@ -103,6 +109,11 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
         for view_index, score in view_scores.items():
             metrics["perception_view%d_score" % view_index] = score
         metrics["perception_best_view"] = float(best_view)
+        brightness_map = getattr(self, "_view_brightness", {})
+        for view_index, value in brightness_map.items():
+            metrics["perception_view%d_brightness" % view_index] = value
+        if best_view in brightness_map:
+            metrics["perception_best_view_brightness"] = brightness_map[best_view]
         metrics["perception_layout_views"] = float(self.layout.num_views)
         metrics["perception_generated_row_height"] = float(self.layout.generated_row_height)
         return Evaluation(best_evaluation.score, metrics, best_evaluation.diagnosis)

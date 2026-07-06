@@ -64,10 +64,11 @@ def task_utility(
     current_spec: SceneSpecification,
     alignment_score: Optional[float] = None,
     weights: Optional[UtilityWeights] = None,
+    alignment_source: str = "measured_alignment",
 ) -> Dict[str, Any]:
     w = (weights or UtilityWeights()).normalized()
     if alignment_score is not None:
-        s_ctrl, s_ctrl_source = float(alignment_score), "measured_alignment"
+        s_ctrl, s_ctrl_source = float(alignment_score), alignment_source
     else:
         s_ctrl, s_ctrl_source = float(control_coverage(condition_plan)["score"]), "control_coverage_plan"
     s_intent = intent_consistency(original_spec, current_spec)
