@@ -8,7 +8,7 @@ from driveloop.condition_adapter import DriveDreamer2ConditionAdapter
 from driveloop.evaluator import BaseEvaluator, RuleBasedEvaluator
 from driveloop.grounding import RuleBasedGrounder
 from driveloop.logging import HistoryLogger
-from driveloop.longtail import LongTailController
+from driveloop.longtail import LongTailController, control_coverage
 from driveloop.refiner import RuleBasedRefiner
 from driveloop.schema import (
     DriveLoopAttempt,
@@ -60,6 +60,7 @@ class DriveLoopRunner:
                 requested_tags=requested_tags,
                 history=history,
             )
+            coverage = control_coverage(condition_plan)
             dd2_condition = self.condition_adapter.build(
                 scene_spec,
                 condition_plan,
@@ -91,6 +92,7 @@ class DriveLoopRunner:
                     "source_selection": source_selection_dict,
                     "scene_specification": asdict(scene_spec),
                     "long_tail_condition_plan": asdict(condition_plan),
+                    "control_coverage": coverage,
                     "dd2_condition": dd2_condition_dict,
                 },
             )

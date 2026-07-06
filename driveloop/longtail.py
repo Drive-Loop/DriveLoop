@@ -201,3 +201,73 @@ class LongTailController:
     def _normalize_tag(self, tag: str) -> str:
         tag = tag.lower().strip().replace("-", "_").replace(" ", "_")
         return _TAG_ALIASES.get(tag, tag)
+
+
+_WEATHER_TAGS = {"heavy_rain", "fog", "snow", "low_visibility"}
+_OBJECT_TAGS = {"vulnerable_road_user", "road_obstacle", "animal_crossing", "traffic_accident"}
+_MOTION_TAGS = {"motorcycle_cut_in", "motorcycle_lane_change"}
+_LANE_RELATION_TAGS = {"left_lane_relation", "right_lane_relation"}
+
+
+def _tag_supported(tag: str, plan: LongTailConditionPlan) -> bool:
+    """Gamma_r in Eq. (10): check tag r maps to at least one executable channel."""
+    controls = plan.executable_controls
+    has_suffix = bool(plan.prompt_suffixes)
+    if tag in _WEATHER_TAGS:
+        return has_suffix and (
+            bool(plan.postprocess_effects)
+            or "weather" in controls
+            or "visibility" in controls
+        )
+    if tag in _OBJECT_TAGS:
+        return bool(controls.get("objects"))
+    if tag in _MOTION_TAGS:
+        return bool(controls.get("motion")) and bool(controls.get("maneuvers"))
+    if tag in _LANE_RELATION_TAGS:
+        return bool(controls.get("lane_relations"))
+    return False
+
+
+def control_coverage(
+    plan: LongTailConditionPlan,
+    tag_weights: Dict[str, float] | None = None,
+) -> Dict[str, Any]:
+    """Compute C_lt = sum_r alpha_r * Gamma_r over resolved long-tail tags (Eq. 10).
+
+    Returns a dict with the scalar score, per-tag support, and unsupported tags.
+    A keyword in the prompt alone is never counted as an executable channel.
+    """
+    tags = list(plan.tags)
+    if not tags:
+        return {
+            "schema_version": "driveloop_control_coverage.v0",
+            "score": 1.0,
+            "tag_support": {},
+            "unsupported_tags": [],
+            "tag_count": 0,
+        }
+
+    weights = tag_weights or {}
+    total_weight = 0.0
+    supported_weight = 0.0
+    tag_support: Dict[str, bool] = {}
+    unsupported: List[str] = []
+
+    for tag in tags:
+        alpha = float(weights.get(tag, 1.0))
+        total_weight += alpha
+        supported = _tag_supported(tag, plan)
+        tag_support[tag] = supported
+        if supported:
+            supported_weight += alpha
+        else:
+            unsupported.append(tag)
+
+    score = supported_weight / total_weight if total_weight > 0 else 0.0
+    return {
+        "schema_version": "driveloop_control_coverage.v0",
+        "score": round(score, 6),
+        "tag_support": tag_support,
+        "unsupported_tags": unsupported,
+        "tag_count": len(tags),
+    }
