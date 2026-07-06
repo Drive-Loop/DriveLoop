@@ -13,6 +13,7 @@ class DriveLoopConfig:
     keep_all_generations: bool = True
     use_task_utility: bool = False
     utility_weights: Optional[Dict[str, float]] = None
+    intent_epsilon: float = 0.05
 
 
 @dataclass(frozen=True)

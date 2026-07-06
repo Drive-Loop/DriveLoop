@@ -21,7 +21,7 @@ from driveloop.schema import (
     Refinement,
 )
 from driveloop.source_selector import BaseSourceSelector, NoOpSourceSelector
-from driveloop.utility import UtilityWeights, task_utility
+from driveloop.utility import UtilityWeights, intent_consistency, task_utility
 
 
 class DriveLoopRunner:
@@ -143,6 +143,19 @@ class DriveLoopRunner:
             refinement: Optional[Refinement] = None
             if not should_stop:
                 refinement = self.refiner.refine(current_request, evaluation)
+                if self.config.use_task_utility and refinement is not None:
+                    refined_spec = self.grounder.ground(
+                        replace(current_request, prompt=refinement.prompt)
+                    )
+                    drift_next = 1.0 - intent_consistency(original_spec, refined_spec)
+                    drift_now = 1.0 - intent_consistency(original_spec, scene_spec)
+                    if drift_next > drift_now + self.config.intent_epsilon:
+                        refinement = Refinement(
+                            prompt=current_request.prompt,
+                            condition=dict(refinement.condition),
+                            notes=list(refinement.notes)
+                            + ["intent_guard_reverted_prompt (Eq.18)"],
+                        )
 
             attempt = DriveLoopAttempt(
                 iteration=iteration,
