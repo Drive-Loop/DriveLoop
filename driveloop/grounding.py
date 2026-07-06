@@ -48,6 +48,9 @@ class RuleBasedGrounder:
     SceneSpecification interface.
     """
 
+    def __init__(self, multimodal_preprocessor=None) -> None:
+        self.multimodal_preprocessor = multimodal_preprocessor
+
     def ground(self, request: DriveLoopRequest) -> SceneSpecification:
         structured_intent = request.metadata.get("structured_intent")
         if isinstance(structured_intent, dict):
@@ -130,6 +133,10 @@ class RuleBasedGrounder:
                     evidence.append(value)
                 elif isinstance(value, Iterable):
                     evidence.extend(str(item) for item in value)
+        if self.multimodal_preprocessor is not None:
+            for item in self.multimodal_preprocessor.collect_evidence(request.metadata):
+                if item.text:
+                    evidence.append(item.text)
         return evidence
 
     def _parse_environment(self, text: str) -> Dict[str, str]:

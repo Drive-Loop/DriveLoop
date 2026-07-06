@@ -241,4 +241,90 @@ class MultimodalPreprocessor:
             if voice_evidence is not None:
                 evidence.append(voice_evidence)
 
+        sketch = metadata.get("sketch")
+        if isinstance(sketch, dict):
+            sketch_evidence = self.image_provider.describe({**sketch, "type": "sketch"})
+            if sketch_evidence is not None:
+                evidence.append(sketch_evidence)
+
+        video = metadata.get("video")
+        if isinstance(video, dict):
+            video_evidence = self._describe_video_middle_frame(video)
+            if video_evidence is not None:
+                evidence.append(video_evidence)
+
         return evidence
+
+    def _describe_video_middle_frame(self, video: Dict[str, Any]) -> ModalityEvidence | None:
+        path = video.get("path") or video.get("file_path")
+        if not path or not Path(str(path)).exists():
+            return None
+        try:
+            import cv2
+            import tempfile
+        except ImportError:
+            return None
+        capture = cv2.VideoCapture(str(path))
+        frame_count = int(capture.get(cv2.CAP_PROP_FRAME_COUNT) or 0)
+        if frame_count > 1:
+            capture.set(cv2.CAP_PROP_POS_FRAMES, frame_count // 2)
+        ok, frame = capture.read()
+        capture.release()
+        if not ok:
+            return None
+        with tempfile.NamedTemporaryFile(suffix=".png", delete=False) as handle:
+            cv2.imwrite(handle.name, frame)
+            frame_path = handle.name
+        try:
+            return self.image_provider.describe({
+                "path": frame_path,
+                "filename": video.get("filename") or Path(str(path)).name,
+                "type": "video_frame",
+            })
+        finally:
+            Path(frame_path).unlink(missing_ok=True)
+
+
+class BlipImageUnderstandingProvider:
+    """Real image captioning via BLIP (Sec. 3.3 psi_i / psi_k).
+
+    Lazily loads Salesforce/blip-image-captioning-base (override with
+    DRIVELOOP_BLIP_MODEL). Falls back to None when the image path is missing.
+    """
+
+    def __init__(self, model_name: str | None = None, device: str | None = None) -> None:
+        self.model_name = model_name or os.environ.get(
+            "DRIVELOOP_BLIP_MODEL", "Salesforce/blip-image-captioning-base"
+        )
+        self.device = device or os.environ.get("DRIVELOOP_BLIP_DEVICE", "cpu")
+        self._model = None
+        self._processor = None
+
+    def _load(self) -> None:
+        if self._model is not None:
+            return
+        from transformers import BlipForConditionalGeneration, BlipProcessor
+        self._processor = BlipProcessor.from_pretrained(self.model_name)
+        self._model = BlipForConditionalGeneration.from_pretrained(self.model_name).to(self.device)
+
+    def describe(self, image: Dict[str, Any]) -> ModalityEvidence | None:
+        path = image.get("path") or image.get("file_path")
+        if not path or not Path(path).exists():
+            return None
+        self._load()
+        from PIL import Image as PILImage
+        pil_image = PILImage.open(path).convert("RGB")
+        inputs = self._processor(pil_image, return_tensors="pt").to(self.device)
+        output = self._model.generate(**inputs, max_new_tokens=40)
+        caption = self._processor.decode(output[0], skip_special_tokens=True).strip()
+        if not caption:
+            return None
+        return ModalityEvidence(
+            modality=str(image.get("type") or "image"),
+            text=caption,
+            metadata={
+                "filename": image.get("filename") or Path(str(path)).name,
+                "model": self.model_name,
+            },
+            status="measured_blip_caption",
+        )
