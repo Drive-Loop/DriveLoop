@@ -29,6 +29,7 @@ class ExperimentCase:
             name=str(data["name"]),
             prompt=str(data["prompt"]),
             metadata=dict(data.get("metadata", {})),
+            condition=dict(data.get("condition", {})),
             tags=list(data.get("tags", [])),
             expected_condition=dict(data.get("expected_condition", {})),
         )
@@ -188,7 +189,9 @@ class ExperimentPipeline:
                 utility_weights=self.config.utility_weights,
             ),
         )
-        result = runner.run(DriveLoopRequest(prompt=case.prompt, metadata=metadata))
+        result = runner.run(
+            DriveLoopRequest(prompt=case.prompt, condition=dict(case.condition), metadata=metadata)
+        )
         attempt_records = [asdict(attempt) for attempt in result.attempt_history]
 
         _write_json(case_dir / "result.json", asdict(result))

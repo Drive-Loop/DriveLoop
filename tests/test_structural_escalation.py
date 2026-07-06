@@ -63,3 +63,12 @@ def test_runner_carries_escalation_into_next_condition_plan(tmp_path):
     assert plan2.executable_controls["structural_escalation"]["level"] == 1
     plan3 = result.attempt_history[2].long_tail_condition_plan
     assert plan3.executable_controls["structural_escalation"]["level"] == 2
+
+
+def test_absolute_geometry_bases_override_proximity():
+    surface = build_actor_motion_surface_plan(
+        _plan({"lateral_base_m": 3.2, "longitudinal_base_m": 12.0})
+    )
+    box = surface["per_frame_boxes3d"][0]["box3d"]
+    assert abs(box[0] - (3.2 + 1.6 * -1.0)) < 1e-6
+    assert abs(box[2] - (12.0 + 2.0)) < 1e-6

@@ -95,6 +95,8 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
     escalation = actor_motion_plan.get("escalation") or {}
     proximity_scale = float(escalation.get("proximity_scale", 1.0))
     size_scale = float(escalation.get("size_scale", 1.0))
+    lateral_base = float(escalation.get("lateral_base_m", 8.0 * proximity_scale))
+    longitudinal_base = float(escalation.get("longitudinal_base_m", 18.0 * proximity_scale))
     dims = {key: value * size_scale for key, value in dims.items()}
     frames = actor_motion_plan.get("runtime_surface", {}).get("frames", [])
     per_frame_boxes3d = []
@@ -111,9 +113,9 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
                 "synthetic_track_id": actor_motion_plan.get("synthetic_track_id"),
                 "category": category,
                 "box3d": [
-                    round(8.0 * proximity_scale + lateral_offset, 6),
+                    round(lateral_base + lateral_offset, 6),
                     1.8,
-                    round(18.0 * proximity_scale + longitudinal_offset, 6),
+                    round(longitudinal_base + longitudinal_offset, 6),
                     dims["width"],
                     dims["height"],
                     dims["depth"],
@@ -135,7 +137,12 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
         else "no_per_frame_boxes3d",
         "control_level": "tensor_override_runtime",
         "surface": "boxes3d.per_frame_append",
-        "escalation_applied": {"proximity_scale": proximity_scale, "size_scale": size_scale},
+        "escalation_applied": {
+            "proximity_scale": proximity_scale,
+            "size_scale": size_scale,
+            "lateral_base_m": lateral_base,
+            "longitudinal_base_m": longitudinal_base,
+        },
         "target_actor": target_actor,
         "synthetic_track_id": actor_motion_plan.get("synthetic_track_id"),
         "per_frame_boxes3d": per_frame_boxes3d,
