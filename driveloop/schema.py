@@ -11,6 +11,8 @@ class DriveLoopConfig:
     target_score: float = 0.8
     output_dir: Path = Path("outputs/driveloop")
     keep_all_generations: bool = True
+    use_task_utility: bool = False
+    utility_weights: Optional[Dict[str, float]] = None
 
 
 @dataclass(frozen=True)

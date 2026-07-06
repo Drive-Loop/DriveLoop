@@ -21,6 +21,7 @@ from driveloop.schema import (
     Refinement,
 )
 from driveloop.source_selector import BaseSourceSelector, NoOpSourceSelector
+from driveloop.utility import UtilityWeights, task_utility
 
 
 class DriveLoopRunner:
@@ -47,6 +48,7 @@ class DriveLoopRunner:
 
     def run(self, request: DriveLoopRequest) -> DriveLoopResult:
         current_request = request
+        original_spec = self.grounder.ground(request)
         history: list[tuple[Generation, Evaluation]] = []
         attempt_history: list[DriveLoopAttempt] = []
         best_generation: Optional[Generation] = None
@@ -99,6 +101,31 @@ class DriveLoopRunner:
 
             evaluation = self.evaluator.evaluate(generation)
             evaluation = self._with_source_selection_diagnosis(evaluation, source_selection_dict)
+            if self.config.use_task_utility:
+                utility_weights = (
+                    UtilityWeights(**self.config.utility_weights)
+                    if self.config.utility_weights
+                    else None
+                )
+                utility = task_utility(
+                    evaluation.score,
+                    condition_plan,
+                    original_spec,
+                    scene_spec,
+                    alignment_score=evaluation.metrics.get("alignment_score"),
+                    weights=utility_weights,
+                )
+                evaluation = replace(
+                    evaluation,
+                    score=utility["J"],
+                    metrics={
+                        **evaluation.metrics,
+                        "J": utility["J"],
+                        "S_perc": utility["S_perc"],
+                        "S_ctrl": utility["S_ctrl"],
+                        "S_intent": utility["S_intent"],
+                    },
+                )
             history.append((generation, evaluation))
 
             if best_evaluation is None or evaluation.score > best_evaluation.score:
