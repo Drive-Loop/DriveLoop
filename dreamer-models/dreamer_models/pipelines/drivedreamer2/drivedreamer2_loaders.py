@@ -6,7 +6,7 @@ from ...models.drivedreamer2 import unet_spatio_temporal_condition
 
 class DriveDreamer2_LoaderMixin:
     def load_weights(self, pretrained_model_name_path):
-        # TODO  此处只load了训练参数的部分,需要check我们训练的时候的训练参数有哪些
+        # TODO: only the training-parameter subset is loaded here; verify which training parameters were used
         device = self.unet.device
         dtype = self.unet.dtype
         state_dict = torch.load(pretrained_model_name_path, map_location='cpu')

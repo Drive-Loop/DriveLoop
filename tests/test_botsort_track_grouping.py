@@ -16,7 +16,7 @@ def _gen(dets, frames):
 
 
 def test_provided_track_ids_override_iou_grouping():
-    # 同一位置交替两个 id:IoU tracker 会并成 1 条,id 分轨必须是 2 条
+    # alternating ids at the same box: IoU tracking would merge them into 1 track; id grouping must yield 2
     dets = [
         Detection(0, "motorcycle", 0.9, (10, 10, 60, 60), track_id=1),
         Detection(1, "motorcycle", 0.9, (10, 10, 60, 60), track_id=2),

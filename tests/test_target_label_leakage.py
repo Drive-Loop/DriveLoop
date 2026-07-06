@@ -16,7 +16,7 @@ def _gen_with_car_detections(prompt):
 def test_ego_vehicle_does_not_make_car_a_target():
     prompt = "a motorcycle cuts in from the left toward the ego vehicle"
     ev = PerceptionVideoEvaluator().evaluate(_gen_with_car_detections(prompt))
-    # 只有 car 检出而目标是 motorcycle,得分必须为 0
+    # only cars are detected while the target is motorcycle; score must be 0
     assert ev.metrics["perception_detection_count"] == 0.0
     assert "target_object_not_detected" in ev.diagnosis.reasons
 

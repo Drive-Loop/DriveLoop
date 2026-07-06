@@ -32,8 +32,8 @@ def test_surface_plan_applies_proximity_and_size():
     )
     assert surface["escalation_applied"]["proximity_scale"] == 0.5
     box = surface["per_frame_boxes3d"][0]["box3d"]
-    assert abs(box[2] - (9.0 + 1.8)) < 1e-6   # 更近
-    assert abs(box[3] - 0.8 * 1.5) < 1e-6      # 更大
+    assert abs(box[2] - (9.0 + 1.8)) < 1e-6  # closer
+    assert abs(box[3] - 0.8 * 1.5) < 1e-6  # larger
 
 
 def test_refiner_increments_escalation_level():

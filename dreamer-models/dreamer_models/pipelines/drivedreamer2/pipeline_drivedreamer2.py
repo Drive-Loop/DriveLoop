@@ -239,7 +239,7 @@ class DriveDreamer2Pipeline(DiffusionPipeline,DriveDreamer2_LoaderMixin):
         shape = (
             batch_size,
             num_frames,
-            num_channels_latents,#TODO cfg具体参数设置好需要调整为//2
+            num_channels_latents,  # TODO: adjust to //2 once cfg parameters are finalized
             height // self.vae_scale_factor,
             width // self.vae_scale_factor,
         )
