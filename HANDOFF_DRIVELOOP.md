@@ -222,3 +222,57 @@ expansion beyond candidate70.
   experiments/2026-07-07_v4_structural_escalation_result.md.
 - Open problems: m4 recovery (source rebinding), scenario-family expansion,
   manual review of the new m3 attempt-1 video.
+
+## Session handoff 2026-07-07 (quality-improvement phase, IN PROGRESS)
+
+### Current state
+- Full test suite: 369 passed. All paper Sec.3 formulas implemented
+  (Eq.5 with video-derived auto S_ctrl, Eq.10, Eq.14, Eq.18), refiner has
+  three escalation levers: prompt ladder -> structural (boxes3d
+  proximity/size, absolute geometry bases) -> source rebinding
+  (candidate window offset). Target-label leakage fixed (ego references).
+- Valid experiment data (strict motorcycle targets, tau=0.7):
+  - exp_v5_open_loop: 0/5 accepted, best J 0.300-0.631
+  - exp_v5_closed_loop: 4/5 accepted at attempt 2 (structural level 1),
+    J 0.746-0.851; m4 fails (S_perc 0 even with rebind offset 1)
+  - exp_v5_closed_loop_saturated (rerun after ablation gate fix f4d7035):
+    0/5, identical to open loop -> gains come from feedback content.
+  - exp_v5_closed_loop_saturated_INVALID: discard (pre-gate-fix run).
+  - v1/v2/v4 comparison numbers are INVALID (leakage / superseded).
+
+### Decision by user
+- Do NOT write paper Section 4 yet. Absolute video quality is not
+  acceptable (S_perc 0.6-0.7, maneuvers unverified). Goal: metric-passing,
+  research-grade videos first.
+
+### Running right now
+- Geometry calibration sweep (PID 304142, log /tmp/exp_geo_sweep.log):
+  9 combos lateral_base {3.2,4.5,6.0} x longitudinal_base {9,12,16} on the
+  m1 prompt, single-pass each, output outputs/driveloop/exp_geometry_sweep.
+  Hypothesis: current default (8m lateral / 18m ahead) places the injected
+  motorcycle two lanes away at frame edge; adjacent-lane geometry should
+  raise S_perc substantially.
+
+### Next steps (in order)
+1. Read exp_geometry_sweep/summary.md, pick argmax-S_perc geometry, set it
+   as the default in build_actor_motion_surface_plan (and rebase the
+   escalation ladder around it).
+2. Rerun three arms (v6) with calibrated geometry; target S_perc >= 0.85
+   on accepted cases.
+3. Manual 9-check alignment review of best videos (maneuver visibility is
+   the open semantic gap; ego is stationary in candidate70 source scene,
+   consider source scenes with moving ego).
+4. m4 remains failed: try larger rebinding offsets / different windows.
+5. Scenario-family expansion beyond candidate70 (accident / fog / obstacle)
+   for paper-scale experiments.
+6. Only then rewrite paper Section 4 from v6+ numbers
+   (outputs/section4_experiments.tex draft exists locally with user).
+
+### Working agreements
+- No Chinese anywhere in code or comments (enforced; scan with the CJK
+  regex over git ls-files *.py).
+- Anchored-patch workflow via /tmp/*.py scripts; run full pytest before
+  every commit; commit messages in English; push after each milestone.
+- GPU is free to use (monthly billing), but keep claim boundaries:
+  perception acceptance is never semantic success; manual review gates
+  semantic claims.
