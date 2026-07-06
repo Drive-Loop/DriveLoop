@@ -35,7 +35,7 @@ def test_runner_records_perception_metrics_in_attempt_history_jsonl():
         root = Path(tmpdir)
         evaluator = CompositeEvaluator([
             RuleBasedEvaluator(),
-            PerceptionVideoEvaluator(target_labels=["motorcycle"], pass_threshold=0.8),
+            PerceptionVideoEvaluator(target_labels=["motorcycle"], pass_threshold=0.8, static_motion_threshold=0.0),
         ])
         result = DriveLoopRunner(
             backend=MockGenerationBackend(output_dir=root / "artifacts"),

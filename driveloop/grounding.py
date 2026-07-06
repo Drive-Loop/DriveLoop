@@ -58,6 +58,9 @@ class RuleBasedGrounder:
 
         evidence = self._collect_evidence(request)
         text = " ".join(evidence).lower()
+        # Ego references describe the ego vehicle, not a scene actor.
+        import re
+        text = re.sub(r"ego[\s-]+(vehicle|car|lane|path)", " ego_reference ", text)
 
         objects = [
             SceneObject(category=category)

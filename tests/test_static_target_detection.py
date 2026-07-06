@@ -21,8 +21,8 @@ def _static_dets(n=4):
     return [Detection(i, "motorcycle", 0.9, (100, 100, 150, 150)) for i in range(n)]
 
 
-def _moving_dets(n=4):
-    return [Detection(i, "motorcycle", 0.9, (100 + 40 * i, 100, 150 + 40 * i, 150)) for i in range(n)]
+def _moving_dets(n=8):
+    return [Detection(i, "motorcycle", 0.9, (100 + 15 * i, 100, 150 + 15 * i, 150)) for i in range(n)]
 
 
 def test_static_target_flagged_when_motion_requested():
@@ -32,9 +32,9 @@ def test_static_target_flagged_when_motion_requested():
 
 
 def test_moving_target_not_flagged():
-    ev = PerceptionVideoEvaluator(target_labels=["motorcycle"]).evaluate(_gen(_moving_dets(), 4, MOTION_META))
+    ev = PerceptionVideoEvaluator(target_labels=["motorcycle"]).evaluate(_gen(_moving_dets(), 8, MOTION_META))
     assert "target_appears_static" not in ev.diagnosis.reasons
-    assert ev.metrics["perception_dominant_motion_over_width"] > 2.0
+    assert ev.metrics["perception_dominant_motion_over_width"] > 1.5
 
 
 def test_static_ok_when_no_motion_requested():

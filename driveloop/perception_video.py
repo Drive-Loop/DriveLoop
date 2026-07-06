@@ -405,12 +405,13 @@ class PerceptionVideoEvaluator(BaseEvaluator):
         metadata_labels = generation.metadata.get("target_labels")
         if isinstance(metadata_labels, list):
             labels.update(self._normalize_label(str(label)) for label in metadata_labels)
-        prompt = generation.prompt.lower()
+        import re
+        # Strip ego-references so "toward the ego vehicle" does not make the
+        # ego car a detection target (target-label leakage fix).
+        prompt = re.sub(r"ego[\s-]+(vehicle|car|lane|path)", " ", generation.prompt.lower())
         for label in ("motorcycle", "car", "truck", "bus", "pedestrian", "bicycle"):
             if label in prompt:
                 labels.add(label)
-        if "vehicle" in prompt:
-            labels.add("car")
         return labels
 
     def _build_tracks(self, detections: List[Detection]) -> List[Track]:
