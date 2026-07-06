@@ -53,6 +53,10 @@ class ExperimentPipelineConfig:
     dd2_timeout_seconds: int | None = None
     dd2_force_boxes3d_probe: bool = False
     dd2_boxes3d_probe_category: str | None = None
+    use_task_utility: bool = False
+    utility_weights: Any = None
+    perception_weights: Any = None
+    perception_confidence: float = 0.25
 
 
 def load_experiment_cases(path: Path | str) -> list[ExperimentCase]:
@@ -154,12 +158,26 @@ class ExperimentPipeline:
         if case.expected_condition:
             metadata.setdefault("expected_condition", case.expected_condition)
 
+        evaluator = None
+        if self.config.perception_weights:
+            from driveloop.composite_perception import CompositePerceptionVideoEvaluator
+            from driveloop.perception_video import UltralyticsYOLODetector
+            evaluator = CompositePerceptionVideoEvaluator(
+                detector=UltralyticsYOLODetector(
+                    self.config.perception_weights,
+                    confidence_threshold=self.config.perception_confidence,
+                ),
+                confidence_threshold=self.config.perception_confidence,
+            )
         runner = DriveLoopRunner(
             backend=self.backend_factory(case_dir / "artifacts"),
+            evaluator=evaluator,
             config=DriveLoopConfig(
                 max_iterations=self.config.max_iterations,
                 target_score=self.config.target_score,
                 output_dir=case_dir / "history",
+                use_task_utility=self.config.use_task_utility,
+                utility_weights=self.config.utility_weights,
             ),
         )
         result = runner.run(DriveLoopRequest(prompt=case.prompt, metadata=metadata))
@@ -184,6 +202,7 @@ class ExperimentPipeline:
             "tags": case.tags,
             "status": "accepted" if accepted else "failed",
             "best_score": result.best_evaluation.score,
+            "best_metrics": dict(result.best_evaluation.metrics),
             "attempt_count": len(attempt_records),
             "attempt_statuses": [attempt.get("status") for attempt in attempt_records],
             "diagnosis_reasons": list(result.best_evaluation.diagnosis.reasons),
