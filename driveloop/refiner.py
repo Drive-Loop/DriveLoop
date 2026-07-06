@@ -112,6 +112,13 @@ class RuleBasedRefiner:
                 "claim_boundary": "structured-condition escalation; not proof of visual realization",
             }
             notes.append("structural_escalation_level_%d" % level)
+            if level >= 2:
+                condition["source_rebinding"] = {
+                    "candidate_offset": level - 1,
+                    "reason": "structural_escalation_insufficient",
+                    "claim_boundary": "source window shifted; token match refers to offset-zero window",
+                }
+                notes.append("source_rebinding_offset_%d" % (level - 1))
 
         return Refinement(
             prompt=prompt,

@@ -37,6 +37,7 @@ def build_source_sample_binding(
     hz_factor: int = 3,
     video_split_rate: int = 1,
     multiview: bool = True,
+    candidate_offset: int = 0,
 ) -> dict[str, Any]:
     dataset_dir = Path(dataset_dir)
     labels_path = dataset_dir / "labels" / "data.pkl"
@@ -102,6 +103,12 @@ def build_source_sample_binding(
             and (not target_scene_tokens or scene_tokens_match)
         )
         if token_groups_match:
+            if candidate_offset:
+                candidate_index = (candidate_index + int(candidate_offset)) % len(starts)
+                camera_starts = starts[candidate_index]
+                selected_indices = selected_frame_indices(
+                    camera_starts, frame_num=frame_num, hz_factor=hz_factor
+                )
             front_record_index = camera_starts[1] if multiview and len(camera_starts) > 1 else camera_starts[0]
             front_record = records[front_record_index]
             return {
@@ -114,6 +121,11 @@ def build_source_sample_binding(
                 "record_count": len(records),
                 "candidate_start_count": len(starts),
                 "dd2_batch_skip": candidate_index,
+                "rebinding": (
+                    {"candidate_offset": int(candidate_offset), "token_match_from_offset_zero": True}
+                    if candidate_offset
+                    else None
+                ),
                 "front_record_index": front_record_index,
                 "front_record": {
                     "sample_token": front_record.get("sample_token"),

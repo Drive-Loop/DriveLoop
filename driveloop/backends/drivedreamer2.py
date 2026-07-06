@@ -256,6 +256,11 @@ class DriveDreamer2Backend(GenerationBackend):
             "instance_token": metadata.get("instance_token")
             or condition.get("instance_token")
             or self.instance_token,
+            "candidate_offset": (
+                (condition.get("source_rebinding") or {}).get("candidate_offset", 0)
+                if isinstance(condition.get("source_rebinding"), dict)
+                else 0
+            ),
             "identity_summary_path": str(
                 metadata.get("source_identity_summary_path")
                 or condition.get("source_identity_summary_path")
@@ -273,6 +278,7 @@ class DriveDreamer2Backend(GenerationBackend):
             scene_token=selector.get("scene_token"),
             instance_token=selector.get("instance_token"),
             identity_summary_path=selector.get("identity_summary_path"),
+            candidate_offset=int(selector.get("candidate_offset") or 0),
             frame_num=self.source_selector_frame_num,
             hz_factor=self.source_selector_hz_factor,
             video_split_rate=self.source_selector_video_split_rate,
