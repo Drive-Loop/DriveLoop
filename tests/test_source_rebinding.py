@@ -20,3 +20,12 @@ def test_rebinding_not_added_for_non_perception_failure():
     evaluation = Evaluation(0.1, {}, Diagnosis(False, ["low_detector_confidence"], []))
     refinement = refiner.refine(DriveLoopRequest(prompt="a motorcycle scene"), evaluation)
     assert "source_rebinding" not in refinement.condition
+
+
+def test_ablation_gate_disables_structural_and_rebinding():
+    refiner = RuleBasedRefiner()
+    refiner.STRUCTURAL_ESCALATION_ENABLED = False
+    request = DriveLoopRequest(prompt="a motorcycle changes lane")
+    refinement = refiner.refine(request, FAILURE)
+    assert "structural_escalation" not in refinement.condition
+    assert "source_rebinding" not in refinement.condition

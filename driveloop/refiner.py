@@ -17,6 +17,8 @@ class RuleBasedRefiner:
         "unstable_bounding_boxes",
         "target_appears_static",
     }
+    STRUCTURAL_ESCALATION_ENABLED = True
+
     PERCEPTION_ESCALATION = [
         "the motorcycle rides in the left adjacent lane very close to the ego vehicle, large in the frame",
         "close range view of the motorcycle with its headlight on, occupying a prominent part of the front-left camera view",
@@ -99,8 +101,9 @@ class RuleBasedRefiner:
         if runtime_feedback:
             condition["runtime_control_feedback"] = runtime_feedback
 
-        if {"target_object_not_detected", "low_detection_coverage", "target_appears_static"} & set(
-            evaluation.diagnosis.reasons
+        if self.STRUCTURAL_ESCALATION_ENABLED and (
+            {"target_object_not_detected", "low_detection_coverage", "target_appears_static"}
+            & set(evaluation.diagnosis.reasons)
         ):
             prior = request.condition.get("structural_escalation")
             level = int(prior.get("level", 0)) + 1 if isinstance(prior, dict) else 1

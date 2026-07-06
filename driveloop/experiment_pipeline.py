@@ -175,6 +175,7 @@ class ExperimentPipeline:
             from driveloop.refiner import RuleBasedRefiner
             refiner = RuleBasedRefiner()
             refiner.PERCEPTION_ESCALATION = []  # saturated-refiner ablation
+            refiner.STRUCTURAL_ESCALATION_ENABLED = False
         runner = DriveLoopRunner(
             backend=self.backend_factory(case_dir / "artifacts"),
             evaluator=evaluator,
