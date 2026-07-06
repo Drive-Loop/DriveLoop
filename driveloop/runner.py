@@ -62,6 +62,15 @@ class DriveLoopRunner:
                 requested_tags=requested_tags,
                 history=history,
             )
+            structural_escalation = current_request.condition.get("structural_escalation")
+            if isinstance(structural_escalation, dict) and structural_escalation:
+                condition_plan = replace(
+                    condition_plan,
+                    executable_controls={
+                        **condition_plan.executable_controls,
+                        "structural_escalation": structural_escalation,
+                    },
+                )
             coverage = control_coverage(condition_plan)
             dd2_condition = self.condition_adapter.build(
                 scene_spec,

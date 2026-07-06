@@ -65,6 +65,7 @@ def build_actor_motion_plan(
         "requested_motions": requested_motions,
         "requested_relations": requested_relations,
         "maneuver": maneuver,
+        "escalation": (executable_controls or {}).get("structural_escalation"),
         "runtime_surface": {
             "type": "boxes3d.per_frame_append",
             "frames": frames,
@@ -91,6 +92,10 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
     target_actor = actor_motion_plan.get("target_actor", {})
     category = str(target_actor.get("category") or "car")
     dims = _DEFAULT_BOX_DIMS.get(category, _DEFAULT_BOX_DIMS["car"])
+    escalation = actor_motion_plan.get("escalation") or {}
+    proximity_scale = float(escalation.get("proximity_scale", 1.0))
+    size_scale = float(escalation.get("size_scale", 1.0))
+    dims = {key: value * size_scale for key, value in dims.items()}
     frames = actor_motion_plan.get("runtime_surface", {}).get("frames", [])
     per_frame_boxes3d = []
 
@@ -106,9 +111,9 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
                 "synthetic_track_id": actor_motion_plan.get("synthetic_track_id"),
                 "category": category,
                 "box3d": [
-                    round(8.0 + lateral_offset, 6),
+                    round(8.0 * proximity_scale + lateral_offset, 6),
                     1.8,
-                    round(18.0 + longitudinal_offset, 6),
+                    round(18.0 * proximity_scale + longitudinal_offset, 6),
                     dims["width"],
                     dims["height"],
                     dims["depth"],
@@ -130,6 +135,7 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
         else "no_per_frame_boxes3d",
         "control_level": "tensor_override_runtime",
         "surface": "boxes3d.per_frame_append",
+        "escalation_applied": {"proximity_scale": proximity_scale, "size_scale": size_scale},
         "target_actor": target_actor,
         "synthetic_track_id": actor_motion_plan.get("synthetic_track_id"),
         "per_frame_boxes3d": per_frame_boxes3d,

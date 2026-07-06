@@ -99,6 +99,20 @@ class RuleBasedRefiner:
         if runtime_feedback:
             condition["runtime_control_feedback"] = runtime_feedback
 
+        if {"target_object_not_detected", "low_detection_coverage", "target_appears_static"} & set(
+            evaluation.diagnosis.reasons
+        ):
+            prior = request.condition.get("structural_escalation")
+            level = int(prior.get("level", 0)) + 1 if isinstance(prior, dict) else 1
+            condition["structural_escalation"] = {
+                "level": level,
+                "proximity_scale": round(max(1.0 - 0.25 * level, 0.4), 3),
+                "size_scale": round(min(1.0 + 0.25 * level, 1.75), 3),
+                "reason": "perception_target_failure",
+                "claim_boundary": "structured-condition escalation; not proof of visual realization",
+            }
+            notes.append("structural_escalation_level_%d" % level)
+
         return Refinement(
             prompt=prompt,
             condition=condition,
