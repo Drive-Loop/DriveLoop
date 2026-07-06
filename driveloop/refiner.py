@@ -16,6 +16,12 @@ class RuleBasedRefiner:
         "identity_inconsistent",
         "unstable_bounding_boxes",
     }
+    PERCEPTION_ESCALATION = [
+        "the motorcycle rides in the left adjacent lane very close to the ego vehicle, large in the frame",
+        "close range view of the motorcycle with its headlight on, occupying a prominent part of the front-left camera view",
+        "the motorcycle is centered, sharp and high contrast against the road at close distance",
+    ]
+
     SOURCE_REASONS = {
         "source_selection_unavailable",
         "source_binding_unavailable",
@@ -64,8 +70,15 @@ class RuleBasedRefiner:
         if self._runtime_reasons(evaluation):
             notes.append("runtime controls are unavailable; do not treat another retry as semantic success")
 
+        additions = [a for a in dict.fromkeys(additions) if a.lower() not in prompt.lower()]
+        if not additions and (self.PERCEPTION_REASONS & set(evaluation.diagnosis.reasons)):
+            for escalation in self.PERCEPTION_ESCALATION:
+                if escalation.lower() not in prompt.lower():
+                    additions.append(escalation)
+                    notes.append("perception_escalation_applied")
+                    break
         if additions:
-            prompt = prompt.rstrip(".") + ", " + ", ".join(dict.fromkeys(additions)) + "."
+            prompt = prompt.rstrip(".") + ", " + ", ".join(additions) + "."
 
         condition = dict(request.condition)
 
