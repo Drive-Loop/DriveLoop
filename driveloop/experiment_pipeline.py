@@ -57,6 +57,7 @@ class ExperimentPipelineConfig:
     utility_weights: Any = None
     perception_weights: Any = None
     perception_confidence: float = 0.25
+    refiner_escalation: bool = True
 
 
 def load_experiment_cases(path: Path | str) -> list[ExperimentCase]:
@@ -169,9 +170,15 @@ class ExperimentPipeline:
                 ),
                 confidence_threshold=self.config.perception_confidence,
             )
+        refiner = None
+        if not self.config.refiner_escalation:
+            from driveloop.refiner import RuleBasedRefiner
+            refiner = RuleBasedRefiner()
+            refiner.PERCEPTION_ESCALATION = []  # saturated-refiner ablation
         runner = DriveLoopRunner(
             backend=self.backend_factory(case_dir / "artifacts"),
             evaluator=evaluator,
+            refiner=refiner,
             config=DriveLoopConfig(
                 max_iterations=self.config.max_iterations,
                 target_score=self.config.target_score,
