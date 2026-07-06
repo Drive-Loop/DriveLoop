@@ -85,6 +85,32 @@ class DriveLoopRunner:
                 },
             )
             generation = self.backend.generate(generation_request, iteration)
+            if self.config.use_postprocess and condition_plan.postprocess_effects:
+                from driveloop.postprocess import apply_postprocess_effects
+                raw_video = generation.artifacts.get("video")
+                if raw_video:
+                    post_report = apply_postprocess_effects(raw_video, condition_plan.postprocess_effects)
+                    generation = replace(
+                        generation,
+                        artifacts={
+                            **generation.artifacts,
+                            "video_pre_postprocess": raw_video,
+                            "video": post_report["output"],
+                        },
+                        metadata={**generation.metadata, "postprocess_report": post_report},
+                    )
+                else:
+                    generation = replace(
+                        generation,
+                        metadata={
+                            **generation.metadata,
+                            "postprocess_report": {
+                                "applied": [],
+                                "skipped_unknown": list(condition_plan.postprocess_effects),
+                                "reason": "no_video_artifact",
+                            },
+                        },
+                    )
             perception_metadata = self._perception_metadata_from_request(current_request.metadata)
             generation = replace(
                 generation,

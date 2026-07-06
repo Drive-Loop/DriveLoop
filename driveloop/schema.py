@@ -14,6 +14,7 @@ class DriveLoopConfig:
     use_task_utility: bool = False
     utility_weights: Optional[Dict[str, float]] = None
     intent_epsilon: float = 0.05
+    use_postprocess: bool = False
 
 
 @dataclass(frozen=True)
