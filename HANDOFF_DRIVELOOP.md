@@ -197,3 +197,14 @@ Do not commit pretrained models, hf_cache, data, exp outputs, pem files, Hugging
   experiments/2026-07-07_baseline_vs_closed_loop_mini_comparison.md
 - Manual alignment review of m3/m4 accepted videos is still required before
   any semantic-success claim.
+
+## Update 2026-07-07 (paper-formula completion)
+
+All Sec. 3 formulas now have implementations: Eq.5 utility, Eq.10 control
+coverage, Eq.14 post-processing (fog_overlay, opt-in), Eq.18 intent guard.
+BoT-SORT tracking path added (detector-provided track ids, per-view reset).
+BLIP captioning wired for image/sketch/video grounding (audio was already
+Whisper). Full suite 350 passed. Paper Sec. 4 draft written from the mini
+comparison; Sec. 3 wording on BoT-SORT is now backed by implementation.
+Remaining: manual alignment review of m3/m4 accepted videos, scenario-family
+expansion beyond candidate70.
