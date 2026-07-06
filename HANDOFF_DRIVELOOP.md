@@ -208,3 +208,17 @@ Whisper). Full suite 350 passed. Paper Sec. 4 draft written from the mini
 comparison; Sec. 3 wording on BoT-SORT is now backed by implementation.
 Remaining: manual alignment review of m3/m4 accepted videos, scenario-family
 expansion beyond candidate70.
+
+## Update 2026-07-07 (final for this session)
+
+- Target-label leakage found and fixed (ego references no longer expand the
+  detection target set); v2 comparison numbers are invalid.
+- v3 (post-fix, tau=0.7): open loop = prompt-only closed loop = saturated
+  ablation (3/5). Prompt refinement alone cannot move detector evidence here.
+- v4: structured-condition escalation (per-frame boxes3d proximity/size,
+  levels 1-3) recovers m3 (S_perc 0 -> 0.536, accepted at attempt 2);
+  final 4/5 vs open-loop 3/5, mean J 0.632 -> 0.685. m4 remains failed.
+- Full suite 361 passed. Paper Sec. 4 numbers should come from
+  experiments/2026-07-07_v4_structural_escalation_result.md.
+- Open problems: m4 recovery (source rebinding), scenario-family expansion,
+  manual review of the new m3 attempt-1 video.
