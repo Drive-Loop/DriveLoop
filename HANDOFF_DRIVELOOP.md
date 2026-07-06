@@ -184,3 +184,16 @@ Not allowed claims:
 ## Do Not Commit
 
 Do not commit pretrained models, hf_cache, data, exp outputs, pem files, HuggingFace tokens, or downloaded model weights.
+
+## Update 2026-07-07 (closed-loop comparison milestone)
+
+- Perception zero-detection root cause fixed (ultralytics API + composite
+  layout); candidate70 perception score 0.0 -> 0.468 measured.
+- Eq.(10) control coverage and Eq.(5) task utility implemented and wired
+  (opt-in via DriveLoopConfig.use_task_utility).
+- Refiner escalation ladder guarantees a novel prompt per retry round.
+- Mini baseline-vs-closed-loop comparison completed on GPU:
+  acceptance 3/5 -> 5/5, mean J 0.783 -> 0.971; see
+  experiments/2026-07-07_baseline_vs_closed_loop_mini_comparison.md
+- Manual alignment review of m3/m4 accepted videos is still required before
+  any semantic-success claim.
