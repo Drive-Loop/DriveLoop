@@ -18,6 +18,7 @@ class Detection:
     label: str
     confidence: float
     box: Box
+    track_id: int | None = None
 
     @classmethod
     def from_dict(cls, payload: Dict[str, Any], frame_index: int | None = None) -> "Detection":
@@ -29,6 +30,7 @@ class Detection:
             label=str(payload.get("label") or payload.get("class_name") or payload.get("category") or "unknown"),
             confidence=float(payload.get("confidence", payload.get("score", 0.0))),
             box=(float(box[0]), float(box[1]), float(box[2]), float(box[3])),
+            track_id=int(payload["track_id"]) if payload.get("track_id") is not None else None,
         )
 
     def area(self) -> float:
@@ -253,13 +255,11 @@ class PerceptionVideoEvaluator(BaseEvaluator):
             and (not target_labels or self._normalize_label(d.label) in target_labels)
         ]
 
-        tracker = SimpleIoUTracker(iou_threshold=self.tracker_iou_threshold)
-        for frame_index in sorted({d.frame_index for d in filtered}):
-            tracker.update(d for d in filtered if d.frame_index == frame_index)
+        tracks = self._build_tracks(filtered)
 
         q_cov = self._coverage_score(filtered, frame_count)
         q_conf = self._confidence_score(filtered)
-        q_track, dominant = self._track_score(tracker.tracks, frame_count)
+        q_track, dominant = self._track_score(tracks, frame_count)
         q_id = self._identity_score(filtered, dominant)
         q_box = self._box_stability_score(dominant)
         score = round(
@@ -278,7 +278,7 @@ class PerceptionVideoEvaluator(BaseEvaluator):
             "Q_id": q_id,
             "Q_box": q_box,
             "perception_detection_count": float(len(filtered)),
-            "perception_track_count": float(len(tracker.tracks)),
+            "perception_track_count": float(len(tracks)),
             "perception_dominant_track_length": float(len(dominant.detections) if dominant else 0),
         })
 
@@ -393,6 +393,27 @@ class PerceptionVideoEvaluator(BaseEvaluator):
         if "vehicle" in prompt:
             labels.add("car")
         return labels
+
+    def _build_tracks(self, detections: List[Detection]) -> List[Track]:
+        """Group by detector-provided track ids (e.g. BoT-SORT); fall back to IoU."""
+        if any(d.track_id is not None for d in detections):
+            grouped: Dict[Any, Track] = {}
+            next_synthetic = -1
+            for detection in sorted(detections, key=lambda d: d.frame_index):
+                key = detection.track_id
+                if key is None:
+                    key = next_synthetic
+                    next_synthetic -= 1
+                track = grouped.get((key, detection.label))
+                if track is None:
+                    track = Track(int(key) if isinstance(key, int) else 0, detection.label, [])
+                    grouped[(key, detection.label)] = track
+                track.append(detection)
+            return list(grouped.values())
+        tracker = SimpleIoUTracker(iou_threshold=self.tracker_iou_threshold)
+        for frame_index in sorted({d.frame_index for d in detections}):
+            tracker.update(d for d in detections if d.frame_index == frame_index)
+        return tracker.tracks
 
     def _coverage_score(self, detections: List[Detection], frame_count: int) -> float:
         return round(len({d.frame_index for d in detections}) / frame_count, 6) if frame_count > 0 else 0.0

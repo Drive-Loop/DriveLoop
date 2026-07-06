@@ -15,11 +15,17 @@ def main():
     parser.add_argument("--prompt", default="a motorcycle cut-in at night")
     parser.add_argument("--weights", default="yolov8m.pt")
     parser.add_argument("--confidence-threshold", type=float, default=0.25)
+    parser.add_argument("--tracker", choices=["iou", "botsort"], default="iou")
     parser.add_argument("--out-root", default="outputs/driveloop/perception_video_eval")
     args = parser.parse_args()
 
+    if args.tracker == "botsort":
+        from driveloop.botsort_tracking import BotSortUltralyticsDetector
+        detector = BotSortUltralyticsDetector(args.weights, confidence_threshold=args.confidence_threshold)
+    else:
+        detector = UltralyticsYOLODetector(args.weights, confidence_threshold=args.confidence_threshold)
     evaluator = CompositePerceptionVideoEvaluator(
-        detector=UltralyticsYOLODetector(args.weights, confidence_threshold=args.confidence_threshold),
+        detector=detector,
         layout=CompositeVideoLayout(),
         confidence_threshold=args.confidence_threshold,
     )
@@ -27,6 +33,7 @@ def main():
     report = evaluator.build_report(generation)
     report["scenario_id"] = args.scenario_id
     report["detector_weights"] = args.weights
+    report["tracker"] = args.tracker
 
     out_dir = Path(args.out_root) / args.scenario_id
     out_dir.mkdir(parents=True, exist_ok=True)

@@ -64,6 +64,9 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
         best_view = -1
         view_scores: Dict[int, float] = {}
         for view_index in range(self.layout.num_views):
+            reset = getattr(self.detector, "reset", None)
+            if callable(reset):
+                reset()
             payload_frames = []
             for frame_index, frame in enumerate(frames):
                 view = self.layout.extract_view(frame, view_index)
@@ -76,6 +79,7 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
                             "label": d.label,
                             "confidence": d.confidence,
                             "box": list(d.box),
+                            "track_id": d.track_id,
                         }
                         for d in detections
                     ],
