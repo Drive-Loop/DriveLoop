@@ -15,6 +15,7 @@ from driveloop.schema import DriveLoopConfig, DriveLoopRequest
 class ExperimentCase:
     name: str
     prompt: str
+    condition: dict[str, Any] = field(default_factory=dict)
     metadata: dict[str, Any] = field(default_factory=dict)
     tags: list[str] = field(default_factory=list)
     expected_condition: dict[str, Any] = field(default_factory=dict)
