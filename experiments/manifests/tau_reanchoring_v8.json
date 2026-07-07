@@ -1,0 +1,356 @@
+{
+  "schema_version": "driveloop_tau_reanchoring.v0",
+  "capability_configuration": "candidate70_mini_ckpt_8f",
+  "anchor_arm": "open_loop",
+  "current_tau": 0.7,
+  "primary_rule": "anchor_mean_plus_1_std",
+  "proposed_tau": 0.607852,
+  "proposed_tau_grid_0p05": 0.6,
+  "candidates": {
+    "anchor_mean_plus_0p5_std": 0.510149,
+    "anchor_mean_plus_1_std": 0.607852,
+    "anchor_p75": 0.565425,
+    "anchor_p90": 0.574654
+  },
+  "arms": {
+    "open_loop": {
+      "directory": "outputs/driveloop/exp_v8_open_loop",
+      "case_names": [
+        "m1_night_cut_in_left",
+        "m2_rainy_night_cut_in",
+        "m3_lane_change_left_to_ego",
+        "m4_intersection_approach",
+        "m5_low_visibility_cut_in"
+      ],
+      "best_j": [
+        0.580806,
+        0.565425,
+        0.515992,
+        0.2,
+        0.2
+      ],
+      "best_j_stats": {
+        "count": 5,
+        "mean": 0.412445,
+        "std": 0.195407,
+        "min": 0.2,
+        "max": 0.580806,
+        "median": 0.515992,
+        "p75": 0.565425,
+        "p90": 0.574654
+      },
+      "attempt_j_stats": {
+        "count": 5,
+        "mean": 0.412445,
+        "std": 0.195407,
+        "min": 0.2,
+        "max": 0.580806,
+        "median": 0.515992,
+        "p75": 0.565425,
+        "p90": 0.574654
+      },
+      "accepted_count_recorded": 0
+    },
+    "closed_loop": {
+      "directory": "outputs/driveloop/exp_v8_closed_loop",
+      "case_names": [
+        "m1_night_cut_in_left",
+        "m2_rainy_night_cut_in",
+        "m3_lane_change_left_to_ego",
+        "m4_intersection_approach",
+        "m5_low_visibility_cut_in"
+      ],
+      "best_j": [
+        0.633944,
+        0.587129,
+        0.564177,
+        0.2,
+        0.559775
+      ],
+      "best_j_stats": {
+        "count": 5,
+        "mean": 0.509005,
+        "std": 0.175228,
+        "min": 0.2,
+        "max": 0.633944,
+        "median": 0.564177,
+        "p75": 0.587129,
+        "p90": 0.615218
+      },
+      "attempt_j_stats": {
+        "count": 15,
+        "mean": 0.397243,
+        "std": 0.192455,
+        "min": 0.2,
+        "max": 0.633944,
+        "median": 0.515992,
+        "p75": 0.564801,
+        "p90": 0.5846
+      },
+      "accepted_count_recorded": 0
+    },
+    "closed_loop_r2": {
+      "directory": "outputs/driveloop/exp_v8_closed_loop_r2",
+      "case_names": [
+        "m1_night_cut_in_left",
+        "m2_rainy_night_cut_in",
+        "m3_lane_change_left_to_ego",
+        "m4_intersection_approach",
+        "m5_low_visibility_cut_in"
+      ],
+      "best_j": [
+        0.580806,
+        0.623345,
+        0.515992,
+        0.2,
+        0.53206
+      ],
+      "best_j_stats": {
+        "count": 5,
+        "mean": 0.490441,
+        "std": 0.167757,
+        "min": 0.2,
+        "max": 0.623345,
+        "median": 0.53206,
+        "p75": 0.580806,
+        "p90": 0.606329
+      },
+      "attempt_j_stats": {
+        "count": 15,
+        "mean": 0.392303,
+        "std": 0.188035,
+        "min": 0.2,
+        "max": 0.623345,
+        "median": 0.515992,
+        "p75": 0.552493,
+        "p90": 0.589499
+      },
+      "accepted_count_recorded": 0
+    },
+    "closed_loop_saturated": {
+      "directory": "outputs/driveloop/exp_v8_closed_loop_saturated",
+      "case_names": [
+        "m1_night_cut_in_left",
+        "m2_rainy_night_cut_in",
+        "m3_lane_change_left_to_ego",
+        "m4_intersection_approach",
+        "m5_low_visibility_cut_in"
+      ],
+      "best_j": [
+        0.580806,
+        0.639609,
+        0.564696,
+        0.2,
+        0.571543
+      ],
+      "best_j_stats": {
+        "count": 5,
+        "mean": 0.511331,
+        "std": 0.176552,
+        "min": 0.2,
+        "max": 0.639609,
+        "median": 0.571543,
+        "p75": 0.580806,
+        "p90": 0.616088
+      },
+      "attempt_j_stats": {
+        "count": 15,
+        "mean": 0.47021,
+        "std": 0.171471,
+        "min": 0.2,
+        "max": 0.639609,
+        "median": 0.564696,
+        "p75": 0.571543,
+        "p90": 0.594971
+      },
+      "accepted_count_recorded": 0
+    }
+  },
+  "acceptance_table": {
+    "current_tau": {
+      "tau": 0.7,
+      "per_arm": {
+        "open_loop": {
+          "accepted_count": 0,
+          "case_count": 5,
+          "accepted_cases": []
+        },
+        "closed_loop": {
+          "accepted_count": 0,
+          "case_count": 5,
+          "accepted_cases": []
+        },
+        "closed_loop_r2": {
+          "accepted_count": 0,
+          "case_count": 5,
+          "accepted_cases": []
+        },
+        "closed_loop_saturated": {
+          "accepted_count": 0,
+          "case_count": 5,
+          "accepted_cases": []
+        }
+      }
+    },
+    "anchor_mean_plus_0p5_std": {
+      "tau": 0.510149,
+      "per_arm": {
+        "open_loop": {
+          "accepted_count": 3,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left",
+            "m2_rainy_night_cut_in",
+            "m3_lane_change_left_to_ego"
+          ]
+        },
+        "closed_loop": {
+          "accepted_count": 4,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left",
+            "m2_rainy_night_cut_in",
+            "m3_lane_change_left_to_ego",
+            "m5_low_visibility_cut_in"
+          ]
+        },
+        "closed_loop_r2": {
+          "accepted_count": 4,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left",
+            "m2_rainy_night_cut_in",
+            "m3_lane_change_left_to_ego",
+            "m5_low_visibility_cut_in"
+          ]
+        },
+        "closed_loop_saturated": {
+          "accepted_count": 4,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left",
+            "m2_rainy_night_cut_in",
+            "m3_lane_change_left_to_ego",
+            "m5_low_visibility_cut_in"
+          ]
+        }
+      }
+    },
+    "anchor_mean_plus_1_std": {
+      "tau": 0.607852,
+      "per_arm": {
+        "open_loop": {
+          "accepted_count": 0,
+          "case_count": 5,
+          "accepted_cases": []
+        },
+        "closed_loop": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left"
+          ]
+        },
+        "closed_loop_r2": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in"
+          ]
+        },
+        "closed_loop_saturated": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in"
+          ]
+        }
+      }
+    },
+    "anchor_p75": {
+      "tau": 0.565425,
+      "per_arm": {
+        "open_loop": {
+          "accepted_count": 2,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left",
+            "m2_rainy_night_cut_in"
+          ]
+        },
+        "closed_loop": {
+          "accepted_count": 2,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left",
+            "m2_rainy_night_cut_in"
+          ]
+        },
+        "closed_loop_r2": {
+          "accepted_count": 2,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left",
+            "m2_rainy_night_cut_in"
+          ]
+        },
+        "closed_loop_saturated": {
+          "accepted_count": 3,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left",
+            "m2_rainy_night_cut_in",
+            "m5_low_visibility_cut_in"
+          ]
+        }
+      }
+    },
+    "anchor_p90": {
+      "tau": 0.574654,
+      "per_arm": {
+        "open_loop": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left"
+          ]
+        },
+        "closed_loop": {
+          "accepted_count": 2,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left",
+            "m2_rainy_night_cut_in"
+          ]
+        },
+        "closed_loop_r2": {
+          "accepted_count": 2,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left",
+            "m2_rainy_night_cut_in"
+          ]
+        },
+        "closed_loop_saturated": {
+          "accepted_count": 2,
+          "case_count": 5,
+          "accepted_cases": [
+            "m1_night_cut_in_left",
+            "m2_rainy_night_cut_in"
+          ]
+        }
+      }
+    }
+  },
+  "claim_boundary": {
+    "tau_reanchoring_is_not_video_semantic_success": true,
+    "anchored_on_single_arm_distribution": true,
+    "anchor_arm_is_open_loop_baseline": true,
+    "comparison_requires_fresh_runs_at_frozen_tau": true,
+    "reusing_anchoring_runs_for_comparison_is_circular": true,
+    "rule_must_be_rederived_per_capability_configuration": true,
+    "small_anchor_sample_caveat": true,
+    "anchor_case_count": 5,
+    "paper_claims_require_manual_spot_check": true
+  }
+}
