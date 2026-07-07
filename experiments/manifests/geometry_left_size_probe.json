@@ -1,0 +1,46 @@
+{
+  "cases": [
+    {
+      "name": "geo_left_size1p25",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.25,
+          "lateral_base_m": 2.0,
+          "longitudinal_base_m": 9.0,
+          "reason": "left_side_size_scale_probe"
+        }
+      }
+    },
+    {
+      "name": "geo_left_size1p5",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.5,
+          "lateral_base_m": 2.0,
+          "longitudinal_base_m": 9.0,
+          "reason": "left_side_size_scale_probe"
+        }
+      }
+    },
+    {
+      "name": "geo_left_size1p75",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.75,
+          "lateral_base_m": 2.0,
+          "longitudinal_base_m": 9.0,
+          "reason": "left_side_size_scale_probe"
+        }
+      }
+    }
+  ]
+}

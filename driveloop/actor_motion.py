@@ -114,8 +114,12 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
     escalation = actor_motion_plan.get("escalation") or {}
     proximity_scale = float(escalation.get("proximity_scale", 1.0))
     size_scale = float(escalation.get("size_scale", 1.0))
-    lateral_base = float(escalation.get("lateral_base_m", 3.2 * proximity_scale))
     lateral_side = float(actor_motion_plan.get("lateral_side") or 1.0)
+    # Side-specific defaults: the renderable window on candidate70's left
+    # (intersection/connector space) is closer than on the right
+    # (geometry sweeps 2026-07-07). Escalation overrides stay absolute.
+    default_lateral = 3.2 if lateral_side >= 0 else 2.0
+    lateral_base = float(escalation.get("lateral_base_m", default_lateral * proximity_scale))
     longitudinal_base = float(escalation.get("longitudinal_base_m", 9.0 * proximity_scale))
     dims = {key: value * size_scale for key, value in dims.items()}
     frames = actor_motion_plan.get("runtime_surface", {}).get("frames", [])

@@ -23,7 +23,7 @@ def test_surface_plan_unchanged_without_escalation():
     surface = build_actor_motion_surface_plan(_plan())
     assert surface["escalation_applied"]["proximity_scale"] == 1.0
     assert surface["escalation_applied"]["size_scale"] == 1.0
-    assert surface["escalation_applied"]["lateral_base_m"] == 3.2
+    assert surface["escalation_applied"]["lateral_base_m"] == 2.0  # left-side default
     assert surface["escalation_applied"]["longitudinal_base_m"] == 9.0
     box = surface["per_frame_boxes3d"][0]["box3d"]
     assert abs(box[2] - (9.0 + 1.8)) < 1e-6
