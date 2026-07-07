@@ -22,6 +22,16 @@ class CompositeVideoLayout:
     generated_row_height: int = 256
     num_views: int = 6
     generated_row_at_bottom: bool = True
+    # Mosaic tile order of the DD2 tester composite video. Must match the
+    # dataloader camera order; verify before trusting target-view scores.
+    cam_order: tuple = (
+        "cam_front_left",
+        "cam_front",
+        "cam_front_right",
+        "cam_back_right",
+        "cam_back",
+        "cam_back_left",
+    )
 
     def extract_view(self, frame: Any, view_index: int) -> Any:
         height = frame.shape[0]
@@ -63,6 +73,7 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
         best_evaluation: Evaluation | None = None
         best_view = -1
         view_scores: Dict[int, float] = {}
+        view_evaluations: Dict[int, Evaluation] = {}
         for view_index in range(self.layout.num_views):
             reset = getattr(self.detector, "reset", None)
             if callable(reset):
@@ -97,6 +108,7 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
             )
             evaluation = super().evaluate(view_generation)
             view_scores[view_index] = evaluation.score
+            view_evaluations[view_index] = evaluation
             view_brightness = round(brightness_sum / max(len(frames), 1), 3)
             if not hasattr(self, "_view_brightness"):
                 self._view_brightness = {}
@@ -105,10 +117,22 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
                 best_evaluation = evaluation
                 best_view = view_index
 
-        metrics = dict(best_evaluation.metrics)
+        target_view_indices = self._target_view_indices(generation.metadata)
+        selected_evaluation = best_evaluation
+        selected_view = best_view
+        if target_view_indices:
+            in_target = [vi for vi in target_view_indices if vi in view_evaluations]
+            if in_target:
+                selected_view = max(in_target, key=lambda vi: view_evaluations[vi].score)
+                selected_evaluation = view_evaluations[selected_view]
+
+        metrics = dict(selected_evaluation.metrics)
         for view_index, score in view_scores.items():
             metrics["perception_view%d_score" % view_index] = score
         metrics["perception_best_view"] = float(best_view)
+        metrics["perception_all_view_max_score"] = best_evaluation.score
+        metrics["perception_selected_view"] = float(selected_view)
+        metrics["perception_target_view_count"] = float(len(target_view_indices))
         brightness_map = getattr(self, "_view_brightness", {})
         for view_index, value in brightness_map.items():
             metrics["perception_view%d_brightness" % view_index] = value
@@ -116,4 +140,21 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
             metrics["perception_best_view_brightness"] = brightness_map[best_view]
         metrics["perception_layout_views"] = float(self.layout.num_views)
         metrics["perception_generated_row_height"] = float(self.layout.generated_row_height)
-        return Evaluation(best_evaluation.score, metrics, best_evaluation.diagnosis)
+        return Evaluation(selected_evaluation.score, metrics, selected_evaluation.diagnosis)
+
+    def _target_view_indices(self, metadata: dict) -> list:
+        """Resolve target cam types from the generation metadata to mosaic
+        view indices. Empty result preserves legacy all-view-max behavior."""
+        if not isinstance(metadata, dict):
+            return []
+        plan = metadata.get("dd2_override_candidate_plan")
+        surface = plan.get("actor_motion_surface_plan") if isinstance(plan, dict) else None
+        cams = surface.get("target_cam_types") if isinstance(surface, dict) else None
+        if not cams:
+            return []
+        indices = []
+        for cam in cams:
+            cam_l = str(cam).lower()
+            if cam_l in self.layout.cam_order:
+                indices.append(self.layout.cam_order.index(cam_l))
+        return sorted(set(indices))

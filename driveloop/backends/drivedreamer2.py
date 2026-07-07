@@ -348,6 +348,7 @@ class DriveDreamer2Backend(GenerationBackend):
         self,
         per_frame_boxes: list[dict],
         source_sample_binding: dict | None,
+        target_cam_types: list[str] | None = None,
     ) -> tuple[list[dict], dict]:
         identities = self._build_source_bound_sample_identities(source_sample_binding)
         mapping_errors = [item for item in identities if item.get("available") is False]
@@ -369,6 +370,8 @@ class DriveDreamer2Backend(GenerationBackend):
         for identity in valid_identities:
             identities_by_step.setdefault(int(identity["relative_step"]), []).append(identity)
 
+        allowed_cam_types = {str(item).lower() for item in (target_cam_types or [])}
+        view_filtered_count = 0
         mapped_entries = []
         unmapped_relative_steps = []
         for entry in per_frame_boxes:
@@ -379,6 +382,10 @@ class DriveDreamer2Backend(GenerationBackend):
                 continue
 
             for identity in matches:
+                identity_cam = str(identity.get("cam_type") or "").lower()
+                if allowed_cam_types and identity_cam not in allowed_cam_types:
+                    view_filtered_count += 1
+                    continue
                 mapped = dict(entry)
                 mapped["relative_frame_idx"] = relative_step
                 mapped["frame_idx"] = identity.get("frame_idx")
@@ -403,6 +410,13 @@ class DriveDreamer2Backend(GenerationBackend):
                 "source_identity_count": len(valid_identities),
                 "input_per_frame_count": len(per_frame_boxes),
                 "mapped_entry_count": len(mapped_entries),
+                "view_filter": {
+                    "target_cam_types": sorted(allowed_cam_types),
+                    "filtered_out_count": view_filtered_count,
+                    "all_entries_filtered": bool(
+                        per_frame_boxes and not mapped_entries and view_filtered_count
+                    ),
+                },
                 "unmapped_relative_frame_idx": sorted(set(unmapped_relative_steps)),
                 "claim_boundary": "Frame mapping connects structural actor boxes to source-bound DD2 samples; it is not video semantic proof.",
             },
@@ -472,6 +486,7 @@ class DriveDreamer2Backend(GenerationBackend):
             ) = self._map_per_frame_actor_boxes_to_source_bound_samples(
                 per_frame_append_boxes,
                 source_sample_binding,
+                actor_motion_surface_plan.get("target_cam_types"),
             )
 
         scene_description = structural_input_plan.get("scene_description", {})

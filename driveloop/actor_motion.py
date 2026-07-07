@@ -13,6 +13,21 @@ _DEFAULT_BOX_DIMS = {
 }
 
 
+def derive_target_cam_types(relations: Iterable[str]) -> list[str]:
+    """Map requested spatial relations to the camera views that should
+    receive (and be evaluated for) the injected actor. Ahead-facing
+    requests target the front camera; left/right add the matching
+    front-side camera."""
+    rels = {str(item).lower() for item in relations}
+    cams: list[str] = []
+    if "left" in rels:
+        cams.append("cam_front_left")
+    if "right" in rels:
+        cams.append("cam_front_right")
+    cams.append("cam_front")
+    return cams
+
+
 def build_actor_motion_plan(
     actor_controls: list[dict[str, Any]],
     relations: Iterable[str],
@@ -64,6 +79,7 @@ def build_actor_motion_plan(
         "synthetic_track_id": f"{target_actor['actor_id']}_synthetic_motion_track",
         "requested_motions": requested_motions,
         "requested_relations": requested_relations,
+        "target_cam_types": derive_target_cam_types(requested_relations),
         "maneuver": maneuver,
         "escalation": (executable_controls or {}).get("structural_escalation"),
         "runtime_surface": {
@@ -145,6 +161,7 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
         },
         "target_actor": target_actor,
         "synthetic_track_id": actor_motion_plan.get("synthetic_track_id"),
+        "target_cam_types": list(actor_motion_plan.get("target_cam_types") or ["cam_front"]),
         "per_frame_boxes3d": per_frame_boxes3d,
         "claim_boundary": actor_motion_plan.get("claim_boundary"),
         "limitations": [
