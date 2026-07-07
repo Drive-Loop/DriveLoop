@@ -86,9 +86,11 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
                 brightness_sum += float(view.mean())
                 detections = self.detector.detect(view, frame_index)
                 if detections:
-                    boxes = [d.box for d in detections]
                     view_centers.append(
-                        sum((b[0] + b[2]) / 2.0 for b in boxes) / len(boxes)
+                        [
+                            (str(d.label).lower(), (d.box[0] + d.box[2]) / 2.0)
+                            for d in detections
+                        ]
                     )
                 else:
                     view_centers.append(None)
@@ -183,7 +185,19 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
         side = float(surface.get("lateral_side") or 0.0)
         if side == 0.0:
             return None
-        observed = [c for c in centers if c is not None]
+        target_actor = surface.get("target_actor") or {}
+        category = str(target_actor.get("category") or "").lower()
+        observed = []
+        for frame_dets in centers:
+            if not frame_dets:
+                continue
+            values = [
+                center
+                for label, center in frame_dets
+                if not category or label == category
+            ]
+            if values:
+                observed.append(sum(values) / len(values))
         if len(observed) < 3:
             return None
         expected_sign = 1.0 if side < 0 else -1.0

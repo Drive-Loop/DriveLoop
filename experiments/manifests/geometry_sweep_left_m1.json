@@ -1,0 +1,130 @@
+{
+  "cases": [
+    {
+      "name": "geo_left_lat1p6_lon5p0",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 1.6,
+          "longitudinal_base_m": 5.0,
+          "reason": "left_side_geometry_calibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat1p6_lon7p0",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 1.6,
+          "longitudinal_base_m": 7.0,
+          "reason": "left_side_geometry_calibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat1p6_lon9p0",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 1.6,
+          "longitudinal_base_m": 9.0,
+          "reason": "left_side_geometry_calibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat2p0_lon5p0",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 2.0,
+          "longitudinal_base_m": 5.0,
+          "reason": "left_side_geometry_calibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat2p0_lon7p0",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 2.0,
+          "longitudinal_base_m": 7.0,
+          "reason": "left_side_geometry_calibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat2p0_lon9p0",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 2.0,
+          "longitudinal_base_m": 9.0,
+          "reason": "left_side_geometry_calibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat2p4_lon5p0",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 2.4,
+          "longitudinal_base_m": 5.0,
+          "reason": "left_side_geometry_calibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat2p4_lon7p0",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 2.4,
+          "longitudinal_base_m": 7.0,
+          "reason": "left_side_geometry_calibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat2p4_lon9p0",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 2.4,
+          "longitudinal_base_m": 9.0,
+          "reason": "left_side_geometry_calibration_sweep"
+        }
+      }
+    }
+  ]
+}

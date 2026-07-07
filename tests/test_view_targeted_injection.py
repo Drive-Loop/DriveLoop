@@ -67,16 +67,25 @@ def test_maneuver_direction_check():
                 "maneuver": "lane_change",
                 "lateral_side": -1.0,
                 "target_cam_types": ["cam_front"],
+                "target_actor": {"category": "motorcycle"},
             }
         }
     }
+    moto = lambda x: [("motorcycle", x)]
     # left actor approaching ego: pixel x should increase
-    ok = evaluator._maneuver_direction_check(metadata, [100.0, None, 140.0, 180.0])
+    ok = evaluator._maneuver_direction_check(
+        metadata, [moto(100.0), None, moto(140.0), moto(180.0)]
+    )
     assert ok is not None and ok[2] is True
-    bad = evaluator._maneuver_direction_check(metadata, [180.0, 140.0, 100.0])
+    bad = evaluator._maneuver_direction_check(
+        metadata, [moto(180.0), moto(140.0), moto(100.0)]
+    )
     assert bad is not None and bad[2] is False
-    assert evaluator._maneuver_direction_check(metadata, [100.0, None]) is None
-    assert evaluator._maneuver_direction_check({}, [1.0, 2.0, 3.0]) is None
+    assert evaluator._maneuver_direction_check(metadata, [moto(100.0), None]) is None
+    # distractor-only detections must not produce a verdict
+    cars = [[("car", 100.0)], [("car", 140.0)], [("car", 180.0)]]
+    assert evaluator._maneuver_direction_check(metadata, cars) is None
+    assert evaluator._maneuver_direction_check({}, [moto(1.0), moto(2.0), moto(3.0)]) is None
 
 
 def _identities(cam_types):
