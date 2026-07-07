@@ -55,6 +55,7 @@ class ExperimentPipelineConfig:
     dd2_timeout_seconds: int | None = None
     dd2_force_boxes3d_probe: bool = False
     dd2_boxes3d_probe_category: str | None = None
+    dd2_frame_num: int = 8
     use_task_utility: bool = False
     utility_weights: Any = None
     perception_weights: Any = None
@@ -123,6 +124,7 @@ class ExperimentPipeline:
                 timeout_seconds=config.dd2_timeout_seconds,
                 force_boxes3d_probe=config.dd2_force_boxes3d_probe,
                 boxes3d_probe_category=config.dd2_boxes3d_probe_category,
+                source_selector_frame_num=config.dd2_frame_num,
             )
         raise ValueError(f"unsupported experiment backend: {config.backend_name}")
 

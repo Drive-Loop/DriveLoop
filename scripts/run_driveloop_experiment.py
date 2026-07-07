@@ -31,6 +31,7 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--audit-only", action="store_true")
     parser.add_argument("--force-boxes3d-probe", action="store_true")
     parser.add_argument("--boxes3d-probe-category", default=None)
+    parser.add_argument("--dd2-frame-num", type=int, default=8)
     parser.add_argument("--timeout-seconds", type=int, default=None)
     parser.add_argument("--use-task-utility", action="store_true")
     parser.add_argument("--perception-weights", default=None)
@@ -58,6 +59,7 @@ def main(argv: list[str] | None = None) -> int:
             dd2_timeout_seconds=args.timeout_seconds,
             dd2_force_boxes3d_probe=args.force_boxes3d_probe,
             dd2_boxes3d_probe_category=args.boxes3d_probe_category,
+            dd2_frame_num=args.dd2_frame_num,
             use_task_utility=args.use_task_utility,
             perception_weights=args.perception_weights,
             perception_confidence=args.perception_confidence,
