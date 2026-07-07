@@ -23,10 +23,10 @@ def test_surface_plan_unchanged_without_escalation():
     surface = build_actor_motion_surface_plan(_plan())
     assert surface["escalation_applied"]["proximity_scale"] == 1.0
     assert surface["escalation_applied"]["size_scale"] == 1.0
-    assert surface["escalation_applied"]["lateral_base_m"] == 8.0
-    assert surface["escalation_applied"]["longitudinal_base_m"] == 18.0
+    assert surface["escalation_applied"]["lateral_base_m"] == 3.2
+    assert surface["escalation_applied"]["longitudinal_base_m"] == 9.0
     box = surface["per_frame_boxes3d"][0]["box3d"]
-    assert abs(box[2] - (18.0 + 1.8)) < 1e-6
+    assert abs(box[2] - (9.0 + 1.8)) < 1e-6
 
 
 def test_surface_plan_applies_proximity_and_size():
@@ -35,7 +35,7 @@ def test_surface_plan_applies_proximity_and_size():
     )
     assert surface["escalation_applied"]["proximity_scale"] == 0.5
     box = surface["per_frame_boxes3d"][0]["box3d"]
-    assert abs(box[2] - (9.0 + 1.8)) < 1e-6  # closer
+    assert abs(box[2] - (4.5 + 1.8)) < 1e-6  # closer
     assert abs(box[3] - 0.8 * 1.5) < 1e-6  # larger
 
 
@@ -73,7 +73,8 @@ def test_absolute_geometry_bases_override_proximity():
         _plan({"lateral_base_m": 3.2, "longitudinal_base_m": 12.0})
     )
     box = surface["per_frame_boxes3d"][0]["box3d"]
-    # relations ["left"] gives direction=-1; lane_change starts at -1.6*direction=+1.6
-    assert abs(box[0] - (3.2 + 1.6)) < 1e-6
+    # relations ["left"]: side=-1, magnitude starts at +1.6
+    # box x = side*base + side*magnitude = -(3.2 + 1.6)
+    assert abs(box[0] - (-(3.2 + 1.6))) < 1e-6
     # lane_change longitudinal start offset is 1.8
     assert abs(box[2] - (12.0 + 1.8)) < 1e-6

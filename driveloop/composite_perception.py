@@ -80,10 +80,18 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
                 reset()
             payload_frames = []
             brightness_sum = 0.0
+            view_centers: list = []
             for frame_index, frame in enumerate(frames):
                 view = self.layout.extract_view(frame, view_index)
                 brightness_sum += float(view.mean())
                 detections = self.detector.detect(view, frame_index)
+                if detections:
+                    boxes = [d.box for d in detections]
+                    view_centers.append(
+                        sum((b[0] + b[2]) / 2.0 for b in boxes) / len(boxes)
+                    )
+                else:
+                    view_centers.append(None)
                 payload_frames.append({
                     "frame_index": frame_index,
                     "detections": [
@@ -109,6 +117,9 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
             evaluation = super().evaluate(view_generation)
             view_scores[view_index] = evaluation.score
             view_evaluations[view_index] = evaluation
+            if not hasattr(self, "_view_centers"):
+                self._view_centers = {}
+            self._view_centers[view_index] = view_centers
             view_brightness = round(brightness_sum / max(len(frames), 1), 3)
             if not hasattr(self, "_view_brightness"):
                 self._view_brightness = {}
@@ -133,6 +144,52 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
         metrics["perception_all_view_max_score"] = best_evaluation.score
         metrics["perception_selected_view"] = float(selected_view)
         metrics["perception_target_view_count"] = float(len(target_view_indices))
+
+        diagnosis = selected_evaluation.diagnosis
+        direction = self._maneuver_direction_check(
+            generation.metadata,
+            getattr(self, "_view_centers", {}).get(selected_view, []),
+        )
+        if direction is not None:
+            expected_sign, pixel_delta, consistent = direction
+            metrics["maneuver_expected_pixel_sign"] = expected_sign
+            metrics["maneuver_pixel_delta_x"] = round(pixel_delta, 3)
+            metrics["maneuver_direction_consistent"] = 1.0 if consistent else 0.0
+            if not consistent:
+                from driveloop.schema import Diagnosis
+                diagnosis = Diagnosis(
+                    False,
+                    list(diagnosis.reasons) + ["maneuver_direction_mismatch"],
+                    list(diagnosis.suggested_actions)
+                    + ["verify signed lateral geometry and source-scene distractors"],
+                )
+        return Evaluation(selected_evaluation.score, metrics, diagnosis)
+
+    def _maneuver_direction_check(self, metadata, centers):
+        """Expected pixel motion of the injected actor in the selected
+        view: approaching the ego lane means moving toward the image
+        center, i.e. pixel x increases for side=-1 (left) and decreases
+        for side=+1 (right). Returns (expected_sign, delta, consistent)
+        or None when not measurable."""
+        if not isinstance(metadata, dict):
+            return None
+        plan = metadata.get("dd2_override_candidate_plan")
+        surface = plan.get("actor_motion_surface_plan") if isinstance(plan, dict) else None
+        if not isinstance(surface, dict) or surface.get("maneuver") not in (
+            "cut_in",
+            "lane_change",
+        ):
+            return None
+        side = float(surface.get("lateral_side") or 0.0)
+        if side == 0.0:
+            return None
+        observed = [c for c in centers if c is not None]
+        if len(observed) < 3:
+            return None
+        expected_sign = 1.0 if side < 0 else -1.0
+        pixel_delta = observed[-1] - observed[0]
+        consistent = pixel_delta * expected_sign > 0
+        return expected_sign, pixel_delta, consistent
         brightness_map = getattr(self, "_view_brightness", {})
         for view_index, value in brightness_map.items():
             metrics["perception_view%d_brightness" % view_index] = value
@@ -140,8 +197,6 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
             metrics["perception_best_view_brightness"] = brightness_map[best_view]
         metrics["perception_layout_views"] = float(self.layout.num_views)
         metrics["perception_generated_row_height"] = float(self.layout.generated_row_height)
-        return Evaluation(selected_evaluation.score, metrics, selected_evaluation.diagnosis)
-
     def _target_view_indices(self, metadata: dict) -> list:
         """Resolve target cam types from the generation metadata to mosaic
         view indices. Empty result preserves legacy all-view-max behavior."""

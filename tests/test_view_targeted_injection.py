@@ -12,11 +12,8 @@ from driveloop.composite_perception import (
 ACTORS = [{"actor_id": "actor_01", "category": "motorcycle", "source_category": "motorcycle"}]
 
 
-def test_derive_target_cam_types_left():
-    assert derive_target_cam_types(["left"]) == ["cam_front_left", "cam_front"]
-
-
-def test_derive_target_cam_types_default_front():
+def test_derive_target_cam_types_single_view():
+    assert derive_target_cam_types(["left"]) == ["cam_front"]
     assert derive_target_cam_types([]) == ["cam_front"]
 
 
@@ -27,9 +24,59 @@ def test_surface_plan_carries_target_cam_types():
         motion_primitives=["lane_change"],
         executable_controls={},
     )
-    assert plan["target_cam_types"] == ["cam_front_left", "cam_front"]
+    assert plan["target_cam_types"] == ["cam_front"]
+    assert plan["lateral_side"] == -1.0
     surface = build_actor_motion_surface_plan(plan)
-    assert surface["target_cam_types"] == ["cam_front_left", "cam_front"]
+    assert surface["target_cam_types"] == ["cam_front"]
+    assert surface["lateral_side"] == -1.0
+
+
+def test_left_lane_change_renders_on_left_and_approaches_ego():
+    plan = build_actor_motion_plan(
+        actor_controls=ACTORS,
+        relations=["left"],
+        motion_primitives=["lane_change"],
+        executable_controls={},
+    )
+    surface = build_actor_motion_surface_plan(plan)
+    xs = [entry["box3d"][0] for entry in surface["per_frame_boxes3d"]]
+    assert all(x < 0 for x in xs), "left request must render on camera-left (negative x)"
+    assert abs(xs[0]) > abs(xs[-1]), "|x| must decrease: approach the ego lane"
+    assert abs(xs[0] + 4.8) < 1e-6 and abs(xs[-1] + 1.6) < 1e-6
+
+
+def test_left_cut_in_approaches_ego():
+    plan = build_actor_motion_plan(
+        actor_controls=ACTORS,
+        relations=["left"],
+        motion_primitives=["cut_in"],
+        executable_controls={},
+    )
+    surface = build_actor_motion_surface_plan(plan)
+    xs = [entry["box3d"][0] for entry in surface["per_frame_boxes3d"]]
+    assert all(x < 0 for x in xs)
+    assert abs(xs[0] + 4.8) < 1e-6 and abs(xs[-1] + 2.4) < 1e-6
+
+
+def test_maneuver_direction_check():
+    evaluator = object.__new__(CompositePerceptionVideoEvaluator)
+    evaluator.layout = CompositeVideoLayout()
+    metadata = {
+        "dd2_override_candidate_plan": {
+            "actor_motion_surface_plan": {
+                "maneuver": "lane_change",
+                "lateral_side": -1.0,
+                "target_cam_types": ["cam_front"],
+            }
+        }
+    }
+    # left actor approaching ego: pixel x should increase
+    ok = evaluator._maneuver_direction_check(metadata, [100.0, None, 140.0, 180.0])
+    assert ok is not None and ok[2] is True
+    bad = evaluator._maneuver_direction_check(metadata, [180.0, 140.0, 100.0])
+    assert bad is not None and bad[2] is False
+    assert evaluator._maneuver_direction_check(metadata, [100.0, None]) is None
+    assert evaluator._maneuver_direction_check({}, [1.0, 2.0, 3.0]) is None
 
 
 def _identities(cam_types):

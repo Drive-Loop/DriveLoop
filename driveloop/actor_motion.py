@@ -14,18 +14,20 @@ _DEFAULT_BOX_DIMS = {
 
 
 def derive_target_cam_types(relations: Iterable[str]) -> list[str]:
-    """Map requested spatial relations to the camera views that should
-    receive (and be evaluated for) the injected actor. Ahead-facing
-    requests target the front camera; left/right add the matching
-    front-side camera."""
+    """Single-view injection: the per-frame boxes3d surface has no
+    camera-extrinsic transform, so injecting the same camera-frame box
+    into multiple views creates physically inconsistent clones. Until an
+    extrinsic-aware projection exists, inject and evaluate cam_front
+    only; the signed lateral geometry keeps the actor inside the front
+    FOV for the whole trajectory."""
+    return ["cam_front"]
+
+
+def derive_lateral_side(relations: Iterable[str]) -> float:
+    """Camera-frame x is positive to the RIGHT (verified against
+    detected pixel trajectories). left -> -1.0, otherwise +1.0."""
     rels = {str(item).lower() for item in relations}
-    cams: list[str] = []
-    if "left" in rels:
-        cams.append("cam_front_left")
-    if "right" in rels:
-        cams.append("cam_front_right")
-    cams.append("cam_front")
-    return cams
+    return -1.0 if "left" in rels else 1.0
 
 
 def build_actor_motion_plan(
@@ -80,6 +82,7 @@ def build_actor_motion_plan(
         "requested_motions": requested_motions,
         "requested_relations": requested_relations,
         "target_cam_types": derive_target_cam_types(requested_relations),
+        "lateral_side": derive_lateral_side(requested_relations),
         "maneuver": maneuver,
         "escalation": (executable_controls or {}).get("structural_escalation"),
         "runtime_surface": {
@@ -111,8 +114,9 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
     escalation = actor_motion_plan.get("escalation") or {}
     proximity_scale = float(escalation.get("proximity_scale", 1.0))
     size_scale = float(escalation.get("size_scale", 1.0))
-    lateral_base = float(escalation.get("lateral_base_m", 8.0 * proximity_scale))
-    longitudinal_base = float(escalation.get("longitudinal_base_m", 18.0 * proximity_scale))
+    lateral_base = float(escalation.get("lateral_base_m", 3.2 * proximity_scale))
+    lateral_side = float(actor_motion_plan.get("lateral_side") or 1.0)
+    longitudinal_base = float(escalation.get("longitudinal_base_m", 9.0 * proximity_scale))
     dims = {key: value * size_scale for key, value in dims.items()}
     frames = actor_motion_plan.get("runtime_surface", {}).get("frames", [])
     per_frame_boxes3d = []
@@ -129,7 +133,7 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
                 "synthetic_track_id": actor_motion_plan.get("synthetic_track_id"),
                 "category": category,
                 "box3d": [
-                    round(lateral_base + lateral_offset, 6),
+                    round(lateral_side * lateral_base + lateral_offset, 6),
                     1.8,
                     round(longitudinal_base + longitudinal_offset, 6),
                     dims["width"],
@@ -162,6 +166,8 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
         "target_actor": target_actor,
         "synthetic_track_id": actor_motion_plan.get("synthetic_track_id"),
         "target_cam_types": list(actor_motion_plan.get("target_cam_types") or ["cam_front"]),
+        "lateral_side": lateral_side,
+        "maneuver": actor_motion_plan.get("maneuver"),
         "per_frame_boxes3d": per_frame_boxes3d,
         "claim_boundary": actor_motion_plan.get("claim_boundary"),
         "limitations": [
@@ -205,14 +211,16 @@ def _build_motion_frames(
     maneuver: str,
     relations: list[str],
 ) -> list[dict[str, Any]]:
-    direction = -1.0 if "left" in relations else 1.0
+    side = -1.0 if "left" in relations else 1.0
     frame_count = 8
 
+    # Offset magnitudes are relative to the (unsigned) lateral base.
+    # Both maneuvers APPROACH the ego lane: |x| decreases over time.
     if maneuver == "cut_in":
-        lateral_offsets = _linspace(1.6 * direction, -0.8 * direction, frame_count)
+        magnitudes = _linspace(1.6, -0.8, frame_count)
         longitudinal_offsets = _linspace(2.0, -0.4, frame_count)
     else:
-        lateral_offsets = _linspace(-1.6 * direction, 1.6 * direction, frame_count)
+        magnitudes = _linspace(1.6, -1.6, frame_count)
         longitudinal_offsets = _linspace(1.8, 0.0, frame_count)
 
     return [
@@ -220,9 +228,9 @@ def _build_motion_frames(
             "frame_idx": idx,
             "actor_id": actor_id,
             "category": category,
-            "lateral_offset_m": lateral_offsets[idx],
+            "lateral_offset_m": side * magnitudes[idx],
             "longitudinal_offset_m": longitudinal_offsets[idx],
-            "yaw_rad": -0.25,
+            "yaw_rad": -0.25 * side,
         }
         for idx in range(frame_count)
     ]
