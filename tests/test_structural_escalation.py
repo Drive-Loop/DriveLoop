@@ -47,7 +47,8 @@ def test_refiner_increments_escalation_level():
         DriveLoopRequest(prompt=r1.prompt, condition=r1.condition), FAILURE
     )
     assert r2.condition["structural_escalation"]["level"] == 2
-    assert r2.condition["structural_escalation"]["proximity_scale"] < r1.condition["structural_escalation"]["proximity_scale"]
+    assert r1.condition["structural_escalation"]["size_scale"] == 1.5
+    assert r2.condition["structural_escalation"]["proximity_scale"] == 1.0
 
 
 class AlwaysFail(BaseEvaluator):

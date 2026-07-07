@@ -109,8 +109,12 @@ class RuleBasedRefiner:
             level = int(prior.get("level", 0)) + 1 if isinstance(prior, dict) else 1
             condition["structural_escalation"] = {
                 "level": level,
-                "proximity_scale": round(max(1.0 - 0.25 * level, 0.4), 3),
-                "size_scale": round(min(1.0 + 0.25 * level, 1.75), 3),
+                # Position is side-calibrated (geometry sweeps 2026-07-07):
+                # do not move the actor. Escalate rendering strength to the
+                # measured sweet spot (size 1.5; both 1.25 and 1.75 gave
+                # Q_cov 0.125 vs 0.375 at 1.5 in the left-side size probe).
+                "proximity_scale": 1.0,
+                "size_scale": 1.5,
                 "reason": "perception_target_failure",
                 "claim_boundary": "structured-condition escalation; not proof of visual realization",
             }
