@@ -7,6 +7,8 @@ from typing import Any
 
 import numpy as np
 
+from driveloop.ego_injection import ego_entry_to_cam_box9
+
 
 _CATEGORY_TO_ORI_LABEL = {
     "animal": "animal",
@@ -90,6 +92,39 @@ def apply_dd2_override_to_sample(
             "target": "boxes3d",
             "mode": "per_frame_append",
             "reason": "no_per_frame_append_entries",
+        })
+
+    per_frame_append_ego_entries = boxes3d.get("per_frame_append_ego") if isinstance(boxes3d, dict) else None
+    if per_frame_append_ego_entries:
+        selected_ego, selection_skips = _select_per_frame_append_ego_entries(updated, per_frame_append_ego_entries)
+        converted_ego, conversion_skips = _convert_ego_entries_to_cam_append(updated, selected_ego)
+        if converted_ego:
+            updated, boxes_audit = _append_boxes3d(updated, converted_ego, mode="per_frame_append_ego")
+            boxes_audit["frame_idx"] = updated.get("frame_idx")
+            boxes_audit["cam_type"] = updated.get("cam_type")
+            boxes_audit["conversion"] = {
+                "mode": "ego_entry_to_cam_box9",
+                "reference": "per_frame_cam_front_ego2global",
+            }
+            boxes_audit["skipped_non_matching_count"] = len(selection_skips)
+            boxes_audit["conversion_skipped_entries"] = conversion_skips
+            audit["applied"].append(boxes_audit)
+        else:
+            audit["skipped"].append({
+                "target": "boxes3d",
+                "mode": "per_frame_append_ego",
+                "reason": "no_matching_or_convertible_entries",
+                "frame_idx": updated.get("frame_idx"),
+                "cam_type": updated.get("cam_type"),
+                "candidate_count": len(per_frame_append_ego_entries) if isinstance(per_frame_append_ego_entries, list) else None,
+                "selection_skipped_entries": selection_skips,
+                "conversion_skipped_entries": conversion_skips,
+            })
+    else:
+        audit["skipped"].append({
+            "target": "boxes3d",
+            "mode": "per_frame_append_ego",
+            "reason": "no_per_frame_append_ego_entries",
         })
 
     image_hdmap = override_spec.get("image_hdmap", {})
@@ -241,6 +276,134 @@ def _select_per_frame_append_entries(
         selected.append(entry)
 
     return selected, skipped
+
+
+def _select_per_frame_append_ego_entries(
+    data_dict: dict[str, Any],
+    per_frame_append_ego: Any,
+) -> tuple[list[tuple[dict[str, Any], dict[str, Any] | None]], list[dict[str, Any]]]:
+    """Select ego-frame entries for the current record.
+
+    Each entry carries ONE ego-frame box per video frame plus the
+    sample identities of ALL cameras of that frame; a record consumes
+    the entry when any identity matches, then converts it into its own
+    camera frame (true per-view projections, no clones)."""
+    frame_idx = data_dict.get("frame_idx")
+    selected: list[tuple[dict[str, Any], dict[str, Any] | None]] = []
+    skipped: list[dict[str, Any]] = []
+
+    if not isinstance(per_frame_append_ego, list):
+        return selected, [{"reason": "per_frame_append_ego_must_be_list"}]
+
+    for entry in per_frame_append_ego:
+        if not isinstance(entry, dict):
+            skipped.append({"reason": "per_frame_entry_must_be_dict"})
+            continue
+
+        sample_identities = entry.get("sample_identities")
+        if isinstance(sample_identities, list) and sample_identities:
+            matched = next(
+                (
+                    identity
+                    for identity in sample_identities
+                    if isinstance(identity, dict) and _sample_identity_matches(identity, data_dict)
+                ),
+                None,
+            )
+            if matched is None:
+                skipped.append({
+                    "reason": "sample_identity_mismatch",
+                    "entry_frame_idx": entry.get("frame_idx"),
+                    "sample_frame_idx": frame_idx,
+                    "sample_cam_type": data_dict.get("cam_type"),
+                })
+                continue
+            selected.append((entry, matched))
+            continue
+
+        if not _frame_idx_matches(entry.get("frame_idx"), frame_idx):
+            skipped.append({
+                "reason": "frame_idx_mismatch",
+                "entry_frame_idx": entry.get("frame_idx"),
+                "sample_frame_idx": frame_idx,
+            })
+            continue
+        selected.append((entry, None))
+
+    return selected, skipped
+
+
+def _convert_ego_entries_to_cam_append(
+    data_dict: dict[str, Any],
+    selected: list[tuple[dict[str, Any], dict[str, Any] | None]],
+) -> tuple[list[dict[str, Any]], list[dict[str, Any]]]:
+    """Convert selected ego-frame entries into this record's camera
+    frame via ego_entry_to_cam_box9 (reference: the per-frame cam_front
+    record's ego2global embedded by the backend)."""
+    calib = data_dict.get("calib") if isinstance(data_dict.get("calib"), dict) else {}
+    cam2ego = calib.get("cam2ego")
+    ego2global = calib.get("ego2global")
+
+    converted: list[dict[str, Any]] = []
+    skipped: list[dict[str, Any]] = []
+
+    for entry, matched_identity in selected:
+        ego_payload = entry.get("ego")
+        if not isinstance(ego_payload, dict) or not all(
+            key in ego_payload for key in ("center_ego", "dims", "heading_ego")
+        ):
+            skipped.append({
+                "reason": "ego_payload_missing_fields",
+                "entry_frame_idx": entry.get("frame_idx"),
+            })
+            continue
+        ref_ego2global = entry.get("ref_ego2global")
+        if ref_ego2global is None:
+            skipped.append({
+                "reason": "missing_ref_ego2global",
+                "entry_frame_idx": entry.get("frame_idx"),
+            })
+            continue
+        if cam2ego is None or ego2global is None:
+            skipped.append({
+                "reason": "record_calib_missing_extrinsics",
+                "cam_type": data_dict.get("cam_type"),
+                "entry_frame_idx": entry.get("frame_idx"),
+            })
+            continue
+
+        try:
+            box9 = ego_entry_to_cam_box9(ego_payload, ref_ego2global, cam2ego, ego2global)
+        except Exception as exc:
+            skipped.append({
+                "reason": "ego_to_cam_conversion_failed",
+                "error": f"{type(exc).__name__}: {exc}",
+                "entry_frame_idx": entry.get("frame_idx"),
+            })
+            continue
+
+        converted_entry = {
+            "category": entry.get("category"),
+            "box3d": box9,
+            "source": entry.get("source", "boxes3d.per_frame_append_ego"),
+            "provenance": entry.get("provenance", "driveloop_ego_injection"),
+            "sample_identity": matched_identity
+            or {
+                "cam_type": data_dict.get("cam_type"),
+                "frame_idx": data_dict.get("frame_idx"),
+            },
+        }
+        if "frame_idx" in entry:
+            converted_entry["frame_idx"] = entry.get("frame_idx")
+        if "relative_frame_idx" in entry:
+            converted_entry["relative_frame_idx"] = entry.get("relative_frame_idx")
+        if "ori_label" in entry:
+            converted_entry["ori_label"] = entry.get("ori_label")
+        if "label3d" in entry:
+            converted_entry["label3d"] = entry.get("label3d")
+        converted.append(converted_entry)
+
+    return converted, skipped
 
 
 def _append_boxes3d(

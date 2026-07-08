@@ -12,6 +12,7 @@ from typing import Optional
 from driveloop.backends.base import GenerationBackend
 from driveloop.actor_motion import build_actor_motion_surface_plan
 from driveloop.dd2_override import read_override_audit
+from driveloop.ego_injection import cam_box9_to_ego_entry
 from driveloop.schema import DriveLoopRequest, Generation
 from driveloop.source_sample_binding import build_source_sample_binding
 
@@ -332,16 +333,24 @@ class DriveDreamer2Backend(GenerationBackend):
             if record_index < 0 or record_index >= len(records):
                 continue
             record = records[record_index]
-            identities.append(
-                {
-                    "relative_step": int(position % self.source_selector_frame_num),
-                    "record_index": int(record_index),
-                    "frame_idx": record.get("frame_idx"),
-                    "cam_type": record.get("cam_type"),
-                    "sample_token": record.get("sample_token"),
-                    "scene_token": record.get("scene_token"),
-                }
-            )
+            identity = {
+                "relative_step": int(position % self.source_selector_frame_num),
+                "record_index": int(record_index),
+                "frame_idx": record.get("frame_idx"),
+                "cam_type": record.get("cam_type"),
+                "sample_token": record.get("sample_token"),
+                "scene_token": record.get("scene_token"),
+            }
+            calib = record.get("calib")
+            if isinstance(calib, dict):
+                extrinsics = {}
+                for key in ("cam2ego", "ego2global"):
+                    value = calib.get(key)
+                    if value is not None:
+                        extrinsics[key] = value.tolist() if hasattr(value, "tolist") else value
+                if extrinsics:
+                    identity["calib"] = extrinsics
+            identities.append(identity)
         return identities
 
     def _map_per_frame_actor_boxes_to_source_bound_samples(
@@ -422,6 +431,126 @@ class DriveDreamer2Backend(GenerationBackend):
             },
         )
 
+    def _map_per_frame_actor_boxes_to_ego_entries(
+        self,
+        per_frame_boxes: list[dict],
+        source_sample_binding: dict | None,
+    ) -> tuple[list[dict], dict]:
+        """Ego-frame injection surface (C4): ONE ego-frame entry per video
+        frame. The plan's cam_front-frame box9 is lifted into the ego frame
+        using the per-frame cam_front record's cam2ego; that record's
+        ego2global is embedded as the reference so every camera record can
+        convert the entry into its own frame at consumption (true per-view
+        projections, no clones). No view filter: behind-camera boxes are
+        culled by the existing z>0 crop at canvas time."""
+        identities = self._build_source_bound_sample_identities(source_sample_binding)
+        mapping_errors = [item for item in identities if item.get("available") is False]
+        valid_identities = [item for item in identities if item.get("available") is not False]
+
+        if not per_frame_boxes:
+            return [], {"available": False, "reason": "no_per_frame_actor_boxes3d"}
+        if not valid_identities:
+            return (
+                [],
+                {
+                    "available": False,
+                    "mode": "ego_frame_one_entry_per_video_frame",
+                    "reason": "no_source_bound_sample_identity_mapping",
+                    "errors": mapping_errors,
+                },
+            )
+
+        identities_by_step: dict[int, list[dict]] = {}
+        for identity in valid_identities:
+            identities_by_step.setdefault(int(identity["relative_step"]), []).append(identity)
+
+        mapped_entries = []
+        unmapped_relative_steps = []
+        missing_front_calib_steps = []
+        for entry in per_frame_boxes:
+            relative_step = int(entry.get("frame_idx"))
+            matches = identities_by_step.get(relative_step, [])
+            if not matches:
+                unmapped_relative_steps.append(relative_step)
+                continue
+
+            front_identity = next(
+                (
+                    identity
+                    for identity in matches
+                    if str(identity.get("cam_type") or "").lower() == "cam_front"
+                ),
+                None,
+            )
+            front_calib = front_identity.get("calib") if isinstance(front_identity, dict) else None
+            if (
+                not isinstance(front_calib, dict)
+                or front_calib.get("cam2ego") is None
+                or front_calib.get("ego2global") is None
+            ):
+                missing_front_calib_steps.append(relative_step)
+                continue
+
+            ego_payload = cam_box9_to_ego_entry(entry.get("box3d"), front_calib["cam2ego"])
+            mapped_entries.append(
+                {
+                    "relative_frame_idx": relative_step,
+                    "frame_idx": front_identity.get("frame_idx"),
+                    "actor_id": entry.get("actor_id"),
+                    "synthetic_track_id": entry.get("synthetic_track_id"),
+                    "category": entry.get("category"),
+                    "ego": ego_payload,
+                    "ref_ego2global": front_calib["ego2global"],
+                    "sample_identities": [
+                        {
+                            "cam_type": identity.get("cam_type"),
+                            "frame_idx": identity.get("frame_idx"),
+                            "sample_token": identity.get("sample_token"),
+                            "scene_token": identity.get("scene_token"),
+                        }
+                        for identity in matches
+                    ],
+                    "source_record_indices": {
+                        str(identity.get("cam_type")): identity.get("record_index")
+                        for identity in matches
+                    },
+                    "frame_mapping": {
+                        "mode": "ego_frame_relative_step_to_all_cam_sample_identities",
+                        "relative_step": relative_step,
+                    },
+                    "source": entry.get("source", "actor_motion_plan.per_frame_actor_boxes3d"),
+                    "provenance": entry.get("provenance", "driveloop_ego_injection_surface"),
+                    "motion_surface": "boxes3d.per_frame_append_ego",
+                    "maneuver": entry.get("maneuver"),
+                }
+            )
+
+        return (
+            mapped_entries,
+            {
+                "available": bool(mapped_entries),
+                "mode": "ego_frame_one_entry_per_video_frame",
+                "source_identity_count": len(valid_identities),
+                "input_per_frame_count": len(per_frame_boxes),
+                "mapped_entry_count": len(mapped_entries),
+                "cam_coverage": sorted(
+                    {
+                        str(identity.get("cam_type"))
+                        for identity in valid_identities
+                        if identity.get("cam_type")
+                    }
+                ),
+                "view_filter": {
+                    "target_cam_types": [],
+                    "filtered_out_count": 0,
+                    "policy": "no_view_filter_geometry_culls_behind_camera_boxes",
+                },
+                "unmapped_relative_frame_idx": sorted(set(unmapped_relative_steps)),
+                "missing_front_calib_relative_frame_idx": sorted(set(missing_front_calib_steps)),
+                "claim_boundary": "Ego-frame mapping connects structural actor boxes to source-bound DD2 samples; it is not video semantic proof.",
+            },
+        )
+
     def _build_override_json(
         self,
         dd2_prompt: str | None,
@@ -479,7 +608,20 @@ class DriveDreamer2Backend(GenerationBackend):
             "available": False,
             "reason": "no_actor_motion_per_frame_entries",
         }
-        if per_frame_append_boxes:
+        ego_injection_enabled = os.environ.get("DRIVELOOP_EGO_INJECTION") == "1"
+        per_frame_append_ego_boxes: list[dict] = []
+        if per_frame_append_boxes and ego_injection_enabled:
+            (
+                per_frame_append_ego_boxes,
+                actor_motion_frame_mapping,
+            ) = self._map_per_frame_actor_boxes_to_ego_entries(
+                per_frame_append_boxes,
+                source_sample_binding,
+            )
+            # The legacy per-cam clone surface is suppressed when the
+            # ego-frame surface is active to avoid double injection.
+            per_frame_append_boxes = []
+        elif per_frame_append_boxes:
             (
                 per_frame_append_boxes,
                 actor_motion_frame_mapping,
@@ -504,9 +646,21 @@ class DriveDreamer2Backend(GenerationBackend):
                 else "text_control.prompt",
             },
             "boxes3d": {
-                "mode": "append_and_per_frame_append" if per_frame_append_boxes else "append",
+                "mode": (
+                    "append_and_per_frame_append_ego"
+                    if per_frame_append_ego_boxes
+                    else "append_and_per_frame_append"
+                    if per_frame_append_boxes
+                    else "append"
+                ),
                 "append": append_boxes,
                 "per_frame_append": per_frame_append_boxes,
+                "per_frame_append_ego": per_frame_append_ego_boxes,
+                "ego_injection": {
+                    "enabled": ego_injection_enabled,
+                    "env_flag": "DRIVELOOP_EGO_INJECTION",
+                    "surface": "boxes3d.per_frame_append_ego",
+                },
                 "source": structural_input_plan.get("boxes3d", {}).get(
                     "source",
                     "executable_condition_tensor_override",
@@ -533,13 +687,17 @@ class DriveDreamer2Backend(GenerationBackend):
             "audit": {
                 "control_level": (
                     "tensor_override_runtime"
-                    if append_boxes or per_frame_append_boxes or structural_input_plan.get("image_hdmap", {}).get("source") != "runtime_dataset_baseline"
+                    if append_boxes or per_frame_append_boxes or per_frame_append_ego_boxes or structural_input_plan.get("image_hdmap", {}).get("source") != "runtime_dataset_baseline"
                     else "runtime_surface_observation"
                 ),
                 "actor_motion_frame_mapping": actor_motion_frame_mapping,
                 "limitations": [
-                    "boxes3d_override_not_applied" if not append_boxes and not per_frame_append_boxes else "box_positions_are_draft_until_projection_and_scene_geometry_are_verified",
-                    "actor_motion_surface_not_applied" if not per_frame_append_boxes else "per_frame_actor_boxes3d_runtime_surface_connected",
+                    "boxes3d_override_not_applied" if not append_boxes and not per_frame_append_boxes and not per_frame_append_ego_boxes else "box_positions_are_draft_until_projection_and_scene_geometry_are_verified",
+                    "per_frame_actor_boxes3d_runtime_surface_connected_ego_frame"
+                    if per_frame_append_ego_boxes
+                    else "per_frame_actor_boxes3d_runtime_surface_connected"
+                    if per_frame_append_boxes
+                    else "actor_motion_surface_not_applied",
                     "hdmap_kept_baseline_without_explicit_verified_override",
                 ],
             },
