@@ -132,12 +132,18 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
     proximity_scale = float(escalation.get("proximity_scale", 1.0))
     size_scale = float(escalation.get("size_scale", 1.0))
     lateral_side = float(actor_motion_plan.get("lateral_side") or 1.0)
-    # Side-specific defaults: the renderable window on candidate70's left
-    # (intersection/connector space) is closer than on the right
-    # (geometry sweeps 2026-07-07). Escalation overrides stay absolute.
-    default_lateral = 3.2 if lateral_side >= 0 else 2.0
+    # Side-specific defaults. RIGHT: 3.2/9 (2026-07-07 sweep; near range,
+    # pending gated re-audit, no human-verified cell yet). LEFT: 3.5/20
+    # from the 2026-07-08 2D distance sweep (human-verified motorcycle,
+    # baseline-differential detection; rendering quality rises with
+    # injection distance at the mini config). Escalation overrides stay
+    # absolute.
+    if lateral_side >= 0:
+        default_lateral, default_longitudinal = 3.2, 9.0
+    else:
+        default_lateral, default_longitudinal = 3.5, 20.0
     lateral_base = float(escalation.get("lateral_base_m", default_lateral * proximity_scale))
-    longitudinal_base = float(escalation.get("longitudinal_base_m", 9.0 * proximity_scale))
+    longitudinal_base = float(escalation.get("longitudinal_base_m", default_longitudinal * proximity_scale))
     dims = {key: value * size_scale for key, value in dims.items()}
     frames = actor_motion_plan.get("runtime_surface", {}).get("frames", [])
     per_frame_boxes3d = []

@@ -42,7 +42,8 @@ def test_left_lane_change_renders_on_left_and_approaches_ego():
     xs = [entry["box3d"][0] for entry in surface["per_frame_boxes3d"]]
     assert all(x < 0 for x in xs), "left request must render on camera-left (negative x)"
     assert abs(xs[0]) > abs(xs[-1]), "|x| must decrease: approach the ego lane"
-    assert abs(xs[0] + 3.6) < 1e-6 and abs(xs[-1] + 0.4) < 1e-6
+    # Left default base 3.5/20 (2026-07-08 distance sweep record).
+    assert abs(xs[0] + 5.1) < 1e-6 and abs(xs[-1] + 1.9) < 1e-6
 
 
 def test_left_cut_in_approaches_ego():
@@ -55,7 +56,8 @@ def test_left_cut_in_approaches_ego():
     surface = build_actor_motion_surface_plan(plan)
     xs = [entry["box3d"][0] for entry in surface["per_frame_boxes3d"]]
     assert all(x < 0 for x in xs)
-    assert abs(xs[0] + 3.6) < 1e-6 and abs(xs[-1] + 1.2) < 1e-6
+    # Left default base 3.5/20 (2026-07-08 distance sweep record).
+    assert abs(xs[0] + 5.1) < 1e-6 and abs(xs[-1] + 2.7) < 1e-6
 
 
 def test_right_side_keeps_calibrated_default():
