@@ -167,8 +167,12 @@ def build_actor_motion_surface_plan(actor_motion_plan: dict[str, Any] | None) ->
                     dims["height"],
                     dims["depth"],
                     0.0,
-                    0.0,
+                    # Dataset boxes3d layout carries yaw (rotation about
+                    # camera y) at index 7, not 8 (verified against real
+                    # cross-camera pairs, 2026-07-08/09 audit). The old
+                    # layout applied a spurious z-roll instead of heading.
                     yaw,
+                    0.0,
                 ],
                 "source": "actor_motion_plan.per_frame_actor_boxes3d",
                 "provenance": "driveloop_actor_motion_surface",
