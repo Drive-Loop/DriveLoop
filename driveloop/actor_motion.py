@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from typing import Any, Iterable
+import os
 
 
 _DEFAULT_BOX_DIMS = {
@@ -13,13 +14,29 @@ _DEFAULT_BOX_DIMS = {
 }
 
 
+_ALL_CAM_TYPES = [
+    "cam_front_left",
+    "cam_front",
+    "cam_front_right",
+    "cam_back_right",
+    "cam_back",
+    "cam_back_left",
+]
+
+
 def derive_target_cam_types(relations: Iterable[str]) -> list[str]:
     """Single-view injection: the per-frame boxes3d surface has no
     camera-extrinsic transform, so injecting the same camera-frame box
     into multiple views creates physically inconsistent clones. Until an
     extrinsic-aware projection exists, inject and evaluate cam_front
     only; the signed lateral geometry keeps the actor inside the front
-    FOV for the whole trajectory."""
+    FOV for the whole trajectory.
+
+    DRIVELOOP_INJECT_ALL_CAM_TYPES=1 restores the pre-17983a4 all-view
+    append as a DIAGNOSTIC PROBE ONLY (physically inconsistent clones;
+    never a source of paper numbers)."""
+    if os.environ.get("DRIVELOOP_INJECT_ALL_CAM_TYPES") == "1":
+        return list(_ALL_CAM_TYPES)
     return ["cam_front"]
 
 
