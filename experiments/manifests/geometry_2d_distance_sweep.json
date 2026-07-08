@@ -1,0 +1,340 @@
+{
+  "cases": [
+    {
+      "name": "geo_left_lat3p0_lon16",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 3.0,
+          "longitudinal_base_m": 16.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat3p0_lon20",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 3.0,
+          "longitudinal_base_m": 20.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat3p0_lon24",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 3.0,
+          "longitudinal_base_m": 24.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat3p5_lon16",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 3.5,
+          "longitudinal_base_m": 16.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat3p5_lon20",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 3.5,
+          "longitudinal_base_m": 20.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat3p5_lon24",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 3.5,
+          "longitudinal_base_m": 24.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat4p0_lon16",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 4.0,
+          "longitudinal_base_m": 16.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat4p0_lon20",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 4.0,
+          "longitudinal_base_m": 20.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat4p0_lon24",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 4.0,
+          "longitudinal_base_m": 24.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat4p5_lon16",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 4.5,
+          "longitudinal_base_m": 16.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat4p5_lon20",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 4.5,
+          "longitudinal_base_m": 20.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_left_lat4p5_lon24",
+      "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 4.5,
+          "longitudinal_base_m": 24.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_right_lat3p0_lon16",
+      "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 3.0,
+          "longitudinal_base_m": 16.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_right_lat3p0_lon20",
+      "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 3.0,
+          "longitudinal_base_m": 20.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_right_lat3p0_lon24",
+      "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 3.0,
+          "longitudinal_base_m": 24.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_right_lat3p5_lon16",
+      "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 3.5,
+          "longitudinal_base_m": 16.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_right_lat3p5_lon20",
+      "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 3.5,
+          "longitudinal_base_m": 20.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_right_lat3p5_lon24",
+      "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 3.5,
+          "longitudinal_base_m": 24.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_right_lat4p0_lon16",
+      "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 4.0,
+          "longitudinal_base_m": 16.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_right_lat4p0_lon20",
+      "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 4.0,
+          "longitudinal_base_m": 20.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_right_lat4p0_lon24",
+      "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 4.0,
+          "longitudinal_base_m": 24.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_right_lat4p5_lon16",
+      "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 4.5,
+          "longitudinal_base_m": 16.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_right_lat4p5_lon20",
+      "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 4.5,
+          "longitudinal_base_m": 20.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    },
+    {
+      "name": "geo_right_lat4p5_lon24",
+      "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle",
+      "condition": {
+        "structural_escalation": {
+          "level": 0,
+          "proximity_scale": 1.0,
+          "size_scale": 1.0,
+          "lateral_base_m": 4.5,
+          "longitudinal_base_m": 24.0,
+          "reason": "distance_bearing_2d_recalibration_sweep"
+        }
+      }
+    }
+  ]
+}
