@@ -18,6 +18,8 @@ def main():
     parser.add_argument("--tracker", choices=["iou", "botsort"], default="iou")
     parser.add_argument("--motion-required", action="store_true",
                         help="treat the request as motion-implying so static targets are diagnosed")
+    parser.add_argument("--baseline-video", default=None,
+                        help="no-injection baseline video for differential scoring")
     parser.add_argument("--out-root", default="outputs/driveloop/perception_video_eval")
     args = parser.parse_args()
 
@@ -30,6 +32,7 @@ def main():
         detector=detector,
         layout=CompositeVideoLayout(),
         confidence_threshold=args.confidence_threshold,
+        baseline_video=args.baseline_video,
     )
     metadata = {}
     if args.motion_required:

@@ -61,6 +61,7 @@ class ExperimentPipelineConfig:
     perception_weights: Any = None
     perception_confidence: float = 0.25
     refiner_escalation: bool = True
+    perception_baseline_video: Any = None
 
 
 def load_experiment_cases(path: Path | str) -> list[ExperimentCase]:
@@ -173,6 +174,7 @@ class ExperimentPipeline:
                     confidence_threshold=self.config.perception_confidence,
                 ),
                 confidence_threshold=self.config.perception_confidence,
+                baseline_video=self.config.perception_baseline_video,
             )
         refiner = None
         if not self.config.refiner_escalation:

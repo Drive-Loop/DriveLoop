@@ -49,9 +49,19 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
     video and evaluates each camera view independently, reporting the best
     view. Falls back to whole-frame evaluation for non-composite videos."""
 
-    def __init__(self, *args: Any, layout: CompositeVideoLayout | None = None, **kwargs: Any) -> None:
+    def __init__(
+        self,
+        *args: Any,
+        layout: CompositeVideoLayout | None = None,
+        baseline_video: Any = None,
+        baseline_iou_threshold: float = 0.5,
+        **kwargs: Any,
+    ) -> None:
         super().__init__(*args, **kwargs)
         self.layout = layout or CompositeVideoLayout()
+        self.baseline_video = baseline_video
+        self.baseline_iou_threshold = float(baseline_iou_threshold)
+        self._baseline_cache: Dict[str, dict] = {}
 
     def evaluate(self, generation: Generation) -> Evaluation:
         if self._detections_from_metadata(generation.metadata) is not None:
@@ -70,6 +80,14 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
         if not self.layout.matches(frames[0]):
             return super().evaluate(generation)
 
+        baseline_path = generation.metadata.get("perception_baseline_video") or self.baseline_video
+        baseline_table = (
+            self._baseline_view_detections(baseline_path)
+            if baseline_path and Path(str(baseline_path)).exists()
+            else {}
+        )
+        baseline_removed_total = 0
+
         best_evaluation: Evaluation | None = None
         best_view = -1
         view_scores: Dict[int, float] = {}
@@ -85,6 +103,11 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
                 view = self.layout.extract_view(frame, view_index)
                 brightness_sum += float(view.mean())
                 detections = self.detector.detect(view, frame_index)
+                if baseline_table:
+                    detections, removed = self._subtract_baseline(
+                        detections, baseline_table.get((view_index, frame_index), [])
+                    )
+                    baseline_removed_total += removed
                 if detections:
                     view_centers.append(
                         [
@@ -146,6 +169,8 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
         metrics["perception_all_view_max_score"] = best_evaluation.score
         metrics["perception_selected_view"] = float(selected_view)
         metrics["perception_target_view_count"] = float(len(target_view_indices))
+        metrics["perception_baseline_available"] = 1.0 if baseline_table else 0.0
+        metrics["perception_baseline_subtracted_count"] = float(baseline_removed_total)
 
         diagnosis = selected_evaluation.diagnosis
         direction = self._maneuver_direction_check(
@@ -211,6 +236,55 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
             metrics["perception_best_view_brightness"] = brightness_map[best_view]
         metrics["perception_layout_views"] = float(self.layout.num_views)
         metrics["perception_generated_row_height"] = float(self.layout.generated_row_height)
+    def _baseline_view_detections(self, path: Any) -> dict:
+        """Detections of the no-injection baseline video of the same
+        source window, keyed by (view_index, frame_index). Determinism
+        makes the baseline exact; class-agnostic IoU subtraction removes
+        pre-existing source objects from target credit (2026-07-08
+        baseline-differential record)."""
+        key = str(path)
+        if key not in self._baseline_cache:
+            table: dict = {}
+            frames = self.frame_reader.read(Path(key), max_frames=self.max_frames)
+            if frames and self.layout.matches(frames[0]) and self.detector is not None:
+                for view_index in range(self.layout.num_views):
+                    reset = getattr(self.detector, "reset", None)
+                    if callable(reset):
+                        reset()
+                    for frame_index, frame in enumerate(frames):
+                        view = self.layout.extract_view(frame, view_index)
+                        table[(view_index, frame_index)] = self.detector.detect(view, frame_index)
+            self._baseline_cache[key] = table
+        return self._baseline_cache[key]
+
+    @staticmethod
+    def _iou_xyxy(a, b) -> float:
+        ix1, iy1 = max(a[0], b[0]), max(a[1], b[1])
+        ix2, iy2 = min(a[2], b[2]), min(a[3], b[3])
+        inter = max(0.0, ix2 - ix1) * max(0.0, iy2 - iy1)
+        if inter <= 0:
+            return 0.0
+        union = (
+            max(0.0, a[2] - a[0]) * max(0.0, a[3] - a[1])
+            + max(0.0, b[2] - b[0]) * max(0.0, b[3] - b[1])
+            - inter
+        )
+        return inter / union if union > 0 else 0.0
+
+    def _subtract_baseline(self, detections, baseline_dets):
+        if not baseline_dets:
+            return detections, 0
+        kept, removed = [], 0
+        for d in detections:
+            if any(
+                self._iou_xyxy(d.box, b.box) >= self.baseline_iou_threshold
+                for b in baseline_dets
+            ):
+                removed += 1
+            else:
+                kept.append(d)
+        return kept, removed
+
     def _target_view_indices(self, metadata: dict) -> list:
         """Resolve target cam types from the generation metadata to mosaic
         view indices. Empty result preserves legacy all-view-max behavior."""

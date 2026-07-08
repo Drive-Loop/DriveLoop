@@ -223,6 +223,7 @@ class PerceptionVideoEvaluator(BaseEvaluator):
         max_frames: int | None = None,
         tracker_iou_threshold: float = 0.3,
         static_motion_threshold: float = 0.5,
+        min_target_support_frames: int = 2,
     ) -> None:
         self.detector = detector
         self.frame_reader = frame_reader or OpenCVFrameReader()
@@ -233,6 +234,7 @@ class PerceptionVideoEvaluator(BaseEvaluator):
         self.max_frames = max_frames
         self.tracker_iou_threshold = tracker_iou_threshold
         self.static_motion_threshold = static_motion_threshold
+        self.min_target_support_frames = int(min_target_support_frames)
 
     def evaluate(self, generation: Generation) -> Evaluation:
         detections, frame_count, measured, setup_reasons = self._collect_detections(generation)
@@ -264,6 +266,14 @@ class PerceptionVideoEvaluator(BaseEvaluator):
         q_track, dominant = self._track_score(tracks, frame_count)
         q_id = self._identity_score(filtered, dominant)
         q_box = self._box_stability_score(dominant)
+        support_frames = len({d.frame_index for d in filtered})
+        support_guard_triggered = 0 < support_frames < self.min_target_support_frames
+        if support_guard_triggered:
+            # Integrity guard: single-frame target support degenerates
+            # Q_id/Q_box to 1.0 (2026-07-08 m5 class-flip forensics);
+            # deny that free credit.
+            q_id = 0.0
+            q_box = 0.0
         score = round(
             self.weights.coverage * q_cov
             + self.weights.confidence * q_conf
@@ -282,11 +292,18 @@ class PerceptionVideoEvaluator(BaseEvaluator):
             "Q_box": q_box,
             "perception_detection_count": float(len(filtered)),
             "perception_track_count": float(len(tracks)),
+            "perception_target_support_frames": float(support_frames),
             "perception_dominant_track_length": float(len(dominant.detections) if dominant else 0),
             "perception_dominant_net_motion_px": float(motion_px) if motion_px is not None else -1.0,
             "perception_dominant_motion_over_width": float(motion_norm) if motion_norm is not None else -1.0,
         })
 
+        if support_guard_triggered:
+            reasons.append("insufficient_target_support_frames")
+            actions.append(
+                "target must be detected in at least %d frames"
+                % self.min_target_support_frames
+            )
         if not filtered:
             reasons.append("target_object_not_detected")
             actions.append("make the target actor visible or check detector classes")

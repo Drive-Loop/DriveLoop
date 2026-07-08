@@ -36,6 +36,8 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--use-task-utility", action="store_true")
     parser.add_argument("--perception-weights", default=None)
     parser.add_argument("--perception-confidence", type=float, default=0.25)
+    parser.add_argument("--perception-baseline-video", default=None,
+                        help="no-injection baseline video of the same source window for differential scoring")
     parser.add_argument("--no-refiner-escalation", action="store_true")
     args = parser.parse_args(argv)
 
@@ -63,6 +65,7 @@ def main(argv: list[str] | None = None) -> int:
             use_task_utility=args.use_task_utility,
             perception_weights=args.perception_weights,
             perception_confidence=args.perception_confidence,
+            perception_baseline_video=args.perception_baseline_video,
             refiner_escalation=not args.no_refiner_escalation,
         ),
     ).run_cases(load_experiment_cases(args.cases))
