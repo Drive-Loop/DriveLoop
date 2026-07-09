@@ -169,3 +169,28 @@ def test_backend_maps_actor_motion_surface_to_source_bound_sample_identity():
     assert [entry["frame_idx"] for entry in mapped] == [144 + step * 3 for step in range(8)]
     assert all(entry["sample_identity"]["cam_type"] == "cam_front" for entry in mapped)
     assert override_json["audit"]["actor_motion_frame_mapping"]["mapped_entry_count"] == 8
+
+
+def test_far_entry_profile_env_gated(monkeypatch):
+    from driveloop.actor_motion import build_actor_motion_plan
+
+    def plan():
+        return build_actor_motion_plan(
+            actor_controls=[{"actor_id": "actor_01", "category": "motorcycle"}],
+            relations=["left"],
+            motion_primitives=["cut_in"],
+            executable_controls={},
+        )
+
+    monkeypatch.delenv("DRIVELOOP_EGO_FAR_ENTRY", raising=False)
+    frames_default = plan()["runtime_surface"]["frames"]
+    assert frames_default[0]["longitudinal_offset_m"] == 2.0
+
+    monkeypatch.setenv("DRIVELOOP_EGO_FAR_ENTRY", "1")
+    frames_far = plan()["runtime_surface"]["frames"]
+    # Frame 0 starts ~35 m beyond the near profile (img_cond frame-0
+    # anchor: the actor must enter, not materialize; 2026-07-09).
+    assert frames_far[0]["longitudinal_offset_m"] == 35.0
+    assert frames_far[-1]["longitudinal_offset_m"] == -4.0
+    # Lateral approach profile unchanged.
+    assert frames_far[0]["lateral_offset_m"] == frames_default[0]["lateral_offset_m"]
