@@ -72,3 +72,24 @@ non-near distances is capped by the mini checkpoint everywhere on the
 curve. Conclusion stands: stronger checkpoint / longer frame_num is
 the binding lever for synthetic-path visual quality; trajectory
 design is now calibrated and env-parameterized for when it lands.
+
+## Finding 3 final: wo_img intervention confirms the anchor mechanism
+wo_img checkpoint (no first-frame image condition; new config
+drivedreamer2_wo_img_mini_local), same window, near profile: the
+motorcycle IS present from frame 0 - the img_cond first-frame anchor
+hypothesis is confirmed by intervention. But without the image anchor
+the rendering collapses globally: paper-thin actor, drift and
+deformation across frames. Reviewer verdict: worse overall than the
+original img_cond near-start version.
+
+## Consolidated conclusion (four-point design sweep)
+img_cond+near: correct class, pops in. img_cond+mid: natural entry,
+ambiguous class. img_cond+far: person-like. wo_img+near: present from
+frame 0, globally degraded. At the mini checkpoint the best synthetic
+configuration is the ORIGINAL img_cond near profile; its pop-in is the
+cheapest defect available. All sweep knobs are env-gated and default
+OFF, so shipped defaults sit at this optimum. The binding lever for
+synthetic-path visual quality is checkpoint capability (stronger
+weights / longer frame_num); trajectory and mode knobs are exhausted
+and documented. Real-track mode on actor-bearing windows remains the
+quality path for paper-facing videos.
