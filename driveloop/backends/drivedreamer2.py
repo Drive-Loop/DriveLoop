@@ -353,6 +353,196 @@ class DriveDreamer2Backend(GenerationBackend):
             identities.append(identity)
         return identities
 
+    def _build_source_bound_front_records(
+        self,
+        source_sample_binding: dict | None,
+    ) -> list[dict]:
+        """Selected-window cam_front records (with boxes/labels/calib),
+        one per relative step, for real-track ego injection."""
+        if not isinstance(source_sample_binding, dict) or source_sample_binding.get("ready") is not True:
+            return []
+        labels_path_value = source_sample_binding.get("labels_path")
+        dd2_batch_skip = source_sample_binding.get("dd2_batch_skip")
+        if labels_path_value is None or dd2_batch_skip is None:
+            return []
+        try:
+            from scripts.run_dd2_batch_sampler_audit import (
+                candidate_camera_starts,
+                load_records,
+                selected_frame_indices,
+            )
+
+            records = load_records(Path(labels_path_value))
+            starts = candidate_camera_starts(
+                records,
+                frame_num=self.source_selector_frame_num,
+                hz_factor=self.source_selector_hz_factor,
+                video_split_rate=self.source_selector_video_split_rate,
+                multiview=self.source_selector_multiview,
+            )
+            selected_indices = selected_frame_indices(
+                starts[int(dd2_batch_skip)],
+                frame_num=self.source_selector_frame_num,
+                hz_factor=self.source_selector_hz_factor,
+            )
+        except Exception:
+            return []
+        front_records = []
+        for position, record_index in enumerate(selected_indices):
+            if record_index < 0 or record_index >= len(records):
+                continue
+            record = records[record_index]
+            if str(record.get("cam_type") or "").lower() != "cam_front":
+                continue
+            front_records.append(
+                {
+                    "relative_step": int(position % self.source_selector_frame_num),
+                    "record_index": int(record_index),
+                    "record": record,
+                }
+            )
+        return front_records
+
+    def _map_real_track_to_ego_entries(
+        self,
+        per_frame_boxes: list[dict],
+        source_sample_binding: dict | None,
+    ) -> tuple[list[dict], dict]:
+        """Real-track ego injection: when the source-bound window already
+        contains a real actor of the requested category, lift ITS per-frame
+        cam_front box into the ego frame and emit it on the C4 surface
+        (true per-view projections), suppressing the synthetic stand-in.
+        A synthetic duplicate next to a real target produces overlapping
+        conditioning (measured 2026-07-09: min gap 3.7 m, crossing tracks).
+        Selection prefers the binding instance_token, then track continuity.
+        Disable with DRIVELOOP_EGO_REAL_TRACK=0 to force the synthetic path."""
+        if os.environ.get("DRIVELOOP_EGO_REAL_TRACK", "1") == "0":
+            return [], {"available": False, "reason": "real_track_mode_disabled"}
+        category = next(
+            (str(entry.get("category")) for entry in per_frame_boxes if isinstance(entry, dict) and entry.get("category")),
+            None,
+        )
+        if not category:
+            return [], {"available": False, "reason": "no_requested_category"}
+        front_records = self._build_source_bound_front_records(source_sample_binding)
+        if not front_records:
+            return [], {"available": False, "reason": "no_source_bound_front_records"}
+        identities = self._build_source_bound_sample_identities(source_sample_binding)
+        identities_by_step: dict[int, list[dict]] = {}
+        for identity in identities:
+            if identity.get("available") is False:
+                continue
+            identities_by_step.setdefault(int(identity["relative_step"]), []).append(identity)
+
+        selector = source_sample_binding.get("selector", {}) if isinstance(source_sample_binding, dict) else {}
+        instance_token = str(
+            selector.get("instance_token")
+            or source_sample_binding.get("instance_token")
+            or ""
+        )
+
+        entries = []
+        track_points = []
+        missing_steps = []
+        selection_basis = "category_nearest_to_previous"
+        previous_box = None
+        for item in sorted(front_records, key=lambda x: x["relative_step"]):
+            record = item["record"]
+            step = item["relative_step"]
+            boxes = record.get("boxes3d")
+            labels = list(record.get("ori_labels3d", []))
+            if boxes is None or len(labels) == 0:
+                missing_steps.append(step)
+                continue
+            candidates = [
+                (index, [float(v) for v in boxes[index]])
+                for index in range(min(len(labels), len(boxes)))
+                if category.lower() in str(labels[index]).lower()
+            ]
+            if not candidates:
+                missing_steps.append(step)
+                continue
+            record_instance_tokens = record.get("instance_tokens")
+            if instance_token and isinstance(record_instance_tokens, (list, tuple)) and len(record_instance_tokens) == len(labels):
+                exact = [(i, b) for i, b in candidates if str(record_instance_tokens[i]) == instance_token]
+                if exact:
+                    candidates = exact
+                    selection_basis = "binding_instance_token"
+            if previous_box is not None and len(candidates) > 1:
+                candidates.sort(key=lambda ib: (ib[1][0] - previous_box[0]) ** 2 + (ib[1][2] - previous_box[2]) ** 2)
+            else:
+                candidates.sort(key=lambda ib: ib[1][0] ** 2 + ib[1][2] ** 2)
+            box_index, box9 = candidates[0]
+            previous_box = box9
+            calib = record.get("calib", {})
+            cam2ego = calib.get("cam2ego")
+            ego2global = calib.get("ego2global")
+            if cam2ego is None or ego2global is None:
+                missing_steps.append(step)
+                continue
+            cam2ego = cam2ego.tolist() if hasattr(cam2ego, "tolist") else cam2ego
+            ego2global = ego2global.tolist() if hasattr(ego2global, "tolist") else ego2global
+            ego_payload = cam_box9_to_ego_entry(box9, cam2ego)
+            matches = identities_by_step.get(step, [])
+            entries.append(
+                {
+                    "relative_frame_idx": step,
+                    "frame_idx": record.get("frame_idx"),
+                    "actor_id": instance_token or f"real_track_{category}",
+                    "synthetic_track_id": None,
+                    "category": category,
+                    "ego": ego_payload,
+                    "ref_ego2global": ego2global,
+                    "sample_identities": [
+                        {
+                            "cam_type": identity.get("cam_type"),
+                            "frame_idx": identity.get("frame_idx"),
+                            "sample_token": identity.get("sample_token"),
+                            "scene_token": identity.get("scene_token"),
+                        }
+                        for identity in matches
+                    ],
+                    "source_record_indices": {
+                        str(identity.get("cam_type")): identity.get("record_index")
+                        for identity in matches
+                    },
+                    "frame_mapping": {
+                        "mode": "real_track_relative_step_to_all_cam_sample_identities",
+                        "relative_step": step,
+                    },
+                    "source": "source_bound_real_track",
+                    "provenance": "driveloop_real_track_ego_injection",
+                    "motion_surface": "boxes3d.per_frame_append_ego",
+                    "heading": {"mode": "real_track_annotation"},
+                    "source_box_index": box_index,
+                }
+            )
+            track_points.append(
+                {
+                    "relative_step": step,
+                    "frame_idx": record.get("frame_idx"),
+                    "cam_x": round(box9[0], 3),
+                    "cam_z": round(box9[2], 3),
+                }
+            )
+
+        return (
+            entries,
+            {
+                "available": bool(entries),
+                "mode": "source_bound_real_track_ego",
+                "reason": None if entries else "no_real_track_boxes_for_category",
+                "category": category,
+                "selection_basis": selection_basis if entries else None,
+                "mapped_entry_count": len(entries),
+                "missing_relative_steps": sorted(set(missing_steps)),
+                "track_points": track_points,
+                "synthetic_suppressed_count": len(per_frame_boxes) if entries else 0,
+                "heading_mode": "real_track_annotation" if entries else None,
+                "claim_boundary": "Real-track ego mapping reinforces existing scene actors through per-view conditioning; it is not video semantic proof.",
+            },
+        )
+
     def _map_per_frame_actor_boxes_to_source_bound_samples(
         self,
         per_frame_boxes: list[dict],
@@ -617,12 +807,24 @@ class DriveDreamer2Backend(GenerationBackend):
         per_frame_append_ego_boxes: list[dict] = []
         if per_frame_append_boxes and ego_injection_enabled:
             (
-                per_frame_append_ego_boxes,
-                actor_motion_frame_mapping,
-            ) = self._map_per_frame_actor_boxes_to_ego_entries(
+                real_track_entries,
+                real_track_mapping,
+            ) = self._map_real_track_to_ego_entries(
                 per_frame_append_boxes,
                 source_sample_binding,
             )
+            if real_track_entries:
+                per_frame_append_ego_boxes = real_track_entries
+                actor_motion_frame_mapping = real_track_mapping
+            else:
+                (
+                    per_frame_append_ego_boxes,
+                    actor_motion_frame_mapping,
+                ) = self._map_per_frame_actor_boxes_to_ego_entries(
+                    per_frame_append_boxes,
+                    source_sample_binding,
+                )
+                actor_motion_frame_mapping["real_track_fallback_reason"] = real_track_mapping.get("reason")
             # The legacy per-cam clone surface is suppressed when the
             # ego-frame surface is active to avoid double injection.
             per_frame_append_boxes = []

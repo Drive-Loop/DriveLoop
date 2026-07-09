@@ -375,6 +375,108 @@ def test_backend_mapping_applies_tangent_heading_and_env_disable(monkeypatch):
     assert all("heading" not in e for e in mapped_off)
 
 
+REAL_MOTO_BOX = [-9.1778, 1.1333, 18.7546, 0.498, 1.761, 0.697, 0.0, 1.5725, 0.0]
+
+
+def _front_record(frame_idx, moto_box=REAL_MOTO_BOX, instance="inst-moto"):
+    import numpy as np
+
+    return {
+        "cam_type": "cam_front",
+        "frame_idx": frame_idx,
+        "sample_token": "tok",
+        "scene_token": "scene",
+        "boxes3d": np.asarray(
+            [[1.0, 1.5, 30.0, 1.9, 1.6, 4.5, 0.0, 0.1, 0.0], moto_box], dtype=np.float64
+        ),
+        "ori_labels3d": ["vehicle.car", "vehicle.motorcycle"],
+        "instance_tokens": ["inst-car", instance],
+        "calib": {"cam2ego": CAM2EGO_FRONT, "ego2global": E2G_FRONT},
+    }
+
+
+def _real_track_backend(monkeypatch, front_records, binding=None):
+    backend = object.__new__(DriveDreamer2Backend)
+    monkeypatch.setattr(
+        backend,
+        "_build_source_bound_sample_identities",
+        lambda b: _identities_with_calib(ALL_CAMS, frame_idx=100),
+        raising=False,
+    )
+    monkeypatch.setattr(
+        backend,
+        "_build_source_bound_front_records",
+        lambda b: front_records,
+        raising=False,
+    )
+    return backend
+
+
+def test_real_track_mode_lifts_real_box_and_suppresses_synthetic(monkeypatch):
+    from driveloop.ego_injection import cam_box9_to_ego_entry
+
+    monkeypatch.delenv("DRIVELOOP_EGO_REAL_TRACK", raising=False)
+    backend = _real_track_backend(
+        monkeypatch,
+        [{"relative_step": 0, "record_index": 30, "record": _front_record(100)}],
+    )
+    binding = {"ready": True, "selector": {"instance_token": "inst-moto"}}
+    entries, mapping = backend._map_real_track_to_ego_entries([_plan_box(0)], binding)
+
+    assert mapping["mode"] == "source_bound_real_track_ego"
+    assert mapping["selection_basis"] == "binding_instance_token"
+    assert mapping["synthetic_suppressed_count"] == 1
+    assert len(entries) == 1
+    entry = entries[0]
+    assert entry["source"] == "source_bound_real_track"
+    assert entry["actor_id"] == "inst-moto"
+    assert entry["heading"]["mode"] == "real_track_annotation"
+    expected = cam_box9_to_ego_entry(REAL_MOTO_BOX, CAM2EGO_FRONT)
+    assert entry["ego"]["center_ego"] == expected["center_ego"]
+    assert {i["cam_type"] for i in entry["sample_identities"]} == set(ALL_CAMS)
+
+
+def test_real_track_mode_env_disable_and_fallback(monkeypatch):
+    backend = _real_track_backend(
+        monkeypatch,
+        [{"relative_step": 0, "record_index": 30, "record": _front_record(100)}],
+    )
+    monkeypatch.setenv("DRIVELOOP_EGO_REAL_TRACK", "0")
+    entries, mapping = backend._map_real_track_to_ego_entries([_plan_box(0)], {"ready": True})
+    assert entries == []
+    assert mapping["reason"] == "real_track_mode_disabled"
+
+    monkeypatch.delenv("DRIVELOOP_EGO_REAL_TRACK", raising=False)
+    record = _front_record(100)
+    record["ori_labels3d"] = ["vehicle.car", "vehicle.car"]
+    backend2 = _real_track_backend(
+        monkeypatch,
+        [{"relative_step": 0, "record_index": 30, "record": record}],
+    )
+    entries2, mapping2 = backend2._map_real_track_to_ego_entries([_plan_box(0)], {"ready": True})
+    assert entries2 == []
+    assert mapping2["reason"] == "no_real_track_boxes_for_category"
+
+
+def test_real_track_entry_roundtrips_to_original_annotation(monkeypatch):
+    import numpy as np
+
+    monkeypatch.delenv("DRIVELOOP_EGO_REAL_TRACK", raising=False)
+    backend = _real_track_backend(
+        monkeypatch,
+        [{"relative_step": 0, "record_index": 30, "record": _front_record(100)}],
+    )
+    entries, _ = backend._map_real_track_to_ego_entries([_plan_box(0)], {"ready": True})
+    override = _override(entries)
+    front = _sample("cam_front", CAM2EGO_FRONT, E2G_FRONT)
+    updated, audit = apply_dd2_override_to_sample(front, override)
+
+    assert updated["boxes3d"].shape == (1, 9)
+    assert np.allclose(updated["boxes3d"][0][:6], REAL_MOTO_BOX[:6], atol=1e-5)
+    applied = [a for a in audit["applied"] if a.get("mode") == "per_frame_append_ego"]
+    assert len(applied) == 1
+
+
 def test_emission_to_consumption_roundtrip_reproduces_cam_front_plan_box(monkeypatch):
     backend = object.__new__(DriveDreamer2Backend)
     monkeypatch.setattr(
