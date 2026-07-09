@@ -99,34 +99,41 @@ class OpenCVFrameReader:
 class UltralyticsYOLODetector:
     def __init__(self, weights: str | Path, confidence_threshold: float = 0.25) -> None:
         self.confidence_threshold = confidence_threshold
+        self.weights = str(weights)
+        self.model = self._load_model()
+
+    def _load_model(self) -> Any:
         try:
             from ultralytics import YOLO  # type: ignore
         except ImportError as exc:
             raise RuntimeError("ultralytics is required for YOLO detection") from exc
-        self.model = YOLO(str(weights))
+        return YOLO(self.weights)
 
     def release_gpu(self) -> None:
-        """Move the detector off the GPU and free the CUDA cache.
+        """Drop the model and free the CUDA cache; the model is reloaded
+        lazily on the next detect call.
 
         The experiment driver holds this detector while the DD2
         generation subprocess needs nearly the whole card (measured
         2026-07-09: detector-held 1.5 GiB caused CUDA OOM in the UNet
-        after several closed-loop iterations on a 22 GiB A10).
-        Ultralytics re-selects the device on the next predict call."""
+        after several closed-loop iterations on a 22 GiB A10). Moving
+        the weights to CPU is NOT sufficient: the ultralytics predictor
+        caches its device and then feeds CUDA inputs to CPU weights
+        (measured crash on the following evaluation)."""
+        self.model = None
         try:
+            import gc
+
             import torch
         except ImportError:
             return
-        inner = getattr(self.model, "model", None)
-        if inner is not None and hasattr(inner, "to"):
-            try:
-                inner.to("cpu")
-            except Exception:
-                pass
+        gc.collect()
         if torch.cuda.is_available():
             torch.cuda.empty_cache()
 
     def detect(self, frame: Any, frame_index: int) -> List[Detection]:
+        if self.model is None:
+            self.model = self._load_model()
         source = frame
         temp_path: Path | None = None
         if not isinstance(frame, (str, Path)):

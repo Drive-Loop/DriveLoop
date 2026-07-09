@@ -11,10 +11,24 @@ from driveloop.perception_video import UltralyticsYOLODetector
 from driveloop.schema import Evaluation, Generation
 
 
-def test_yolo_detector_release_gpu_is_safe_without_loaded_cuda_model():
+def test_yolo_detector_release_gpu_drops_model_and_detect_reloads():
     detector = object.__new__(UltralyticsYOLODetector)
-    detector.model = object()  # no inner .model attribute
+    detector.confidence_threshold = 0.25
+    detector.weights = "fake.pt"
+    reloads = []
+
+    class _FakeModel:
+        def predict(self, source, verbose):
+            return []
+
+    detector._load_model = lambda: reloads.append(1) or _FakeModel()
+    detector.model = _FakeModel()
+
     detector.release_gpu()  # must not raise
+    assert detector.model is None
+
+    assert detector.detect("frame.jpg", 0) == []
+    assert reloads == [1]  # lazily reloaded exactly once
 
 
 class _ReleaseTrackingDetector:
