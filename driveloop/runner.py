@@ -139,6 +139,9 @@ class DriveLoopRunner:
             )
 
             evaluation = self.evaluator.evaluate(generation)
+            release_gpu = getattr(getattr(self.evaluator, "detector", None), "release_gpu", None)
+            if callable(release_gpu):
+                release_gpu()
             evaluation = self._with_source_selection_diagnosis(evaluation, source_selection_dict)
             if self.config.use_task_utility:
                 utility_weights = (

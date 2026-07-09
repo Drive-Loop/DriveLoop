@@ -105,6 +105,27 @@ class UltralyticsYOLODetector:
             raise RuntimeError("ultralytics is required for YOLO detection") from exc
         self.model = YOLO(str(weights))
 
+    def release_gpu(self) -> None:
+        """Move the detector off the GPU and free the CUDA cache.
+
+        The experiment driver holds this detector while the DD2
+        generation subprocess needs nearly the whole card (measured
+        2026-07-09: detector-held 1.5 GiB caused CUDA OOM in the UNet
+        after several closed-loop iterations on a 22 GiB A10).
+        Ultralytics re-selects the device on the next predict call."""
+        try:
+            import torch
+        except ImportError:
+            return
+        inner = getattr(self.model, "model", None)
+        if inner is not None and hasattr(inner, "to"):
+            try:
+                inner.to("cpu")
+            except Exception:
+                pass
+        if torch.cuda.is_available():
+            torch.cuda.empty_cache()
+
     def detect(self, frame: Any, frame_index: int) -> List[Detection]:
         source = frame
         temp_path: Path | None = None
