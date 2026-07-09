@@ -250,16 +250,22 @@ def _build_motion_frames(
     if maneuver == "cut_in":
         magnitudes = _linspace(1.6, -0.8, frame_count)
         longitudinal_offsets = _linspace(2.0, -0.4, frame_count)
-        if os.environ.get("DRIVELOOP_EGO_FAR_ENTRY") == "1":
+        far_entry = os.environ.get("DRIVELOOP_EGO_FAR_ENTRY")
+        if far_entry and far_entry != "0":
             # Far-entry profile: img_cond anchors frame 0 to the REAL
             # source image, so an actor injected already-close pops
             # into existence (clean-window human review, 2026-07-09).
-            # Starting ~55 m out (tens of pixels at frame 0) makes the
-            # actor enter perceptually instead of materializing, and
-            # rendering quality was measured to rise with injection
-            # distance at the mini config (2026-07-08). Default OFF:
+            # Starting far makes the actor enter perceptually instead
+            # of materializing; too far and the mini checkpoint loses
+            # the actor class (v4 review). "1" keeps the ~55 m profile;
+            # a numeric value sets the frame-0 longitudinal offset in
+            # meters, for probing the tradeoff midpoint. Default OFF:
             # the near profile's geometry is sweep-calibrated.
-            longitudinal_offsets = _linspace(35.0, -4.0, frame_count)
+            try:
+                start_offset = 35.0 if far_entry == "1" else float(far_entry)
+            except ValueError:
+                start_offset = 35.0
+            longitudinal_offsets = _linspace(start_offset, -4.0, frame_count)
     else:
         magnitudes = _linspace(1.6, -1.6, frame_count)
         longitudinal_offsets = _linspace(1.8, 0.0, frame_count)
