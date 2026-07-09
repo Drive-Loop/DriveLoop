@@ -12,7 +12,7 @@ from typing import Optional
 from driveloop.backends.base import GenerationBackend
 from driveloop.actor_motion import build_actor_motion_surface_plan
 from driveloop.dd2_override import read_override_audit
-from driveloop.ego_injection import cam_box9_to_ego_entry
+from driveloop.ego_injection import apply_trajectory_tangent_heading, cam_box9_to_ego_entry
 from driveloop.schema import DriveLoopRequest, Generation
 from driveloop.source_sample_binding import build_source_sample_binding
 
@@ -525,11 +525,16 @@ class DriveDreamer2Backend(GenerationBackend):
                 }
             )
 
+        heading_mode = "plan_yaw_tangent_disabled"
+        if os.environ.get("DRIVELOOP_EGO_TANGENT_HEADING", "1") != "0":
+            heading_mode = apply_trajectory_tangent_heading(mapped_entries)
+
         return (
             mapped_entries,
             {
                 "available": bool(mapped_entries),
                 "mode": "ego_frame_one_entry_per_video_frame",
+                "heading_mode": heading_mode,
                 "source_identity_count": len(valid_identities),
                 "input_per_frame_count": len(per_frame_boxes),
                 "mapped_entry_count": len(mapped_entries),

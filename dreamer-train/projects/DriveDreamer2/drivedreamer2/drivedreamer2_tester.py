@@ -218,6 +218,18 @@ class DriveDreamer2_Tester(Tester):
         if self.is_main_process:
             save_dir = self.kwargs.get('save_dir', None)
             os.makedirs(save_dir,exist_ok=True)
+            num_steps_override = os.environ.get("DRIVELOOP_DD2_NUM_INF_STEPS")
+            if num_steps_override:
+                self.num_inf_steps = int(num_steps_override)
+                self.logger.info('DRIVELOOP_DD2_NUM_INF_STEPS=%s: override num_inf_steps', num_steps_override)
+            for kwargs_key, env_key in (
+                ('min_guidance_scale', 'DRIVELOOP_DD2_MIN_GUIDANCE'),
+                ('max_guidance_scale', 'DRIVELOOP_DD2_MAX_GUIDANCE'),
+            ):
+                env_value = os.environ.get(env_key)
+                if env_value:
+                    self.kwargs[kwargs_key] = float(env_value)
+                    self.logger.info('%s=%s: override %s', env_key, env_value, kwargs_key)
             generator = torch.Generator(device=self.device)
             generator.manual_seed(self.seed)
             idx = 0

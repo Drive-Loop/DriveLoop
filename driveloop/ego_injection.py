@@ -38,6 +38,44 @@ def cam_box9_to_ego_entry(box9, cam2ego) -> dict:
     }
 
 
+def apply_trajectory_tangent_heading(mapped_entries: list) -> str:
+    """Replace each entry's plan heading with the tangent of the actor's
+    GLOBAL trajectory, re-expressed in that frame's reference ego frame.
+
+    Rationale: the motion plan carries a constant yaw, so a cutting-in
+    actor slides sideways without turning (physically inconsistent
+    conditioning). The tangent must be taken on the GLOBAL positions
+    (ego motion + relative motion): the ego usually moves faster than
+    the relative drift, so a relative-frame tangent would point
+    backwards. Entries with tiny global displacement keep the plan
+    heading. Mutates entries in place; returns the resulting mode."""
+    ordered = sorted(mapped_entries, key=lambda e: int(e.get("relative_frame_idx", 0)))
+    if len(ordered) < 2:
+        return "plan_yaw_single_frame"
+    transforms = [np.asarray(e["ref_ego2global"], dtype=np.float64) for e in ordered]
+    centers = [
+        (transforms[i] @ np.append(np.asarray(ordered[i]["ego"]["center_ego"], dtype=np.float64), 1.0))[:3]
+        for i in range(len(ordered))
+    ]
+    changed = 0
+    for i, entry in enumerate(ordered):
+        j = i + 1 if i + 1 < len(ordered) else i
+        k = i if i + 1 < len(ordered) else i - 1
+        displacement = centers[j] - centers[k]
+        if float(np.linalg.norm(displacement[:2])) < 0.05:
+            entry["heading"] = {"mode": "plan_yaw_kept_small_displacement"}
+            continue
+        rotation = transforms[i][:3, :3]
+        v_ego = rotation.T @ displacement
+        entry["heading"] = {
+            "mode": "trajectory_tangent_global",
+            "plan_heading_ego": float(entry["ego"]["heading_ego"]),
+        }
+        entry["ego"]["heading_ego"] = float(np.arctan2(v_ego[1], v_ego[0]))
+        changed += 1
+    return "trajectory_tangent_global" if changed else "plan_yaw_kept_small_displacement"
+
+
 def ego_entry_to_cam_box9(entry, ref_ego2global, cam2ego_dst, ego2global_dst) -> list:
     """Ego-frame entry (in the reference record's ego pose) -> camera-frame
     box9 of the destination record."""

@@ -299,6 +299,82 @@ def test_build_override_json_flag_off_keeps_legacy_surface(monkeypatch):
     assert len(boxes3d["per_frame_append"]) == 2  # view-filtered per-cam clones
 
 
+def _tangent_entry(step, e2g, center):
+    return {
+        "relative_frame_idx": step,
+        "ref_ego2global": e2g,
+        "ego": {"center_ego": list(center), "dims": [0.8, 1.4, 2.2], "heading_ego": -0.25},
+    }
+
+
+def _translated(e2g, dx):
+    out = [list(row) for row in e2g]
+    out[0][3] += dx
+    return out
+
+
+IDENTITY_E2G = [[1.0, 0, 0, 0], [0, 1.0, 0, 0], [0, 0, 1.0, 0], [0, 0, 0, 1.0]]
+
+
+def test_tangent_heading_uses_global_motion_when_ego_advances():
+    from driveloop.ego_injection import apply_trajectory_tangent_heading
+
+    # Ego advances 5 m/frame; relative x drifts BACK 0.34 m/frame.
+    # Global motion is forward (+4.66 m/frame): heading must be ~0,
+    # not ~pi (which a relative-frame tangent would produce).
+    entries = [
+        _tangent_entry(k, _translated(IDENTITY_E2G, 5.0 * k), [20.0 - 0.34 * k, 3.5, 1.0])
+        for k in range(3)
+    ]
+    mode = apply_trajectory_tangent_heading(entries)
+
+    assert mode == "trajectory_tangent_global"
+    for e in entries:
+        assert abs(e["ego"]["heading_ego"]) < 0.1
+        assert e["heading"]["mode"] == "trajectory_tangent_global"
+        assert e["heading"]["plan_heading_ego"] == -0.25
+
+
+def test_tangent_heading_static_ego_keeps_plan_for_tiny_displacement():
+    from driveloop.ego_injection import apply_trajectory_tangent_heading
+
+    entries = [
+        _tangent_entry(k, IDENTITY_E2G, [20.0, 3.5, 1.0])
+        for k in range(3)
+    ]
+    mode = apply_trajectory_tangent_heading(entries)
+
+    assert mode == "plan_yaw_kept_small_displacement"
+    for e in entries:
+        assert e["ego"]["heading_ego"] == -0.25
+
+
+def test_backend_mapping_applies_tangent_heading_and_env_disable(monkeypatch):
+    def build(env_value):
+        backend = object.__new__(DriveDreamer2Backend)
+        identities = _identities_with_calib(ALL_CAMS, frame_idx=100) + [
+            {**i, "relative_step": 1, "frame_idx": 101, "record_index": i["record_index"] + 6}
+            for i in _identities_with_calib(ALL_CAMS, frame_idx=101)
+        ]
+        monkeypatch.setattr(
+            backend, "_build_source_bound_sample_identities", lambda binding: identities, raising=False
+        )
+        if env_value is None:
+            monkeypatch.delenv("DRIVELOOP_EGO_TANGENT_HEADING", raising=False)
+        else:
+            monkeypatch.setenv("DRIVELOOP_EGO_TANGENT_HEADING", env_value)
+        boxes = [_plan_box(0), {**_plan_box(1), "box3d": [-3.2, 1.8, 21.0, 0.8, 1.4, 2.2, 0.0, -0.25, 0.0]}]
+        return backend._map_per_frame_actor_boxes_to_ego_entries(boxes, {})
+
+    mapped, mapping = build(None)
+    assert mapping["heading_mode"] == "trajectory_tangent_global"
+    assert all(e["heading"]["mode"] == "trajectory_tangent_global" for e in mapped)
+
+    mapped_off, mapping_off = build("0")
+    assert mapping_off["heading_mode"] == "plan_yaw_tangent_disabled"
+    assert all("heading" not in e for e in mapped_off)
+
+
 def test_emission_to_consumption_roundtrip_reproduces_cam_front_plan_box(monkeypatch):
     backend = object.__new__(DriveDreamer2Backend)
     monkeypatch.setattr(
