@@ -1,0 +1,280 @@
+{
+  "schema_version": "driveloop_tau_reanchoring.v0",
+  "capability_configuration": "candidate70_mini_ckpt_8f_ego_injection_v9",
+  "anchor_arm": "open_loop",
+  "current_tau": 0.45,
+  "primary_rule": "anchor_mean_plus_1_std",
+  "proposed_tau": 0.469559,
+  "proposed_tau_grid_0p05": 0.45,
+  "candidates": {
+    "anchor_mean_plus_0p5_std": 0.390019,
+    "anchor_mean_plus_1_std": 0.469559,
+    "anchor_p75": 0.406618,
+    "anchor_p90": 0.490115
+  },
+  "arms": {
+    "open_loop": {
+      "directory": "outputs/driveloop/exp_v9_open_loop",
+      "case_names": [
+        "m1_night_cut_in_left",
+        "m2_rainy_night_cut_in",
+        "m3_lane_change_left_to_ego",
+        "m4_intersection_approach",
+        "m5_low_visibility_cut_in"
+      ],
+      "best_j": [
+        0.2,
+        0.545779,
+        0.406618,
+        0.2,
+        0.2
+      ],
+      "best_j_stats": {
+        "count": 5,
+        "mean": 0.310479,
+        "std": 0.15908,
+        "min": 0.2,
+        "max": 0.545779,
+        "median": 0.2,
+        "p75": 0.406618,
+        "p90": 0.490115
+      },
+      "attempt_j_stats": {
+        "count": 5,
+        "mean": 0.310479,
+        "std": 0.15908,
+        "min": 0.2,
+        "max": 0.545779,
+        "median": 0.2,
+        "p75": 0.406618,
+        "p90": 0.490115
+      },
+      "accepted_count_recorded": 0
+    },
+    "closed_loop": {
+      "directory": "outputs/driveloop/exp_v9_closed_loop_r3",
+      "case_names": [
+        "m1_night_cut_in_left",
+        "m2_rainy_night_cut_in",
+        "m3_lane_change_left_to_ego",
+        "m4_intersection_approach",
+        "m5_low_visibility_cut_in"
+      ],
+      "best_j": [
+        0.2,
+        0.545779,
+        0.406618,
+        0.2,
+        0.2
+      ],
+      "best_j_stats": {
+        "count": 5,
+        "mean": 0.310479,
+        "std": 0.15908,
+        "min": 0.2,
+        "max": 0.545779,
+        "median": 0.2,
+        "p75": 0.406618,
+        "p90": 0.490115
+      },
+      "attempt_j_stats": {
+        "count": 13,
+        "mean": 0.242492,
+        "std": 0.107541,
+        "min": 0.2,
+        "max": 0.545779,
+        "median": 0.2,
+        "p75": 0.2,
+        "p90": 0.365294
+      },
+      "accepted_count_recorded": 1
+    },
+    "no_escalation": {
+      "directory": "outputs/driveloop/exp_v9_no_escalation",
+      "case_names": [
+        "m1_night_cut_in_left",
+        "m2_rainy_night_cut_in",
+        "m3_lane_change_left_to_ego",
+        "m4_intersection_approach",
+        "m5_low_visibility_cut_in"
+      ],
+      "best_j": [
+        0.2,
+        0.545779,
+        0.406618,
+        0.2,
+        0.2
+      ],
+      "best_j_stats": {
+        "count": 5,
+        "mean": 0.310479,
+        "std": 0.15908,
+        "min": 0.2,
+        "max": 0.545779,
+        "median": 0.2,
+        "p75": 0.406618,
+        "p90": 0.490115
+      },
+      "attempt_j_stats": {
+        "count": 13,
+        "mean": 0.242492,
+        "std": 0.107541,
+        "min": 0.2,
+        "max": 0.545779,
+        "median": 0.2,
+        "p75": 0.2,
+        "p90": 0.365294
+      },
+      "accepted_count_recorded": 1
+    }
+  },
+  "acceptance_table": {
+    "current_tau": {
+      "tau": 0.45,
+      "per_arm": {
+        "open_loop": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in"
+          ]
+        },
+        "closed_loop": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in"
+          ]
+        },
+        "no_escalation": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in"
+          ]
+        }
+      }
+    },
+    "anchor_mean_plus_0p5_std": {
+      "tau": 0.390019,
+      "per_arm": {
+        "open_loop": {
+          "accepted_count": 2,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in",
+            "m3_lane_change_left_to_ego"
+          ]
+        },
+        "closed_loop": {
+          "accepted_count": 2,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in",
+            "m3_lane_change_left_to_ego"
+          ]
+        },
+        "no_escalation": {
+          "accepted_count": 2,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in",
+            "m3_lane_change_left_to_ego"
+          ]
+        }
+      }
+    },
+    "anchor_mean_plus_1_std": {
+      "tau": 0.469559,
+      "per_arm": {
+        "open_loop": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in"
+          ]
+        },
+        "closed_loop": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in"
+          ]
+        },
+        "no_escalation": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in"
+          ]
+        }
+      }
+    },
+    "anchor_p75": {
+      "tau": 0.406618,
+      "per_arm": {
+        "open_loop": {
+          "accepted_count": 2,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in",
+            "m3_lane_change_left_to_ego"
+          ]
+        },
+        "closed_loop": {
+          "accepted_count": 2,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in",
+            "m3_lane_change_left_to_ego"
+          ]
+        },
+        "no_escalation": {
+          "accepted_count": 2,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in",
+            "m3_lane_change_left_to_ego"
+          ]
+        }
+      }
+    },
+    "anchor_p90": {
+      "tau": 0.490115,
+      "per_arm": {
+        "open_loop": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in"
+          ]
+        },
+        "closed_loop": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in"
+          ]
+        },
+        "no_escalation": {
+          "accepted_count": 1,
+          "case_count": 5,
+          "accepted_cases": [
+            "m2_rainy_night_cut_in"
+          ]
+        }
+      }
+    }
+  },
+  "claim_boundary": {
+    "tau_reanchoring_is_not_video_semantic_success": true,
+    "anchored_on_single_arm_distribution": true,
+    "anchor_arm_is_open_loop_baseline": true,
+    "comparison_requires_fresh_runs_at_frozen_tau": true,
+    "reusing_anchoring_runs_for_comparison_is_circular": true,
+    "rule_must_be_rederived_per_capability_configuration": true,
+    "small_anchor_sample_caveat": true,
+    "anchor_case_count": 5,
+    "paper_claims_require_manual_spot_check": true
+  }
+}
