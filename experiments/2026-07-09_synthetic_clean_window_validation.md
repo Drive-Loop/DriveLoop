@@ -59,3 +59,16 @@ checkpoint capability and the first-frame anchor. This closes the
 synthetic-path exploration at the mini config; next levers are the
 stronger checkpoint / longer frame_num, or first-frame condition
 editing.
+
+## Finding 3 closure: three-point distance sweep (v3/v5/v4)
+Start-offset sweep of the synthetic cut-in on the clean window, all
+human-reviewed: 20 m (near, v3) renders a class-correct motorcycle
+that pops into existence; 35 m (mid, v5, DRIVELOOP_EGO_FAR_ENTRY=15)
+enters naturally from the left growing from small - the pop-in is
+GONE - but the actor is class-ambiguous (neither person nor
+motorcycle); 55 m (far, v4) degrades to a person-like figure. The
+far-entry mechanism solves the appearance dynamics; class fidelity at
+non-near distances is capped by the mini checkpoint everywhere on the
+curve. Conclusion stands: stronger checkpoint / longer frame_num is
+the binding lever for synthetic-path visual quality; trajectory
+design is now calibrated and env-parameterized for when it lands.
