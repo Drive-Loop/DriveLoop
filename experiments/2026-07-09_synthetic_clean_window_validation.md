@@ -43,3 +43,19 @@ per-view projection, culling, and per-frame motion verified on a clean
 window; visual insertion quality is limited by the img_cond anchor
 (finding 3) and the mini checkpoint. No perception scores run (the v9
 baseline video belongs to the candidate70 window). Single reviewer.
+
+## Finding 3 follow-up: far-entry trades pop-in for small-actor failure
+Far-entry profile (commit with DRIVELOOP_EGO_FAR_ENTRY, start ~55 m):
+human review of v4 shows the motorcycle class is lost - a person-like
+figure grows in place from small to large. Consistent with the
+2026-07-08 regression record (person-like blob at weak conditioning):
+at ~55 m the actor spans tens of pixels and the mini checkpoint cannot
+render it class-correctly; scale-growth-in-place is the correct
+geometry of an along-axis approach. Synthetic-path appearance is
+therefore bounded on both ends: near start pops into existence
+(img_cond frame-0 anchor), far start fails class rendering. Trajectory
+design moves between failure modes; the binding constraints are
+checkpoint capability and the first-frame anchor. This closes the
+synthetic-path exploration at the mini config; next levers are the
+stronger checkpoint / longer frame_num, or first-frame condition
+editing.
