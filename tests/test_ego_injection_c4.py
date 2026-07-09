@@ -116,6 +116,40 @@ def test_ego_entry_identity_mismatch_not_applied():
     assert skip["selection_skipped_entries"][0]["reason"] == "sample_identity_mismatch"
 
 
+# Idealized rear camera: z_cam = -x_ego, x_cam = +y_ego, y_cam = -z_ego
+# (right-handed; det=+1). A forward actor must be culled here.
+CAM2EGO_BACK = [
+    [0.0, 0.0, -1.0, -0.5],
+    [1.0, 0.0, 0.0, 0.0],
+    [0.0, -1.0, 0.0, 1.5],
+    [0.0, 0.0, 0.0, 1.0],
+]
+
+
+def test_ego_entry_behind_camera_is_culled_before_dd2_depth_assert():
+    override = _override(
+        [
+            {
+                **_ego_entry(),
+                "sample_identities": [
+                    {"cam_type": "cam_back", "frame_idx": 100, "sample_token": "tok", "scene_token": "scene"},
+                ],
+            }
+        ]
+    )
+    back = _sample("cam_back", CAM2EGO_BACK, E2G_FRONT)
+    updated, audit = apply_dd2_override_to_sample(back, override)
+
+    # The forward actor is behind cam_back: no box may be appended,
+    # otherwise the DD2 transform depth assert would crash the run.
+    assert updated["boxes3d"].shape == (0, 9)
+    skip = next(item for item in audit["skipped"] if item.get("mode") == "per_frame_append_ego")
+    culled = skip["conversion_skipped_entries"][0]
+    assert culled["reason"] == "behind_camera_culled"
+    assert culled["center_cam_z"] < 0.0
+    assert audit["changed"]["boxes3d"] is False
+
+
 def test_ego_entry_skipped_when_record_calib_missing_extrinsics():
     override = _override([_ego_entry()])
     sample = _sample("cam_front", CAM2EGO_FRONT, E2G_FRONT)

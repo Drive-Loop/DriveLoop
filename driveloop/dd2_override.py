@@ -382,6 +382,21 @@ def _convert_ego_entries_to_cam_append(
             })
             continue
 
+        # The DD2 transform asserts every box has mean corner depth > 0
+        # (drivedreamer2_transforms.py line ~210); the mean of the 8
+        # corners equals the box center, so injected boxes behind this
+        # camera must be culled HERE (the z>0.5 crop runs only after
+        # that assert). This is the geometric per-view visibility cull
+        # that replaces the legacy target_cam_types view filter.
+        if float(box9[2]) <= 0.0:
+            skipped.append({
+                "reason": "behind_camera_culled",
+                "cam_type": data_dict.get("cam_type"),
+                "center_cam_z": float(box9[2]),
+                "entry_frame_idx": entry.get("frame_idx"),
+            })
+            continue
+
         converted_entry = {
             "category": entry.get("category"),
             "box3d": box9,
