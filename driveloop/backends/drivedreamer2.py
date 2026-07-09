@@ -761,7 +761,14 @@ class DriveDreamer2Backend(GenerationBackend):
         prior levers (synthetic geometry escalation, prompt additions)
         never change the conditioning, making all attempts and arms
         bit-identical under a frozen seed."""
-        parameter_env = {"DRIVELOOP_DD2_SEED_OFFSET": str(int(iteration))}
+        # Run-level seed bank for repeat experiments: attempts within a
+        # run vary by iteration; whole runs vary by DRIVELOOP_DD2_SEED_BANK
+        # (bank 0 reproduces all pre-bank runs byte-identically).
+        try:
+            seed_bank = int(os.environ.get("DRIVELOOP_DD2_SEED_BANK", "0"))
+        except ValueError:
+            seed_bank = 0
+        parameter_env = {"DRIVELOOP_DD2_SEED_OFFSET": str(seed_bank * 100 + int(iteration))}
         generation_escalation = (
             condition.get("generation_escalation") if isinstance(condition, dict) else None
         )

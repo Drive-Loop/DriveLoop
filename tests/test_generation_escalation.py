@@ -81,3 +81,13 @@ def test_saturated_refiner_ablation_does_not_add_generation_escalation():
 
     refinement = refiner.refine(request, _failed_perception_evaluation())
     assert "generation_escalation" not in refinement.condition
+
+
+def test_seed_bank_shifts_run_level_offset(monkeypatch):
+    monkeypatch.setenv("DRIVELOOP_DD2_SEED_BANK", "2")
+    env = _backend()._build_generation_parameter_env({}, 1)
+    assert env["DRIVELOOP_DD2_SEED_OFFSET"] == "201"
+
+    monkeypatch.delenv("DRIVELOOP_DD2_SEED_BANK", raising=False)
+    env0 = _backend()._build_generation_parameter_env({}, 1)
+    assert env0["DRIVELOOP_DD2_SEED_OFFSET"] == "1"  # bank 0 unchanged
