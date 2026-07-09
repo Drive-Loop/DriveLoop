@@ -35,3 +35,9 @@ floor caveat; single window (candidate70), n=5 cases, single closed
 run (run-to-run variance now exists BY DESIGN and needs repeats for
 intervals). Human review of the m4 accepted video is pending and
 gates any paper use of that case.
+
+## Human review (post-record)
+m4 accepted video (iteration_01) verified by reviewer: motorcycle
+visible, approaching from the left adjacent lane, coherent across
+frames. Gate for paper use of this case is cleared at the
+single-reviewer level.
