@@ -74,6 +74,8 @@ class DriveDreamer2Backend(GenerationBackend):
 
         env = os.environ.copy()
         env["PYTORCH_CUDA_ALLOC_CONF"] = "expandable_segments:True"
+        generation_parameter_env = self._build_generation_parameter_env(request.condition, iteration)
+        env.update(generation_parameter_env)
 
         dd2_condition = request.condition.get("dd2_condition", {})
         dd2_prompt = dd2_condition.get("text_prompt") if isinstance(dd2_condition, dict) else None
@@ -231,6 +233,7 @@ class DriveDreamer2Backend(GenerationBackend):
                 "dd2_structural_request_diff": structural_request_diff,
                 "dd2_override_candidate_plan": override_candidate_plan,
                 "dd2_override_json": override_json,
+                "dd2_generation_parameter_env": generation_parameter_env,
                 "dd2_override_audit_path": str(override_audit_path)
                 if override_json.get("available")
                 else None,
@@ -745,6 +748,34 @@ class DriveDreamer2Backend(GenerationBackend):
                 "claim_boundary": "Ego-frame mapping connects structural actor boxes to source-bound DD2 samples; it is not video semantic proof.",
             },
         )
+
+    def _build_generation_parameter_env(
+        self,
+        condition: dict | None,
+        iteration: int,
+    ) -> dict:
+        """Map the refiner's generation_escalation (and the per-attempt
+        seed offset) onto the DD2 tester env overrides. This is the
+        closed-loop lever that reaches the generation itself: v9 showed
+        that with real-track injection and canned-prompt collapse, the
+        prior levers (synthetic geometry escalation, prompt additions)
+        never change the conditioning, making all attempts and arms
+        bit-identical under a frozen seed."""
+        parameter_env = {"DRIVELOOP_DD2_SEED_OFFSET": str(int(iteration))}
+        generation_escalation = (
+            condition.get("generation_escalation") if isinstance(condition, dict) else None
+        )
+        if isinstance(generation_escalation, dict):
+            mapping = {
+                "num_inf_steps": "DRIVELOOP_DD2_NUM_INF_STEPS",
+                "min_guidance_scale": "DRIVELOOP_DD2_MIN_GUIDANCE",
+                "max_guidance_scale": "DRIVELOOP_DD2_MAX_GUIDANCE",
+            }
+            for key, env_key in mapping.items():
+                value = generation_escalation.get(key)
+                if value is not None:
+                    parameter_env[env_key] = str(value)
+        return parameter_env
 
     def _build_override_json(
         self,

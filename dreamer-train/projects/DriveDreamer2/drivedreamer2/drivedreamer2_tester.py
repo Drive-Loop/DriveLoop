@@ -231,7 +231,10 @@ class DriveDreamer2_Tester(Tester):
                     self.kwargs[kwargs_key] = float(env_value)
                     self.logger.info('%s=%s: override %s', env_key, env_value, kwargs_key)
             generator = torch.Generator(device=self.device)
-            generator.manual_seed(self.seed)
+            seed_offset = int(os.environ.get("DRIVELOOP_DD2_SEED_OFFSET", "0"))
+            if seed_offset:
+                self.logger.info('DRIVELOOP_DD2_SEED_OFFSET=%s: reseed per attempt', seed_offset)
+            generator.manual_seed(self.seed + seed_offset)
             idx = 0
             sampler_selected_batch_index = getattr(self, "dd2_sampler_selected_batch_index", None)
             batch_skip = 0 if sampler_selected_batch_index is not None else int(os.environ.get("DRIVELOOP_DD2_BATCH_SKIP", "0"))

@@ -119,6 +119,20 @@ class RuleBasedRefiner:
                 "claim_boundary": "structured-condition escalation; not proof of visual realization",
             }
             notes.append("structural_escalation_level_%d" % level)
+            # Generation-parameter escalation: the only refiner lever
+            # measured to reach the conditioning under real-track ego
+            # injection (v9 2026-07-09: prompt additions collapse to
+            # canned strings; synthetic geometry is superseded).
+            generation_ladder = [
+                {"num_inf_steps": 50},
+                {"num_inf_steps": 50, "max_guidance_scale": 7.0},
+            ]
+            condition["generation_escalation"] = {
+                **generation_ladder[min(level, len(generation_ladder)) - 1],
+                "level": level,
+                "claim_boundary": "generation-parameter escalation; not proof of visual realization",
+            }
+            notes.append("generation_escalation_level_%d" % level)
             if level >= 2:
                 condition["source_rebinding"] = {
                     "candidate_offset": level - 1,
