@@ -2,6 +2,7 @@ from __future__ import annotations
 
 import hashlib
 import json
+import os
 from pathlib import Path
 from typing import Any
 
@@ -9,6 +10,9 @@ import numpy as np
 
 from driveloop.ego_injection import ego_entry_to_cam_box9
 
+
+# DD2 nuScenes raster width (drivedreamer2_transforms.py WIDTH).
+_IMAGE_WIDTH = 1600
 
 _CATEGORY_TO_ORI_LABEL = {
     "animal": "animal",
@@ -381,6 +385,29 @@ def _convert_ego_entries_to_cam_append(
                 "entry_frame_idx": entry.get("frame_idx"),
             })
             continue
+
+        # FOV cull: a box whose CENTER projects outside this camera's
+        # image contributes only clipped corner fragments to the canvas
+        # (junk edge conditioning). Human review of the clean-window
+        # synthetic run (2026-07-09) showed the overlap-view copy
+        # rendered as an actor teleporting between composite tiles.
+        # Applies to injected boxes only; disable via
+        # DRIVELOOP_EGO_FOV_CULL=0 for A/B comparison.
+        if os.environ.get("DRIVELOOP_EGO_FOV_CULL", "1") != "0" and float(box9[2]) > 0.0:
+            intrinsic = calib.get("cam_intrinsic")
+            if intrinsic is not None:
+                intrinsic = np.asarray(intrinsic, dtype=np.float64)
+                fx, cx = float(intrinsic[0][0]), float(intrinsic[0][2])
+                u = fx * float(box9[0]) / float(box9[2]) + cx
+                margin = 0.10 * _IMAGE_WIDTH
+                if u < -margin or u > _IMAGE_WIDTH + margin:
+                    skipped.append({
+                        "reason": "center_outside_image_culled",
+                        "cam_type": data_dict.get("cam_type"),
+                        "projected_u": round(u, 1),
+                        "entry_frame_idx": entry.get("frame_idx"),
+                    })
+                    continue
 
         # The DD2 transform asserts every box has mean corner depth > 0
         # (drivedreamer2_transforms.py line ~210); the mean of the 8

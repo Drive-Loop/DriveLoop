@@ -497,3 +497,47 @@ def test_emission_to_consumption_roundtrip_reproduces_cam_front_plan_box(monkeyp
     # plan box: the round trip must reproduce the original draft box.
     assert np.allclose(updated["boxes3d"][0][:6], plan_box["box3d"][:6], atol=1e-5)
     assert abs(float(updated["boxes3d"][0][7]) - plan_box["box3d"][7]) < 1e-3
+
+
+def test_ego_entry_outside_camera_fov_is_culled(monkeypatch):
+    # Actor 20 m ahead, 3.5 m LEFT: bearing ~10 deg, ~45 deg off the
+    # front-left camera axis - its CENTER projects outside that image,
+    # leaving only clipped corner fragments on the canvas (junk edge
+    # conditioning; human-reviewed teleport artifact, 2026-07-09).
+    monkeypatch.delenv("DRIVELOOP_EGO_FOV_CULL", raising=False)
+    override = _override([_ego_entry()])
+    fl = _sample("cam_front_left", CAM2EGO_FL, E2G_FL)
+    fl["calib"]["cam_intrinsic"] = [
+        [1266.4, 0.0, 800.0, 0.0],
+        [0.0, 1266.4, 450.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+    updated, audit = apply_dd2_override_to_sample(fl, override)
+
+    assert updated["boxes3d"].shape == (0, 9)
+    skip = next(item for item in audit["skipped"] if item.get("mode") == "per_frame_append_ego")
+    culled = skip["conversion_skipped_entries"][0]
+    assert culled["reason"] == "center_outside_image_culled"
+
+    # A/B escape hatch: disabling the cull restores the old behavior.
+    monkeypatch.setenv("DRIVELOOP_EGO_FOV_CULL", "0")
+    fl2 = _sample("cam_front_left", CAM2EGO_FL, E2G_FL)
+    updated2, _ = apply_dd2_override_to_sample(fl2, _override([_ego_entry()]))
+    assert updated2["boxes3d"].shape == (1, 9)
+
+
+def test_ego_entry_centered_in_front_camera_survives_fov_cull(monkeypatch):
+    monkeypatch.delenv("DRIVELOOP_EGO_FOV_CULL", raising=False)
+    front = _sample("cam_front", CAM2EGO_FRONT, E2G_FRONT)
+    front["calib"]["cam_intrinsic"] = [
+        [1266.4, 0.0, 800.0, 0.0],
+        [0.0, 1266.4, 450.0, 0.0],
+        [0.0, 0.0, 1.0, 0.0],
+        [0.0, 0.0, 0.0, 1.0],
+    ]
+    updated, audit = apply_dd2_override_to_sample(front, _override([_ego_entry()]))
+
+    assert updated["boxes3d"].shape == (1, 9)
+    applied = [a for a in audit["applied"] if a.get("mode") == "per_frame_append_ego"]
+    assert applied and applied[0]["accepted_count"] == 1
