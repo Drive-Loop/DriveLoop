@@ -68,7 +68,9 @@ def test_refiner_adds_generation_escalation_ladder():
     escalation2 = refinement2.condition["generation_escalation"]
     assert escalation2["level"] == 2
     assert escalation2["num_inf_steps"] == 50
-    assert escalation2["max_guidance_scale"] == 7.0
+    # max_guidance_scale rung removed: regressed at matched seeds
+    # (m3/m5 attempt 3, 2026-07-09 seed-only attribution record).
+    assert "max_guidance_scale" not in escalation2
 
 
 def test_saturated_refiner_ablation_does_not_add_generation_escalation():

@@ -123,9 +123,14 @@ class RuleBasedRefiner:
             # measured to reach the conditioning under real-track ego
             # injection (v9 2026-07-09: prompt additions collapse to
             # canned strings; synthetic geometry is superseded).
+            # Rung 2 (max_guidance_scale 7.0) was removed: at matched
+            # seeds it regressed both cases that reached it (m3, m5
+            # attempt 3 back to the 0.2 floor, 2026-07-09 seed-only
+            # attribution). All levels use the measured-positive
+            # steps-50 setting; per-attempt reseeding supplies the
+            # remaining variation.
             generation_ladder = [
                 {"num_inf_steps": 50},
-                {"num_inf_steps": 50, "max_guidance_scale": 7.0},
             ]
             condition["generation_escalation"] = {
                 **generation_ladder[min(level, len(generation_ladder)) - 1],
