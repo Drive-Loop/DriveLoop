@@ -162,7 +162,16 @@ class NuScenesConverter:
             dataset.save(os.path.join(self.save_path, 'cam_' + split, self.save_version))
 
     def convert_cam_all(self):
-        self.convert_cam_all_labels()
+        skip_labels = os.environ.get('DRIVELOOP_NUSC_SKIP_LABELS') == '1'
+        if skip_labels:
+            for split in self.splits:
+                config_path = os.path.join(self.save_cam_all_label_paths[split], 'config.json')
+                assert os.path.exists(config_path), (
+                    'DRIVELOOP_NUSC_SKIP_LABELS=1 but completed labels missing: ' + config_path
+                )
+            print('DRIVELOOP_NUSC_SKIP_LABELS=1: reusing existing cam_all labels')
+        else:
+            self.convert_cam_all_labels()
         self.convert_cam_all_images()
         self.convert_cam_all_hdmaps()
         for split in self.splits:

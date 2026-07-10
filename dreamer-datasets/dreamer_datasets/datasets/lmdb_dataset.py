@@ -113,6 +113,18 @@ class LmdbWriter:
         if self.writer is None:
             self.db = lmdb.open(self.data_path, map_size=1099511627776)
             self.writer = self.db.begin(write=True)
+            self._pending_writes = 0
+        elif self._pending_writes >= self._commit_interval():
+            # Periodic commit: a single dataset-wide write txn accumulates dirty
+            # pages in host RAM (OOM-killed the trainval images stage at ~29.5G).
+            self.writer.commit()
+            self.writer = self.db.begin(write=True)
+            self._pending_writes = 0
+        self._pending_writes += 1
+
+    @staticmethod
+    def _commit_interval():
+        return int(os.environ.get('DRIVELOOP_LMDB_COMMIT_INTERVAL', '2000'))
 
     def close(self):
         if self.writer is not None:
