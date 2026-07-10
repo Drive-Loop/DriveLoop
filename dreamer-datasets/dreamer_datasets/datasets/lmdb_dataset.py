@@ -153,6 +153,15 @@ class LmdbWriter:
             assert False
         self.writer.put(str(index).encode(), data)
 
+    def write_image_bytes(self, index, data):
+        self.open()
+        if self.data_type is None:
+            self.data_type = 'image'
+        else:
+            assert self.data_type == 'image'
+        assert isinstance(data, bytes)
+        self.writer.put(str(index).encode(), data)
+
     def write_video(self, index, video):
         self.open()
         if self.data_type is None:

@@ -52,3 +52,25 @@ class TestLmdbWriterCommitInterval:
         data_path = str(tmp_path / 'db_boundary')
         self._write_and_close(data_path, 15)
         assert self._entries(data_path) == 15
+
+
+class TestLmdbWriterImageBytes:
+    def test_roundtrip_and_config(self, tmp_path):
+        payload_a = b'\x89PNG-fake-a'
+        payload_b = b'\x89PNG-fake-b'
+        data_path = str(tmp_path / 'db_bytes')
+        writer = lmdb_dataset.LmdbWriter(data_path)
+        writer.write_image_bytes(3, payload_a)
+        writer.write_image_bytes('7', payload_b)
+        writer.write_config(data_name='image_hdmap')
+        writer.close()
+
+        env = lmdb.open(data_path, readonly=True, lock=False)
+        with env.begin() as txn:
+            assert txn.get(b'3') == payload_a
+            assert txn.get(b'7') == payload_b
+            assert txn.stat()['entries'] == 2
+        env.close()
+        config = json.loads((Path(data_path) / 'config.json').read_text())
+        assert config['data_size'] == 2
+        assert config['data_name'] == 'image_hdmap'
