@@ -292,9 +292,21 @@ class DriveDreamer2_Trainer(Trainer):
                         param.data = param.data.float()
 
         if model_config.get('enable_gradient_checkpointing', False):
-            if hasattr(model.unet, 'enable_gradient_checkpointing'):
-                model.unet.enable_gradient_checkpointing()
-                self.logger.info('gradient checkpointing enabled on unet')
+            # The vendored unet predates the installed diffusers ModelMixin signature
+            # for _set_gradient_checkpointing, so set the block-level flags directly.
+            enabled_blocks = 0
+            for module in model.unet.modules():
+                if hasattr(module, 'gradient_checkpointing'):
+                    module.gradient_checkpointing = True
+                    enabled_blocks += 1
+            self.logger.info(
+                'gradient checkpointing enabled on {} unet blocks'.format(enabled_blocks)
+            )
+
+        # from_pretrained returns modules in eval mode; training mode is required for
+        # the vendored blocks' gradient-checkpointing branches and condition dropout.
+        model.train()
+        model.vae.eval()
 
         trainable = [n for n, p in model.named_parameters() if p.requires_grad]
         total_params = sum(p.numel() for p in model.parameters())
@@ -333,7 +345,11 @@ class DriveDreamer2_Trainer(Trainer):
         )
 
     def export_gligen_weights(self, output_dir):
-        model = self.accelerator.unwrap_model(self.model)
+        # Manual unwrap: accelerator.unwrap_model imports deepspeed, which is
+        # broken on this python version; single-GPU runs have at most .module wrappers.
+        model = self.model
+        while hasattr(model, 'module'):
+            model = model.module
         state = build_gligen_state_dict(
             unet_state_dict={k: v.detach().cpu().half() for k, v in model.unet.state_dict().items()},
             gd_state_dict={

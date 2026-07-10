@@ -741,11 +741,20 @@ class TransformerSpatioTemporalModel(nn.Module):
             hidden_states_mix = hidden_states
             hidden_states_mix = hidden_states_mix + emb
 
-            hidden_states_mix = temporal_block(
-                hidden_states_mix,
-                num_frames=num_frames,
-                encoder_hidden_states=time_context,
-            )
+            if self.training and self.gradient_checkpointing:
+                hidden_states_mix = torch.utils.checkpoint.checkpoint(
+                    temporal_block,
+                    hidden_states_mix,
+                    num_frames,
+                    time_context,
+                    use_reentrant=False,
+                )
+            else:
+                hidden_states_mix = temporal_block(
+                    hidden_states_mix,
+                    num_frames=num_frames,
+                    encoder_hidden_states=time_context,
+                )
             hidden_states = self.time_mixer(
                 x_spatial=hidden_states,
                 x_temporal=hidden_states_mix,
@@ -1857,11 +1866,20 @@ class TransformerSpatioTemporalModelMV(nn.Module):
             hidden_states_mix = hidden_states
             hidden_states_mix = hidden_states_mix + emb
 
-            hidden_states_mix = temporal_block(
-                hidden_states_mix,
-                num_frames=num_frames,
-                encoder_hidden_states=time_context,
-            )
+            if self.training and self.gradient_checkpointing:
+                hidden_states_mix = torch.utils.checkpoint.checkpoint(
+                    temporal_block,
+                    hidden_states_mix,
+                    num_frames,
+                    time_context,
+                    use_reentrant=False,
+                )
+            else:
+                hidden_states_mix = temporal_block(
+                    hidden_states_mix,
+                    num_frames=num_frames,
+                    encoder_hidden_states=time_context,
+                )
             hidden_states = self.time_mixer(
                 x_spatial=hidden_states,
                 x_temporal=hidden_states_mix,
@@ -2085,11 +2103,20 @@ class TransformerSpatioTemporalModelMV_Text(nn.Module):
             hidden_states_mix = hidden_states
             hidden_states_mix = hidden_states_mix + emb
 
-            hidden_states_mix = temporal_block(
-                hidden_states_mix,
-                num_frames=num_frames,
-                encoder_hidden_states=time_context,
-            )
+            if self.training and self.gradient_checkpointing:
+                hidden_states_mix = torch.utils.checkpoint.checkpoint(
+                    temporal_block,
+                    hidden_states_mix,
+                    num_frames,
+                    time_context,
+                    use_reentrant=False,
+                )
+            else:
+                hidden_states_mix = temporal_block(
+                    hidden_states_mix,
+                    num_frames=num_frames,
+                    encoder_hidden_states=time_context,
+                )
             hidden_states = self.time_mixer(
                 x_spatial=hidden_states,
                 x_temporal=hidden_states_mix,
@@ -2313,11 +2340,20 @@ class TransformerSpatioTemporalModelMV_Text_ALL(nn.Module):
             hidden_states_mix = hidden_states
             hidden_states_mix = hidden_states_mix + emb
 
-            hidden_states_mix = temporal_block(
-                hidden_states_mix,
-                num_frames=num_frames,
-                encoder_hidden_states=time_context,
-            )
+            if self.training and self.gradient_checkpointing:
+                hidden_states_mix = torch.utils.checkpoint.checkpoint(
+                    temporal_block,
+                    hidden_states_mix,
+                    num_frames,
+                    time_context,
+                    use_reentrant=False,
+                )
+            else:
+                hidden_states_mix = temporal_block(
+                    hidden_states_mix,
+                    num_frames=num_frames,
+                    encoder_hidden_states=time_context,
+                )
             hidden_states = self.time_mixer(
                 x_spatial=hidden_states,
                 x_temporal=hidden_states_mix,
@@ -2545,11 +2581,20 @@ class TransformerSpatioTemporalModelMV_Text_FTL(nn.Module):
             hidden_states_mix = hidden_states
             hidden_states_mix = hidden_states_mix + emb
 
-            hidden_states_mix = temporal_block(
-                hidden_states_mix,
-                num_frames=num_frames,
-                encoder_hidden_states=time_context,
-            )
+            if self.training and self.gradient_checkpointing:
+                hidden_states_mix = torch.utils.checkpoint.checkpoint(
+                    temporal_block,
+                    hidden_states_mix,
+                    num_frames,
+                    time_context,
+                    use_reentrant=False,
+                )
+            else:
+                hidden_states_mix = temporal_block(
+                    hidden_states_mix,
+                    num_frames=num_frames,
+                    encoder_hidden_states=time_context,
+                )
             hidden_states = self.time_mixer(
                 x_spatial=hidden_states,
                 x_temporal=hidden_states_mix,
