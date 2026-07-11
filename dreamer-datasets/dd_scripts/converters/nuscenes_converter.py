@@ -1126,7 +1126,8 @@ def main():
         label_path = os.path.join(data_path, src_version, 'labels')
         dataset = load_dataset(label_path)
         processor = NuScenesProcessor(os.path.join(data_path, tar_version, 'labels'), add_dict=data_idx)
-        dataset.process(processor, num_workers=4)
+        adjust_workers = int(os.environ.get('DRIVELOOP_NUSC_ADJUST_WORKERS', '4'))
+        dataset.process(processor, num_workers=adjust_workers)
         
         for subfile in os.listdir(os.path.join(data_path, src_version)):
             if subfile == 'labels':
