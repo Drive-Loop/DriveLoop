@@ -22,3 +22,5 @@ config['train']['checkpoint_total_limit'] = 3
 config['train']['log_interval'] = 50
 config['train']['max_grad_norm'] = 1.0
 config['train']['resume'] = False
+config['dataloaders']['train']['resample_num_workers'] = 4
+config['dataloaders']['train']['resample_batch_size'] = 64

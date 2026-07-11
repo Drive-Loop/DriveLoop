@@ -113,6 +113,27 @@ class VideoSampler(DefaultSampler):
         # process index according to frame_num
         logger.info('Sampling video data from image dataset (depends on num_frames, hz_factor, video_split_rate), this may take minutes...')
         logger.info('For faster debugging, please use mini-version of nuscene.')
+        import os as _os
+        import pickle as _pickle
+        self._sampler_cache_path = None
+        cache_dir = _os.environ.get('DRIVELOOP_SAMPLER_CACHE_DIR', '')
+        if cache_dir:
+            signature = 'len{}_f{}_c{}_hz{}_split{}_mv{}_view{}'.format(
+                len(dataset), frame_num, cam_num, hz_factor, video_split_rate, int(mv_video), view
+            )
+            self._sampler_cache_path = _os.path.join(cache_dir, 'video_sampler_{}.pkl'.format(signature))
+            if _os.path.exists(self._sampler_cache_path):
+                with open(self._sampler_cache_path, 'rb') as f:
+                    cached = _pickle.load(f)
+                self.index = cached['index']
+                self.total_size = cached['total_size']
+                logger.info('VideoSampler cache hit: {}'.format(self._sampler_cache_path))
+                return
+        restored_transform = None
+        if _os.environ.get('DRIVELOOP_SAMPLER_RAW_RESAMPLE', '1') == '1' and getattr(dataset, 'transform', None) is not None:
+            restored_transform = dataset.transform
+            dataset.set_transform(None)
+            logger.info('DRIVELOOP_SAMPLER_RAW_RESAMPLE=1: resampling on raw records (transform detached)')
         dataloader = DataLoader(dataset, batch_size=resample_batch_size, num_workers=resample_num_workers, collate_fn=custom_collate_fn)
         video_frame_len = hz_factor * frame_num
         video_first_frame_flag = []
@@ -152,6 +173,13 @@ class VideoSampler(DefaultSampler):
         else:
             self.total_size = math.ceil(len(self.index) / video_batch_size) * self.frame_num * video_batch_size
             
+        if restored_transform is not None:
+            dataset.set_transform(restored_transform)
+        if self._sampler_cache_path is not None:
+            _os.makedirs(_os.path.dirname(self._sampler_cache_path), exist_ok=True)
+            with open(self._sampler_cache_path, 'wb') as f:
+                _pickle.dump({'index': self.index, 'total_size': self.total_size}, f)
+            logger.info('VideoSampler cache written: {}'.format(self._sampler_cache_path))
         logger.info('Done sampling!')
             
     def __iter__(self):
