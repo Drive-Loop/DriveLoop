@@ -7,7 +7,10 @@ train_data = '/data/projects/DriveLoop/data/processed/nuscenes/v1.0-mini/cam_all
 test_data = '/data/projects/DriveLoop/data/processed/nuscenes/v1.0-mini/cam_all_val/v0.0.2'
 embed_map_path = '/data/projects/DriveLoop/clip_text_transform_after_pool_panoramic.pkl'
 
-weight_path = '/data/projects/DriveLoop/pretrained_models/drivedreamer2_img_cond/pytorch_gligen_weights.bin' # PATH TO YOUR MODEL  set None to load the latest checkpoint in your project_dir
+weight_path = os.environ.get(
+    'DRIVELOOP_DD2_WEIGHT_PATH',
+    '/data/projects/DriveLoop/pretrained_models/drivedreamer2_img_cond/pytorch_gligen_weights.bin',
+)  # env-gated for fine-tune checkpoint evaluation; default = released weights
 save_path = '/data/projects/DriveLoop/outputs/drivedreamer2_img_cond_mini' # PATH FOR SAVING GENERATED VIDEO
 
 # ============= Data Parameters =================
