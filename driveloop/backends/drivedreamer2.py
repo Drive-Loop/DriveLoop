@@ -17,6 +17,24 @@ from driveloop.schema import DriveLoopRequest, Generation
 from driveloop.source_sample_binding import build_source_sample_binding
 
 
+def real_track_dims_scale() -> float:
+    """Env-gated reinforcement magnitude for real-track ego entries.
+
+    DRIVELOOP_EGO_REAL_TRACK_DIMS_SCALE scales the reinforced actor
+    dims (w/h/d) in the conditioning only; position and heading stay
+    untouched. Default 1.0 keeps the default path byte-identical.
+    Invalid or non-positive values fall back to 1.0.
+    """
+    raw = os.environ.get("DRIVELOOP_EGO_REAL_TRACK_DIMS_SCALE", "1.0")
+    try:
+        value = float(raw)
+    except (TypeError, ValueError):
+        return 1.0
+    if value <= 0.0:
+        return 1.0
+    return value
+
+
 class DriveDreamer2Backend(GenerationBackend):
     """Command-line wrapper for the DriveDreamer-2 mini baseline."""
 
@@ -444,6 +462,7 @@ class DriveDreamer2Backend(GenerationBackend):
             or ""
         )
 
+        dims_scale = real_track_dims_scale()
         entries = []
         track_points = []
         missing_steps = []
@@ -486,6 +505,8 @@ class DriveDreamer2Backend(GenerationBackend):
             cam2ego = cam2ego.tolist() if hasattr(cam2ego, "tolist") else cam2ego
             ego2global = ego2global.tolist() if hasattr(ego2global, "tolist") else ego2global
             ego_payload = cam_box9_to_ego_entry(box9, cam2ego)
+            if dims_scale != 1.0:
+                ego_payload["dims"] = [float(v) * dims_scale for v in ego_payload["dims"]]
             matches = identities_by_step.get(step, [])
             entries.append(
                 {
@@ -541,6 +562,7 @@ class DriveDreamer2Backend(GenerationBackend):
                 "missing_relative_steps": sorted(set(missing_steps)),
                 "track_points": track_points,
                 "synthetic_suppressed_count": len(per_frame_boxes) if entries else 0,
+                "dims_scale": dims_scale,
                 "heading_mode": "real_track_annotation" if entries else None,
                 "claim_boundary": "Real-track ego mapping reinforces existing scene actors through per-view conditioning; it is not video semantic proof.",
             },
