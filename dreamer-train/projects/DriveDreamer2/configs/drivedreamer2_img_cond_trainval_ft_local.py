@@ -10,7 +10,7 @@ save_path = '/data/projects/DriveLoop/outputs/drivedreamer2_img_cond_trainval_ft
 
 config['project_dir'] = project_dir
 config['dataloaders']['train']['data_or_config'] = train_data
-config['dataloaders']['train']['num_workers'] = 4
+config['dataloaders']['train']['num_workers'] = 1
 config['dataloaders']['test']['data_or_config'] = test_data
 config['dataloaders']['test']['shuffle'] = False
 config['test']['save_dir'] = save_path
@@ -22,5 +22,5 @@ config['train']['checkpoint_total_limit'] = 3
 config['train']['log_interval'] = 50
 config['train']['max_grad_norm'] = 1.0
 config['train']['resume'] = False
-config['dataloaders']['train']['resample_num_workers'] = 4
+config['dataloaders']['train']['resample_num_workers'] = 0
 config['dataloaders']['train']['resample_batch_size'] = 64
