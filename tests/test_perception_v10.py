@@ -13,15 +13,15 @@ from driveloop.schema import Generation
 import scripts.rescore_driveloop_videos as harness
 
 
-def test_expand_labels_maps_motorcycle_superclass():
-    assert expand_labels({"motorcycle"}) == {"motorcycle", "bicycle", "person"}
+def test_expand_labels_maps_motorcycle_superclass_normalized():
+    assert expand_labels({"motorcycle"}) == {"motorcycle", "bicycle", "pedestrian"}
 
 
 def test_expand_labels_leaves_unmapped_labels_alone():
     assert expand_labels({"car"}) == {"car"}
 
 
-def test_resolve_target_labels_expands_and_keeps_originals():
+def test_resolve_target_labels_expands_in_normalized_vocabulary():
     evaluator = SuperclassCompositePerceptionEvaluator()
     generation = Generation(
         iteration=0,
@@ -30,18 +30,20 @@ def test_resolve_target_labels_expands_and_keeps_originals():
         metadata={},
     )
     labels = evaluator._resolve_target_labels(generation)
-    assert {"motorcycle", "bicycle", "person"} <= labels
+    assert {"motorcycle", "bicycle", "pedestrian"} <= labels
+    assert "person" not in labels
     assert evaluator._v10_original_labels == {"motorcycle"}
 
 
-def test_class_fidelity_counts_superclass_only():
+def test_class_fidelity_normalizes_raw_detector_labels():
+    evaluator = SuperclassCompositePerceptionEvaluator()
     centers = [
         [("motorcycle", 10.0), ("person", 20.0)],
         None,
         [("car", 30.0), ("person", 40.0)],
     ]
-    share, original, total = SuperclassCompositePerceptionEvaluator.class_fidelity(
-        centers, {"motorcycle"}, {"motorcycle", "bicycle", "person"}
+    share, original, total = evaluator.class_fidelity(
+        centers, {"motorcycle"}, {"motorcycle", "bicycle", "pedestrian"}
     )
     assert total == 3
     assert original == 1

@@ -9,9 +9,12 @@ class fidelity (share of original-target labels among super-class
 detections in the selected view) as a separate metric. Differential
 baseline subtraction and view selection are unchanged from v9.
 
-Offline-only until adoption is recorded: the runtime pipeline keeps
-constructing the v9 composite evaluator. Labels are compared in
-lowercase detector vocabulary (yolov8x: motorcycle, bicycle, person).
+Labels are compared in the evaluator's NORMALIZED vocabulary
+(person -> pedestrian, bike/cyclist -> bicycle), matching the filter
+in PerceptionVideoEvaluator.evaluate; raw detector labels are
+normalized before any membership test. Offline-only until adoption
+is recorded: the runtime pipeline keeps constructing the v9
+composite evaluator.
 """
 
 from __future__ import annotations
@@ -22,7 +25,7 @@ from driveloop.composite_perception import CompositePerceptionVideoEvaluator
 from driveloop.schema import Evaluation, Generation
 
 SUPERCLASS_EXPANSION: Dict[str, Set[str]] = {
-    "motorcycle": {"motorcycle", "bicycle", "person"},
+    "motorcycle": {"motorcycle", "bicycle", "pedestrian"},
 }
 
 
@@ -41,8 +44,8 @@ class SuperclassCompositePerceptionEvaluator(CompositePerceptionVideoEvaluator):
         self._v10_original_labels = set(base_labels)
         return expand_labels(set(base_labels))
 
-    @staticmethod
     def class_fidelity(
+        self,
         view_centers: List,
         original_labels: Set[str],
         superclass_labels: Set[str],
@@ -53,9 +56,10 @@ class SuperclassCompositePerceptionEvaluator(CompositePerceptionVideoEvaluator):
             if not frame_dets:
                 continue
             for label, _center in frame_dets:
-                if label in superclass_labels:
+                normalized = self._normalize_label(str(label))
+                if normalized in superclass_labels:
                     total += 1
-                    if label in original_labels:
+                    if normalized in original_labels:
                         original += 1
         share = round(original / total, 6) if total else 0.0
         return share, original, total
