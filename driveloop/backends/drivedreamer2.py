@@ -887,6 +887,13 @@ class DriveDreamer2Backend(GenerationBackend):
                 per_frame_append_ego_boxes = real_track_entries
                 actor_motion_frame_mapping = real_track_mapping
             else:
+                if os.environ.get("DRIVELOOP_EGO_REQUIRE_REAL_TRACK") == "1":
+                    raise RuntimeError(
+                        "real-track mapping is empty (reason: %s) and"
+                        " DRIVELOOP_EGO_REQUIRE_REAL_TRACK=1; refusing the"
+                        " silent synthetic fallback"
+                        % real_track_mapping.get("reason")
+                    )
                 (
                     per_frame_append_ego_boxes,
                     actor_motion_frame_mapping,
