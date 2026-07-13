@@ -33,3 +33,17 @@ Claim boundary: single window (candidate70), bank0 seed, one attempt,
 n=5 cases; detector-level uplift only; no perception or semantic
 claims; the dims scale stays env-gated and default-off pending human
 review.
+
+## Human-review addendum
+Stacked-arm videos (m3, m5) reviewed frame-stepped: the motorcycle is
+clearly rendered and notably better than the earlier arms; a slight
+widening of the actor appears in the final frame, judged minor by the
+reviewer. Dims scale 1.5 passes visual review with that caveat; it
+stays env-gated and default-off, and last-frame widening is the first
+artifact to watch at higher scales.
+
+## Resolution addendum
+See 2026-07-13_m2_dissection_and_support_table.md: the interaction
+reads (m3/m5 superadditive, m1 sub-additive, m2 regression) are below
+evaluator resolution (+-1 surviving detection). The robust stacked
+claim is binary detectability 5/5 versus anchor 2/5.

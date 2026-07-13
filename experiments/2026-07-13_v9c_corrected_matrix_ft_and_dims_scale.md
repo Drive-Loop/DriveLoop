@@ -55,3 +55,10 @@ Single window (candidate70), bank0 seed, n=5 cases, one attempt in
 the open arms; detector-level uplift only, no perception or semantic
 success claims. The m2 regressions are unexplained and need per-case
 review before either lever is promoted to a default.
+
+## Resolution addendum
+See 2026-07-13_m2_dissection_and_support_table.md: every per-case J
+delta in this matrix rides on 0/1/2 surviving detection frames (max
+support 2/8 anywhere). The mean-J direction stands; per-case
+magnitudes and the m2 regression are below evaluator resolution.
+Binary detectability: anchor 2/5, ft 4/5, dims1.5 4/5.
