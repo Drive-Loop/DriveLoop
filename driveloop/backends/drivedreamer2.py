@@ -155,6 +155,16 @@ class DriveDreamer2Backend(GenerationBackend):
         env["DRIVELOOP_DD2_AUDIT_PATH"] = str(audit_path)
         env["DRIVELOOP_DD2_DATA_OR_CONFIG"] = str(self.baseline_dataset_dir)
         effective_audit_only = self.audit_only or env.get("DRIVELOOP_DD2_AUDIT_ONLY") == "1"
+        if (
+            not effective_audit_only
+            and source_sample_binding.get("requested") is True
+            and source_sample_binding.get("ready") is not True
+        ):
+            raise RuntimeError(
+                "source sample selector requested but binding is not ready"
+                " (reason: %s); refusing to start generation on an unbound"
+                " window" % source_sample_binding.get("reason")
+            )
         if baseline_video.exists() and not effective_audit_only:
             baseline_video.unlink()
         if dd2_prompt:

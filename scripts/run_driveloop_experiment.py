@@ -41,6 +41,12 @@ def main(argv: list[str] | None = None) -> int:
     parser.add_argument("--no-refiner-escalation", action="store_true")
     args = parser.parse_args(argv)
 
+    if args.perception_baseline_video is not None and not Path(args.perception_baseline_video).exists():
+        parser.error(
+            "--perception-baseline-video does not exist: %s"
+            % args.perception_baseline_video
+        )
+
     summary = ExperimentPipeline(
         output_dir=Path(args.output_dir),
         config=ExperimentPipelineConfig(
