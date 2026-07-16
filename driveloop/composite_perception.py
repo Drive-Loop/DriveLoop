@@ -92,7 +92,7 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
         best_view = -1
         view_scores: Dict[int, float] = {}
         view_evaluations: Dict[int, Evaluation] = {}
-        for view_index in range(self.layout.num_views):
+        for view_index in self._views_to_evaluate(generation.metadata):
             reset = getattr(self.detector, "reset", None)
             if callable(reset):
                 reset()
@@ -284,6 +284,10 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
             else:
                 kept.append(d)
         return kept, removed
+
+    def _views_to_evaluate(self, metadata: dict) -> list:
+        """View indices to evaluate; the v9 default scores every mosaic view."""
+        return list(range(self.layout.num_views))
 
     def _target_view_indices(self, metadata: dict) -> list:
         """Resolve target cam types from the generation metadata to mosaic

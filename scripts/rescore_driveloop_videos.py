@@ -45,10 +45,14 @@ def build_evaluator(scorer: str, weights: str, confidence: float, baseline_video
         from driveloop.composite_perception import CompositePerceptionVideoEvaluator
 
         cls = CompositePerceptionVideoEvaluator
-    else:
+    elif scorer == "v10a":
         from driveloop.perception_v10 import SuperclassCompositePerceptionEvaluator
 
         cls = SuperclassCompositePerceptionEvaluator
+    else:
+        from driveloop.perception_v10 import ManeuverViewRestrictedSuperclassEvaluator
+
+        cls = ManeuverViewRestrictedSuperclassEvaluator
     return cls(detector=detector, confidence_threshold=confidence, baseline_video=baseline_video)
 
 
@@ -60,6 +64,8 @@ REPORT_KEYS = (
     "perception_class_fidelity",
     "perception_superclass_detection_count",
     "perception_original_class_detection_count",
+    "perception_allowed_view_count",
+    "perception_view_restriction_unresolved",
 )
 
 
@@ -70,7 +76,7 @@ def main(argv=None) -> int:
         help="tag=run_dir=baseline_video (repeatable)",
     )
     parser.add_argument("--cases", nargs="+", required=True)
-    parser.add_argument("--scorer", choices=["v9", "v10a"], default="v9")
+    parser.add_argument("--scorer", choices=["v9", "v10a", "v10b"], default="v9")
     parser.add_argument("--weights", default="yolov8x.pt")
     parser.add_argument("--confidence", type=float, default=0.20)
     parser.add_argument("--output-jsonl", default=None)
