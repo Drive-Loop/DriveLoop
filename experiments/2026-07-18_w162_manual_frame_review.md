@@ -1,9 +1,21 @@
-# 2026-07-18 candidate162 manual frame review: injection is visible only under FT weights, and v10b ranks the arms inverse to human judgment
+# 2026-07-18 candidate162 manual frame review (non-blind): actor presence and box alignment confirmed, arm-quality findings superseded
 
 First frame-stepped human review of the new-window videos, closing the
 gap left open by 2026-07-18_window_expansion.md. All ten candidate162
 videos were reviewed: official-anchor and ft6322+dims1.5 arms on
 m1/m2/m3/m5, plus both per-weight no-injection baselines.
+
+SUPERSEDED IN PART, same day: findings 3, 4 and 6 below rest on this
+non-blind pass and did not survive blind rating. See
+2026-07-18_w162_blind_rating_test.md. With arm identity hidden, not one
+of the four ft6322+dims1.5 cases recorded as artifact-free below
+received a clean score, and the blind ordering is the reverse of the one
+reported here. Finding 6 and the v10 adoption obstacle drawn from it are
+withdrawn: blind, human rating and v10b agree in direction. Findings 1,
+2, 5 and 7, which concern actor presence, box alignment and the
+weights/dims confound, are not contradicted by the blind pass, and the
+detector support gap stands. The original title asserted the withdrawn
+claim and has been replaced.
 
 ## Method
 Mosaic layout confirmed from the generator code and from every file:
