@@ -61,8 +61,18 @@ excluded from the average. Archived S_ctrl is therefore a two-channel mean:
 The pre-regression cohort is the control. exp_geometry_sweep runs the same
 environment.lighting == 'night', carries measured brightness (36.212, 42.894) and
 records S_ctrl 0.666667 = mean(1.0, 0.0, lighting_night 1.0) and 0.816621. Same
-scene class, same channel definitions, three channels before 2026-07-07 and two
-after. S_ctrl and J are not comparable across that date.
+declared lighting, same channel definitions, three channels before 2026-07-07 and
+two after. S_ctrl and J are not comparable across that date.
+
+CORRECTION, added the same day. This passage first read "Same scene class". That
+is false and was never measured. The exp_geometry_sweep source row measures 56.4
+and the candidate162 source row measures 102.2: the two cohorts declare the same
+lighting and are not the same scene class. The section asserted a same-class
+control while the claim boundary below already said the 2026-07-07 windows are a
+different window set that does not transfer, so the record contradicted itself.
+The channel-set difference is a code fact, established by AST over the file's
+history and by the archives, and does not depend on the scene class. See
+2026-07-18_night_is_a_prompt_not_a_window.md.
 
 Restoring the block would not shift S_ctrl by a constant. Because the score is a
 mean over a variable channel set, the shift depends on the other channels:
