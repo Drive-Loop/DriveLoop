@@ -159,6 +159,7 @@ class DriveLoopRunner:
                 )
                 alignment_score = evaluation.metrics.get("alignment_score")
                 alignment_source = "measured_alignment"
+                auto_ctrl = None
                 if alignment_score is None:
                     auto_ctrl = control_visibility_score(
                         evaluation.metrics, scene_spec, condition_plan
@@ -174,6 +175,14 @@ class DriveLoopRunner:
                     alignment_score=alignment_score,
                     weights=utility_weights,
                     alignment_source=alignment_source,
+                )
+                generation = replace(
+                    generation,
+                    metadata={
+                        **generation.metadata,
+                        "task_utility": utility,
+                        "control_visibility": auto_ctrl,
+                    },
                 )
                 evaluation = replace(
                     evaluation,
