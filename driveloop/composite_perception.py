@@ -63,6 +63,14 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
         self.baseline_iou_threshold = float(baseline_iou_threshold)
         self._baseline_cache: Dict[str, dict] = {}
 
+    def resolve_baseline_video(self, generation: Generation) -> str | None:
+        """The no-injection support video actually used to subtract pre-existing
+        source objects from this generation. Request metadata wins over the
+        constructor default. Single source of truth, so the runner can archive
+        which support video a run really used."""
+        path = generation.metadata.get("perception_baseline_video") or self.baseline_video
+        return str(path) if path else None
+
     def evaluate(self, generation: Generation) -> Evaluation:
         if self._detections_from_metadata(generation.metadata) is not None:
             return super().evaluate(generation)
@@ -80,7 +88,7 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
         if not self.layout.matches(frames[0]):
             return super().evaluate(generation)
 
-        baseline_path = generation.metadata.get("perception_baseline_video") or self.baseline_video
+        baseline_path = self.resolve_baseline_video(generation)
         baseline_table = (
             self._baseline_view_detections(baseline_path)
             if baseline_path and Path(str(baseline_path)).exists()

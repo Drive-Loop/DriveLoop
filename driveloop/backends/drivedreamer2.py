@@ -88,6 +88,9 @@ class DriveDreamer2Backend(GenerationBackend):
             run_artifact_dir = run_artifact_dir / request.scenario_id
         run_artifact_dir.mkdir(parents=True, exist_ok=True)
 
+        # DD2 tester staging output for this run: overwritten on every run and
+        # copied into artifacts below. This is the arm's own render, NOT the
+        # no-injection support baseline of --perception-baseline-video.
         baseline_video = self.baseline_output_dir / "000000.mp4"
 
         env = os.environ.copy()
@@ -238,7 +241,7 @@ class DriveDreamer2Backend(GenerationBackend):
             metadata={
                 "backend": "drivedreamer2",
                 "config_name": self.config_name,
-                "baseline_video": str(baseline_video),
+                "dd2_raw_output_video": str(baseline_video),
                 "returncode": completed.returncode,
                 "dd2_audit_only": effective_audit_only,
                 "dd2_batch_skip": effective_batch_skip,

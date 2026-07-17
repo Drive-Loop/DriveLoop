@@ -1,6 +1,7 @@
 from __future__ import annotations
 
 from dataclasses import asdict, replace
+from pathlib import Path
 from typing import Optional
 
 from driveloop.backends.base import GenerationBackend
@@ -139,6 +140,13 @@ class DriveLoopRunner:
             )
 
             evaluation = self.evaluator.evaluate(generation)
+            generation = replace(
+                generation,
+                metadata={
+                    **generation.metadata,
+                    **self._perception_support_provenance(generation),
+                },
+            )
             release_gpu = getattr(getattr(self.evaluator, "detector", None), "release_gpu", None)
             if callable(release_gpu):
                 release_gpu()
@@ -285,6 +293,24 @@ class DriveLoopRunner:
                 suggested_actions=list(dict.fromkeys(actions)),
             ),
         )
+
+    def _perception_support_provenance(self, generation: Generation) -> dict:
+        """Archive which no-injection support video the evaluator resolved for
+        this generation. Without it the support term is only recoverable by
+        fingerprinting subtracted-detection counters (2026-07-18 audit)."""
+        resolver = getattr(self.evaluator, "resolve_baseline_video", None)
+        if not callable(resolver):
+            return {}
+        resolved = resolver(generation)
+        if resolved is None:
+            return {
+                "perception_baseline_video_resolved": None,
+                "perception_baseline_video_exists": False,
+            }
+        return {
+            "perception_baseline_video_resolved": resolved,
+            "perception_baseline_video_exists": Path(resolved).exists(),
+        }
 
     def _perception_metadata_from_request(self, metadata: dict) -> dict:
         config = metadata.get("perception_evaluation")
