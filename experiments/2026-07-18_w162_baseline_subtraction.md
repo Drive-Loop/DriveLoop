@@ -72,10 +72,16 @@ target filter drops. The offsets are systematic and explained, not error.
    moot and should be closed.
 7. The subtraction is not wrong in general. For a window where injection adds an
    actor absent from the baseline, subtracting the baseline correctly removes
-   scene clutter and keeps the new actor. The defect is specific to real-track
-   source-bound windows, where the injection reinforces an actor the baseline
-   already renders, and there is by definition nothing for the subtraction to
-   leave behind. All three current windows are of that kind.
+   scene clutter and keeps the new actor. The defect needs the injection to
+   reinforce an actor the baseline already renders, leaving the subtraction
+   nothing to keep. Narrowed by 2026-07-18_c70_subtraction_probe.md: the
+   operative condition is not that a window is real-track source-bound, but
+   that the no-injection baseline renders the same actor detectably at the same
+   place. candidate70 is real-track source-bound and does not meet it, and
+   there the subtraction removes none of the target's detections. The sentence
+   that stood here, claiming all three current windows are of that kind, was
+   wrong, and the scope suspicion recorded in the consequences below is
+   answered for candidate70 in the negative.
 
 ## Consequences
 - Every candidate162 S_perc, under v9 and under v10b, is contaminated: its
