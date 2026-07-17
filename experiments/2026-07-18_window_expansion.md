@@ -58,5 +58,10 @@ One seed, one attempt, n=4 cases per window, two new windows;
 detector-level only, v10b offline protocol (v9 remains protocol of
 record). The candidate2216 actor is annotated motorcycle but reads as
 a tricycle in the scene description; its floor result may reflect
-actor type as much as distance. New-window videos have not yet had
-frame-stepped human review.
+actor type as much as distance.
+
+Superseded in part: candidate162 videos have since had frame-stepped
+human review; see 2026-07-18_w162_manual_frame_review.md, whose erratum
+restricts finding 2 above to a statement about detector output.
+candidate70 and candidate2216 videos have still not had frame-stepped
+human review.
