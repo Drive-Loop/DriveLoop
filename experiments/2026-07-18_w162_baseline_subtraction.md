@@ -95,10 +95,15 @@ target filter drops. The offsets are systematic and explained, not error.
 - The v10 adoption decision cannot proceed on the current matrix. The candidate
   protocol inherits the same subtraction from the v9 evaluator, so re-anchoring
   tau or recomposing J will not address this.
-- The scope beyond this window is unmeasured. candidate70 and candidate2216 are
-  also source-bound real-track windows and are the basis of the fidelity-lever
-  narrative and of the protocol of record. They need the same probe before any
-  claim resting on their S_perc is reported.
+- The scope beyond this window is now measured and the suspicion recorded here
+  is answered in the negative for both. candidate70 and candidate2216 are also
+  source-bound real-track windows, and neither exhibits the defect: see
+  2026-07-18_c70_subtraction_probe.md and
+  2026-07-18_three_window_metric_regimes.md. On candidate70 the subtraction
+  removes none of the target's detections and the scarcity is the detector's;
+  on candidate2216 the actor is not detected at all and the baseline is nearly
+  empty. The three windows sit in three different regimes, so the mean of
+  S_perc across them is not a meaningful quantity.
 
 ## Reproducibility defects found in passing
 1. --perception-baseline-video decides the support term and is not archived
