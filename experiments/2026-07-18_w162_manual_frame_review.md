@@ -87,12 +87,13 @@ record is not an evaluator-caliber result.
 Finding 2 of that record reads the anchor's higher support as more
 evidence and the ftdims arm's lower support as an evidence sacrifice
 ("trades evidence volume for label purity"). Frame-stepped review
-shows both arms render the actor in 8/8 frames, so the support
-difference is a property of the detector, not of the generated
-content. The mean-S_perc preference for the anchor stated there must
-not be read as a rendering-quality preference; human review prefers
-the opposite arm. Finding 2 stands only as a statement about detector
-output.
+shows both arms render the actor in 8/8 frames. The attribution of the
+support difference to the detector in the sentence that stood here was
+wrong: 2026-07-18_w162_baseline_subtraction.md shows the detector
+detects the actor in every one of those frames and the difference is
+produced by label-blind baseline subtraction. The mean-S_perc
+preference for the anchor stated in window_expansion measures the
+anchor's deviation from its own baseline.
 
 ## Claim boundary
 Single human reviewer, non-blind: arm identity was visible from folder

@@ -59,7 +59,11 @@ registered prediction and blind score -0.244, permutation p 0.4339
    and 7 of the frame review. The detector support gap therefore
    stands: the evaluator recovers 0-4 support frames on actors the
    reviewer sees throughout. That gap, not the arm ordering, is the
-   durable result of this review cycle.
+   durable result of this review cycle. Its cause is now known and was
+   not a detector under-count: see
+   2026-07-18_w162_baseline_subtraction.md, where the detector is shown
+   to detect the actor in every frame and the label-blind baseline
+   subtraction is shown to remove it.
 5. Method caution for the project. The reviewer's artifact judgments
    reversed when folder names were hidden. Every earlier manual review
    in this project conducted with arm identity visible carries the same

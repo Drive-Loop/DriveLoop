@@ -61,7 +61,11 @@ a tricycle in the scene description; its floor result may reflect
 actor type as much as distance.
 
 Superseded in part: candidate162 videos have since had frame-stepped
-human review; see 2026-07-18_w162_manual_frame_review.md, whose erratum
-restricts finding 2 above to a statement about detector output.
-candidate70 and candidate2216 videos have still not had frame-stepped
-human review.
+human review; see 2026-07-18_w162_manual_frame_review.md. Finding 2 above
+is superseded outright by 2026-07-18_w162_baseline_subtraction.md: the arm
+produces more label-pure evidence, not less, and the evaluator's label-blind
+baseline subtraction removes it for coinciding with the baseline actor. The
+mean-S_perc preference for the anchor reported above measures the anchor's
+deviation from its own baseline and carries no content claim. candidate70 and
+candidate2216 videos have still not had frame-stepped human review, and their
+S_perc figures have not been probed for the same artifact.
