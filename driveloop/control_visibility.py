@@ -28,7 +28,21 @@ def control_visibility_score(
     unmeasured: list[str] = []
 
     if scene_spec.objects:
-        channels["object_presence"] = 1.0 if metrics.get("perception_detection_count", 0.0) > 0 else 0.0
+        # object_presence is fidelity-weighted when the super-class evaluator
+        # (v10) reports class fidelity: the requested control is visible to the
+        # degree its super-class detections read as the target class, so pure
+        # non-target residue (fidelity 0) does not count the control as present.
+        # This is caliber C (block 223): it corrects the super-class over-count
+        # that would otherwise credit an anchor's pedestrian residue as control
+        # visibility. When fidelity is absent (v9 metrics) it falls back to
+        # binary target-class detection, so it is inert until the v10 protocol
+        # is wired in.
+        fidelity = metrics.get("perception_class_fidelity")
+        superclass = metrics.get("perception_superclass_detection_count")
+        if fidelity is not None and superclass is not None:
+            channels["object_presence"] = round(float(fidelity), 6) if float(superclass) > 0 else 0.0
+        else:
+            channels["object_presence"] = 1.0 if metrics.get("perception_detection_count", 0.0) > 0 else 0.0
 
     # target_motion is scored whenever perception was measured (guaranteed
     # by the early return above), not only when the grounder parsed a motion

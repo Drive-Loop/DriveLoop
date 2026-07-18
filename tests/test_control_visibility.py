@@ -82,3 +82,34 @@ def test_weather_is_unmeasured_not_passed():
     result = control_visibility_score(metrics, spec, plan)
     assert "weather.rain" in result["unmeasured"]
     assert "weather" not in str(result["channels"])
+
+
+def test_object_presence_is_fidelity_weighted_under_v10():
+    # Caliber C (block 223): when the super-class evaluator reports class
+    # fidelity, object_presence is the share of detections that read as the
+    # target class, so pure non-target residue does not count the control as
+    # visible.
+    spec, plan = _spec_plan(PROMPT)
+    base = {"perception_measured": 1.0, "perception_dominant_motion_over_width": -1.0}
+    weighted = control_visibility_score(
+        {**base, "perception_superclass_detection_count": 3.0, "perception_class_fidelity": 0.4},
+        spec, plan,
+    )
+    assert weighted["channels"]["object_presence"] == 0.4
+    residue = control_visibility_score(
+        {**base, "perception_superclass_detection_count": 2.0, "perception_class_fidelity": 0.0},
+        spec, plan,
+    )
+    assert residue["channels"]["object_presence"] == 0.0
+
+
+def test_v9_metrics_keep_binary_object_presence():
+    # Backward compatibility: without class fidelity (v9 metrics) object_presence
+    # is the binary target-class detection, so the change is inert until the v10
+    # protocol is wired in.
+    spec, plan = _spec_plan(PROMPT)
+    base = {"perception_measured": 1.0, "perception_dominant_motion_over_width": -1.0}
+    assert control_visibility_score({**base, "perception_detection_count": 3.0}, spec, plan)[
+        "channels"]["object_presence"] == 1.0
+    assert control_visibility_score({**base, "perception_detection_count": 0.0}, spec, plan)[
+        "channels"]["object_presence"] == 0.0
