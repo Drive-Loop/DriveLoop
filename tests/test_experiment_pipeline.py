@@ -29,8 +29,8 @@ def test_perception_protocol_selects_evaluator_class():
     # default and case-insensitivity
     assert perception_evaluator_class(None) is CompositePerceptionVideoEvaluator
     assert perception_evaluator_class("V10B") is ManeuverViewRestrictedSuperclassEvaluator
-    # the config default stays v9 until tau is re-anchored to the v10 distribution
-    assert ExperimentPipelineConfig().perception_protocol == "v9"
+    # v10b is the adopted protocol of record; v9 must be requested explicitly
+    assert ExperimentPipelineConfig().perception_protocol == "v10b"
     with pytest.raises(ValueError):
         perception_evaluator_class("v11")
 

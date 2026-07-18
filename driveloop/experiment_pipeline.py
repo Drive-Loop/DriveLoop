@@ -64,10 +64,15 @@ class ExperimentPipelineConfig:
     perception_baseline_video: Any = None
     # Perception protocol of record. "v9" is the single-class composite
     # evaluator; "v10a" adds super-class evidence and class fidelity; "v10b"
-    # adds the maneuver view restriction (block 220-223). Default stays "v9"
-    # until tau is re-anchored to the v10 score distribution, so this only
-    # exposes the v10 evaluators as an option without changing acceptance.
-    perception_protocol: str = "v9"
+    # adds the maneuver view restriction (block 220-223). Default is "v10b":
+    # the three-window rescore showed the v9 FT lever is a single-class
+    # detection artifact that does not survive super-class pooling, so v10b is
+    # the protocol of record. Acceptance is unaffected -- target_score is a
+    # per-experiment knob (not a global calibrated tau), and the default 0.8 is
+    # already unreachable under both v9 and v10, so both run to max_iterations
+    # and record every attempt. Runs that need to reproduce the archived v9
+    # numbers must set perception_protocol="v9" explicitly.
+    perception_protocol: str = "v10b"
 
 
 def perception_evaluator_class(protocol: Any):
