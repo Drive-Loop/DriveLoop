@@ -60,3 +60,43 @@ def test_utility_acceptance_can_stop_loop(tmp_path):
     )
     result = runner.run(REQUEST)
     assert len(result.attempt_history) == 1
+
+
+class _UnmeasurableEvaluator(BaseEvaluator):
+    # Mimics v10b when the maneuver view restriction resolves to no scorable
+    # view: score 0, not passed, but flagged view_restriction_unresolved.
+    def evaluate(self, generation) -> Evaluation:
+        return Evaluation(
+            0.0,
+            {"perception_measured": 1.0, "perception_view_restriction_unresolved": 1.0},
+            Diagnosis(False, ["no_maneuver_view_restriction_resolvable"], []),
+        )
+
+
+def test_unmeasurable_case_stops_the_loop_and_is_flagged(tmp_path):
+    # An unmeasurable case must not churn refinements against something that
+    # cannot be measured, and must be recorded as unmeasurable rather than a
+    # low-score failure.
+    config = DriveLoopConfig(max_iterations=3, output_dir=tmp_path, target_score=0.8)
+    runner = DriveLoopRunner(
+        backend=MockGenerationBackend(output_dir=tmp_path / "mock"),
+        evaluator=_UnmeasurableEvaluator(),
+        config=config,
+    )
+    result = runner.run(REQUEST)
+    assert len(result.attempt_history) == 1
+    assert result.attempt_history[-1].status == "perception_unmeasurable"
+
+
+def test_low_score_still_churns_when_measurable(tmp_path):
+    # Backward compatibility: a plain low score with no unresolved flag (v9)
+    # still drives refinement to max_iterations.
+    config = DriveLoopConfig(max_iterations=3, output_dir=tmp_path, target_score=0.8)
+    runner = DriveLoopRunner(
+        backend=MockGenerationBackend(output_dir=tmp_path / "mock"),
+        evaluator=FixedScoreEvaluator(0.1),
+        config=config,
+    )
+    result = runner.run(REQUEST)
+    assert len(result.attempt_history) == 3
+    assert result.attempt_history[-1].status == "needs_refinement"

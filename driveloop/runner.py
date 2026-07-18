@@ -208,7 +208,7 @@ class DriveLoopRunner:
             should_stop = (
                 not source_selection_blocks_acceptance
                 and (evaluation.score >= self.config.target_score or evaluation.diagnosis.passed)
-            )
+            ) or self._perception_unmeasurable(evaluation)
             refinement: Optional[Refinement] = None
             if not should_stop:
                 refinement = self.refiner.refine(current_request, evaluation)
@@ -385,12 +385,24 @@ class DriveLoopRunner:
                 unsupported.append(name)
         return list(dict.fromkeys(unsupported))
 
+    @staticmethod
+    def _perception_unmeasurable(evaluation: Evaluation) -> bool:
+        """True when the perception protocol could not measure the case at all
+        (v10b's maneuver view restriction resolved to no scorable view because
+        the case carries no actor_motion_surface_plan). This is distinct from a
+        low score: the case is unmeasurable, not failed, so the loop must not
+        churn refinements against it and it must not be recorded as a semantic
+        failure. Inert under v9, which sets no such flag."""
+        return bool(evaluation.metrics.get("perception_view_restriction_unresolved"))
+
     def _attempt_status(self, generation: Generation, evaluation: Evaluation, source_selection: dict) -> str:
         if source_selection.get("requested") is True and source_selection.get("ready") is not True:
             return "source_selection_unavailable"
         source_binding = self._source_binding_from_generation(generation)
         if source_binding.get("requested") is True and source_binding.get("ready") is not True:
             return "source_binding_unavailable"
+        if self._perception_unmeasurable(evaluation):
+            return "perception_unmeasurable"
         if evaluation.score >= self.config.target_score or evaluation.diagnosis.passed:
             return "accepted"
         return "needs_refinement"
