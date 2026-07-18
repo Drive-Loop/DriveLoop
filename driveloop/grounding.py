@@ -24,6 +24,15 @@ _MOTION_KEYWORDS: Dict[str, List[str]] = {
     "crossing": ["crossing", "crosses", "cross the road"],
     "stopped": ["stopped", "parked", "stationary"],
     "turning": ["left turn", "right turn", "turning"],
+    # An intersection "approach" toward the ego path is a requested motion,
+    # but not necessarily a lateral maneuver. Unlike cut_in/lane_change it
+    # deliberately builds no boxes3d trajectory and no maneuver suffix --
+    # actor_motion and condition_adapter gate those on cut_in/lane_change --
+    # so it records the requested motion without fabricating a cut-in. This
+    # keeps m4-style prompts from grounding to an empty motion (blocks
+    # 217/218). Matched on the verb forms only, not bare "approach", to
+    # avoid nouns like "the approach lane".
+    "approaching": ["approaches", "approaching"],
 }
 
 _RELATION_KEYWORDS = [

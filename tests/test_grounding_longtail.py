@@ -87,3 +87,32 @@ def test_longtail_controller_structures_motorcycle_cut_in_lane_controls():
     assert controls["maneuvers"][0]["requires_lane_geometry"] is True
     assert controls["lane_relations"][0]["from"] == "left_adjacent_lane"
     assert "target_motorcycle_detectable" in controls["perception_requirements"]
+
+
+def test_intersection_approach_grounds_to_approaching_not_a_maneuver():
+    # m4's prompt requests a motion the keyword table previously could not
+    # read, so it grounded to an empty list and was spared the target_motion
+    # channel (blocks 217/218). "approaching" records the requested motion
+    # without asserting a lateral maneuver: an intersection approach toward
+    # the ego path need not be a cut-in, so it deliberately builds no
+    # trajectory and no maneuver suffix.
+    request = DriveLoopRequest(
+        prompt="night urban intersection, a motorcycle approaches from the left adjacent lane toward the ego path"
+    )
+    spec = RuleBasedGrounder().ground(request)
+    plan = LongTailController().build(spec)
+
+    assert "approaching" in spec.motion_primitives
+    assert "cut_in" not in spec.motion_primitives
+    assert "lane_change" not in spec.motion_primitives
+    assert "motorcycle_cut_in" not in plan.tags
+    assert not plan.executable_controls.get("maneuvers")
+
+
+def test_approach_noun_does_not_ground_a_motion():
+    # Matched on verb forms only ("approaches"/"approaching"), so a location
+    # like "the approach lane" is not read as a requested motion.
+    spec = RuleBasedGrounder().ground(
+        DriveLoopRequest(prompt="a truck stopped on the approach lane at night")
+    )
+    assert "approaching" not in spec.motion_primitives
