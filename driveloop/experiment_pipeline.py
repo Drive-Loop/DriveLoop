@@ -62,6 +62,29 @@ class ExperimentPipelineConfig:
     perception_confidence: float = 0.25
     refiner_escalation: bool = True
     perception_baseline_video: Any = None
+    # Perception protocol of record. "v9" is the single-class composite
+    # evaluator; "v10a" adds super-class evidence and class fidelity; "v10b"
+    # adds the maneuver view restriction (block 220-223). Default stays "v9"
+    # until tau is re-anchored to the v10 score distribution, so this only
+    # exposes the v10 evaluators as an option without changing acceptance.
+    perception_protocol: str = "v9"
+
+
+def perception_evaluator_class(protocol: Any):
+    """Resolve the perception evaluator class for a protocol name. Kept
+    importable and detector-free so the selection can be unit-tested without
+    loading YOLO weights."""
+    name = str(protocol or "v9").lower()
+    if name == "v9":
+        from driveloop.composite_perception import CompositePerceptionVideoEvaluator
+        return CompositePerceptionVideoEvaluator
+    if name == "v10a":
+        from driveloop.perception_v10 import SuperclassCompositePerceptionEvaluator
+        return SuperclassCompositePerceptionEvaluator
+    if name == "v10b":
+        from driveloop.perception_v10 import ManeuverViewRestrictedSuperclassEvaluator
+        return ManeuverViewRestrictedSuperclassEvaluator
+    raise ValueError("unknown perception_protocol: %r" % (protocol,))
 
 
 def load_experiment_cases(path: Path | str) -> list[ExperimentCase]:
@@ -166,9 +189,9 @@ class ExperimentPipeline:
 
         evaluator = None
         if self.config.perception_weights:
-            from driveloop.composite_perception import CompositePerceptionVideoEvaluator
             from driveloop.perception_video import UltralyticsYOLODetector
-            evaluator = CompositePerceptionVideoEvaluator(
+            evaluator_cls = perception_evaluator_class(self.config.perception_protocol)
+            evaluator = evaluator_cls(
                 detector=UltralyticsYOLODetector(
                     self.config.perception_weights,
                     confidence_threshold=self.config.perception_confidence,

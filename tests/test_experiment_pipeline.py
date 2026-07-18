@@ -4,13 +4,35 @@ import json
 import tempfile
 from pathlib import Path
 
+import pytest
+
 from driveloop.experiment_pipeline import (
     ExperimentCase,
     ExperimentPipeline,
     ExperimentPipelineConfig,
     load_experiment_cases,
+    perception_evaluator_class,
 )
 from scripts.run_driveloop_experiment import main
+
+
+def test_perception_protocol_selects_evaluator_class():
+    from driveloop.composite_perception import CompositePerceptionVideoEvaluator
+    from driveloop.perception_v10 import (
+        ManeuverViewRestrictedSuperclassEvaluator,
+        SuperclassCompositePerceptionEvaluator,
+    )
+
+    assert perception_evaluator_class("v9") is CompositePerceptionVideoEvaluator
+    assert perception_evaluator_class("v10a") is SuperclassCompositePerceptionEvaluator
+    assert perception_evaluator_class("v10b") is ManeuverViewRestrictedSuperclassEvaluator
+    # default and case-insensitivity
+    assert perception_evaluator_class(None) is CompositePerceptionVideoEvaluator
+    assert perception_evaluator_class("V10B") is ManeuverViewRestrictedSuperclassEvaluator
+    # the config default stays v9 until tau is re-anchored to the v10 distribution
+    assert ExperimentPipelineConfig().perception_protocol == "v9"
+    with pytest.raises(ValueError):
+        perception_evaluator_class("v11")
 
 
 def test_experiment_pipeline_writes_case_and_summary_records():
