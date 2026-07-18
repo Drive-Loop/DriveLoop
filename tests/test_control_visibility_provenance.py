@@ -63,7 +63,12 @@ def test_an_unmeasured_channel_is_archived_as_unmeasured(tmp_path):
     assert "lighting_night" not in cv["channels"]
 
 
-def test_a_measured_brightness_moves_the_channel_out_of_unmeasured(tmp_path):
+def test_a_measured_brightness_does_not_score_lighting(tmp_path):
+    # The lighting channel was removed (2026-07-18 records): illumination
+    # is locked to the source scene under source-bound generation, so a
+    # brightness threshold measures the source's light, not the arm's.
+    # A present brightness metric no longer moves lighting out of
+    # unmeasured; it stays unmeasured, like weather.
     metadata = _run(
         {
             "perception_measured": 1.0,
@@ -73,8 +78,8 @@ def test_a_measured_brightness_moves_the_channel_out_of_unmeasured(tmp_path):
         tmp_path,
     )
     cv = metadata["control_visibility"]
-    assert cv["channels"]["lighting_night"] == 1.0
-    assert "lighting.night" not in cv["unmeasured"]
+    assert "lighting_night" not in cv["channels"]
+    assert "lighting.night" in cv["unmeasured"]
 
 
 def test_utility_weights_and_s_ctrl_source_reach_the_archive(tmp_path):

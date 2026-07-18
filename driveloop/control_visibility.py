@@ -12,7 +12,6 @@ from typing import Any, Dict
 
 from driveloop.schema import LongTailConditionPlan, SceneSpecification
 
-_NIGHT_BRIGHTNESS_MAX = 90.0
 _MOTION_FULL_CREDIT = 1.0
 
 
@@ -31,22 +30,31 @@ def control_visibility_score(
     if scene_spec.objects:
         channels["object_presence"] = 1.0 if metrics.get("perception_detection_count", 0.0) > 0 else 0.0
 
-    if scene_spec.motion_primitives:
-        motion = metrics.get("perception_dominant_motion_over_width", -1.0)
-        if motion is None or motion < 0:
-            channels["target_motion"] = 0.0  # no usable track means the motion is not visible
-        else:
-            channels["target_motion"] = round(min(motion / _MOTION_FULL_CREDIT, 1.0), 6)
+    # target_motion is scored whenever perception was measured (guaranteed
+    # by the early return above), not only when the grounder parsed a motion
+    # word. An empty motion_primitives is almost always a parse failure --
+    # m4's prompt requests a motion the keyword table cannot read -- and
+    # sparing such a case the channel gives it a single channel to divide
+    # by, inflating the FT lever (+38.1 vs +28.5 percent). Scoring it from
+    # the archived measurement reproduces construction C3 per case to 1e-9
+    # (block 217) and repairs m4 without a re-render.
+    motion = metrics.get("perception_dominant_motion_over_width", -1.0)
+    if motion is None or motion < 0:
+        channels["target_motion"] = 0.0  # no usable track means the motion is not visible
+    else:
+        channels["target_motion"] = round(min(motion / _MOTION_FULL_CREDIT, 1.0), 6)
 
+    # Lighting is a requested control we cannot measure under source-bound
+    # generation: illumination is locked to the source scene, so a
+    # brightness threshold on the selected view scores the source's light,
+    # not the arm's. Listed as unmeasured like weather, never scored.
+    # (2026-07-18 lighting-revival records; block 217 confirmed the nine
+    # runs that still carry perception_best_view_brightness are disjoint
+    # from the seven arms of the three-window table, so removal is score-
+    # inert on the paper's numbers.)
     lighting = scene_spec.environment.get("lighting")
-    brightness = metrics.get("perception_best_view_brightness", -1.0)
     if lighting in ("night", "daytime"):
-        if brightness is None or brightness < 0:
-            unmeasured.append("lighting.%s" % lighting)
-        elif lighting == "night":
-            channels["lighting_night"] = 1.0 if brightness < _NIGHT_BRIGHTNESS_MAX else 0.0
-        else:
-            channels["lighting_daytime"] = 1.0 if brightness >= _NIGHT_BRIGHTNESS_MAX else 0.0
+        unmeasured.append("lighting.%s" % lighting)
 
     weather = scene_spec.environment.get("weather")
     if weather in ("rain", "fog", "snow"):
