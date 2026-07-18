@@ -152,35 +152,70 @@ def _iter_json_objects(value: Any) -> Iterable[dict]:
             yield from _iter_json_objects(item)
 
 
+def _iter_json_documents(directory: Path):
+    """Yield (document, path) for every *.json (whole file) and *.jsonl
+    (one document per line) under the directory. Baseline runs archive the
+    binding in result.json (v10w windows) or in history.jsonl / attempts.jsonl
+    (older v9 runs), so both extensions must be read."""
+    for path in sorted(directory.rglob("*.json")):
+        try:
+            yield json.loads(path.read_text(encoding="utf-8")), path
+        except (ValueError, OSError):
+            continue
+    for path in sorted(directory.rglob("*.jsonl")):
+        try:
+            text = path.read_text(encoding="utf-8")
+        except OSError:
+            continue
+        for line in text.splitlines():
+            line = line.strip()
+            if not line:
+                continue
+            try:
+                yield json.loads(line), path
+            except ValueError:
+                continue
+
+
+def _binding_to_config(binding: Any, path: Path):
+    """Turn a dd2_source_sample_binding object into a source config, or None."""
+    if not isinstance(binding, dict):
+        return None
+    selector = binding.get("selector")
+    selector = selector if isinstance(selector, dict) else {}
+    dataset_dir = binding.get("dataset_dir") or selector.get("dataset_dir")
+    if not dataset_dir:
+        return None
+    return {
+        "dataset_dir": dataset_dir,
+        "source_candidate_id": selector.get("source_candidate_id"),
+        "sample_token": selector.get("sample_token"),
+        "scene_token": selector.get("scene_token"),
+        "instance_token": selector.get("instance_token"),
+        "identity_summary_path": selector.get("identity_summary_path"),
+        "_source_metadata_path": str(path),
+    }
+
+
 def source_config_from_baseline_dir(directory: Path) -> Dict[str, Any]:
     """Extract the window source config (dataset_dir + selector tokens) from a
     baseline run directory's archived metadata, so tokens are read byte-exact
-    from the archive rather than retyped. Searches every *.json under the dir for
-    a dd2_source_sample_binding object and reads its dataset_dir + selector."""
+    from the archive rather than retyped. Reads both *.json and *.jsonl, finds a
+    dd2_source_sample_binding, and prefers one whose selector carries at least
+    one non-null token (falling back to the first with a dataset_dir)."""
     directory = Path(directory)
-    for json_path in sorted(directory.rglob("*.json")):
-        try:
-            data = json.loads(json_path.read_text(encoding="utf-8"))
-        except (ValueError, OSError):
-            continue
-        for obj in _iter_json_objects(data):
-            binding = obj.get("dd2_source_sample_binding")
-            if not isinstance(binding, dict):
+    token_keys = ("source_candidate_id", "sample_token", "scene_token", "instance_token")
+    fallback = None
+    for document, path in _iter_json_documents(directory):
+        for obj in _iter_json_objects(document):
+            config = _binding_to_config(obj.get("dd2_source_sample_binding"), path)
+            if config is None:
                 continue
-            selector = binding.get("selector")
-            selector = selector if isinstance(selector, dict) else {}
-            dataset_dir = binding.get("dataset_dir") or selector.get("dataset_dir")
-            if not dataset_dir:
-                continue
-            return {
-                "dataset_dir": dataset_dir,
-                "source_candidate_id": selector.get("source_candidate_id"),
-                "sample_token": selector.get("sample_token"),
-                "scene_token": selector.get("scene_token"),
-                "instance_token": selector.get("instance_token"),
-                "identity_summary_path": selector.get("identity_summary_path"),
-                "_source_metadata_path": str(json_path),
-            }
+            if any(config.get(key) for key in token_keys):
+                return config
+            fallback = fallback or config
+    if fallback is not None:
+        return fallback
     raise SystemExit("no dd2_source_sample_binding with a dataset_dir found under %s" % directory)
 
 

@@ -126,6 +126,44 @@ def test_source_config_from_baseline_dir(tmp_path):
     assert config["scene_token"] == "1d4"
 
 
+def test_source_config_from_history_jsonl(tmp_path):
+    # Older v9 baselines archive the binding in history.jsonl, not result.json.
+    directory = tmp_path / "v9_no_injection_baseline"
+    directory.mkdir()
+    line = {"dd2_source_sample_binding": {
+        "dataset_dir": "/mnt/x/candidate70_source_bound/cam_all_train/v0.0.1",
+        "selector": {
+            "source_candidate_id": "candidate70",
+            "sample_token": "b4c2",
+            "scene_token": None,
+            "instance_token": "21cd",
+            "identity_summary_path": "outputs/x/summary.json",
+        },
+    }}
+    (directory / "history.jsonl").write_text(json.dumps(line) + "\n", encoding="utf-8")
+    config = probe.source_config_from_baseline_dir(directory)
+    assert config["source_candidate_id"] == "candidate70"
+    assert config["dataset_dir"].endswith("candidate70_source_bound/cam_all_train/v0.0.1")
+    assert config["sample_token"] == "b4c2"
+
+
+def test_source_config_prefers_binding_with_nonnull_token(tmp_path):
+    # A record may carry an all-null selector alongside the real one; the
+    # extractor must skip the empty one and return the populated binding.
+    directory = tmp_path / "baseline"
+    directory.mkdir()
+    empty = {"dd2_source_sample_binding": {"dataset_dir": "/mnt/x/win/v0.0.1", "selector": {
+        "source_candidate_id": None, "sample_token": None, "scene_token": None, "instance_token": None}}}
+    real = {"dd2_source_sample_binding": {"dataset_dir": "/mnt/x/win/v0.0.1", "selector": {
+        "source_candidate_id": "candidateX", "sample_token": "tok"}}}
+    (directory / "history.jsonl").write_text(
+        json.dumps(empty) + "\n" + json.dumps(real) + "\n", encoding="utf-8"
+    )
+    config = probe.source_config_from_baseline_dir(directory)
+    assert config["source_candidate_id"] == "candidateX"
+    assert config["sample_token"] == "tok"
+
+
 def test_load_cases(tmp_path):
     manifest = tmp_path / "cases.json"
     manifest.write_text(json.dumps({"cases": [{"name": "m1", "prompt": CUT_IN_LEFT}]}), encoding="utf-8")
