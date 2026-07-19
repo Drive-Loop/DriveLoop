@@ -1,38 +1,80 @@
 {
-  "note": "Real source-window pool for prompt-driven selection. candidate70/162/2216 are a night motorcycle-cut-in family; candidate1409 is a night pedestrian-crossing window built with the same pipeline (scan -> identity probe -> runtime subset -> baseline). With the pedestrian window added, ranking now separates by requested object: a pedestrian prompt selects candidate1409, a motorcycle prompt selects a motorcycle window. Each entry carries source_from_baseline_dir so the selected window's binding is read byte-exact from its baseline directory. More scenarios (truck, daytime, fog) extend this further.",
+  "note": "Real source-window pool for prompt-driven selection, widened past the original night motorcycle-cut-in family (candidate70/162/2216). candidate1409 is a pedestrian crossing; candidate1677 is a truck overtake/cut-in; both built with the same category-neutral pipeline (scan -> find_candidate_actor -> identity probe -> runtime subset -> baseline). Ranking separates by requested object: a pedestrian prompt selects candidate1409, a truck prompt candidate1677, a motorcycle prompt a motorcycle window. Each entry carries source_from_baseline_dir so the selected window's binding is read byte-exact from its baseline directory. More conditions (daytime, fog) extend this further.",
   "candidates": [
     {
+      "candidate_id": "candidate1677",
+      "objects": [
+        "truck"
+      ],
+      "motions": [
+        "cut_in",
+        "lane_change"
+      ],
+      "tags": [],
+      "has_hdmap": true,
+      "has_actor_identity": true,
+      "source_from_baseline_dir": "outputs/driveloop/candidate1677_baseline_official"
+    },
+    {
       "candidate_id": "candidate1409",
-      "objects": ["pedestrian"],
-      "motions": ["crossing"],
-      "tags": ["night"],
+      "objects": [
+        "pedestrian"
+      ],
+      "motions": [
+        "crossing"
+      ],
+      "tags": [
+        "night"
+      ],
       "has_hdmap": true,
       "has_actor_identity": true,
       "source_from_baseline_dir": "outputs/driveloop/candidate1409_baseline_official"
     },
     {
       "candidate_id": "candidate70",
-      "objects": ["motorcycle"],
-      "motions": ["cut_in", "lane_change"],
-      "tags": ["night"],
+      "objects": [
+        "motorcycle"
+      ],
+      "motions": [
+        "cut_in",
+        "lane_change"
+      ],
+      "tags": [
+        "night"
+      ],
       "has_hdmap": true,
       "has_actor_identity": true,
       "source_from_baseline_dir": "outputs/driveloop/v9_no_injection_baseline"
     },
     {
       "candidate_id": "candidate162",
-      "objects": ["motorcycle"],
-      "motions": ["cut_in", "lane_change"],
-      "tags": ["night"],
+      "objects": [
+        "motorcycle"
+      ],
+      "motions": [
+        "cut_in",
+        "lane_change"
+      ],
+      "tags": [
+        "night"
+      ],
       "has_hdmap": true,
       "has_actor_identity": true,
       "source_from_baseline_dir": "outputs/driveloop/v10w_candidate162_baseline_official"
     },
     {
       "candidate_id": "candidate2216",
-      "objects": ["motorcycle", "tricycle"],
-      "motions": ["cut_in", "lane_change"],
-      "tags": ["night"],
+      "objects": [
+        "motorcycle",
+        "tricycle"
+      ],
+      "motions": [
+        "cut_in",
+        "lane_change"
+      ],
+      "tags": [
+        "night"
+      ],
       "has_hdmap": true,
       "has_actor_identity": true,
       "source_from_baseline_dir": "outputs/driveloop/v10w_candidate2216_baseline_official"
