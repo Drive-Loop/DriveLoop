@@ -1,0 +1,32 @@
+{
+  "note": "Real source-window pool for prompt-driven selection. These three windows are a homogeneous family (night nuScenes motorcycle cut-in), so ranking barely separates them; meaningful selection needs a diverse pool (different actors / maneuvers / conditions), which is the multi-scenario work. Each entry carries source_from_baseline_dir so the selected window's binding is read byte-exact from its baseline directory.",
+  "candidates": [
+    {
+      "candidate_id": "candidate70",
+      "objects": ["motorcycle"],
+      "motions": ["cut_in", "lane_change"],
+      "tags": ["night"],
+      "has_hdmap": true,
+      "has_actor_identity": true,
+      "source_from_baseline_dir": "outputs/driveloop/v9_no_injection_baseline"
+    },
+    {
+      "candidate_id": "candidate162",
+      "objects": ["motorcycle"],
+      "motions": ["cut_in", "lane_change"],
+      "tags": ["night"],
+      "has_hdmap": true,
+      "has_actor_identity": true,
+      "source_from_baseline_dir": "outputs/driveloop/v10w_candidate162_baseline_official"
+    },
+    {
+      "candidate_id": "candidate2216",
+      "objects": ["motorcycle", "tricycle"],
+      "motions": ["cut_in", "lane_change"],
+      "tags": ["night"],
+      "has_hdmap": true,
+      "has_actor_identity": true,
+      "source_from_baseline_dir": "outputs/driveloop/v10w_candidate2216_baseline_official"
+    }
+  ]
+}
