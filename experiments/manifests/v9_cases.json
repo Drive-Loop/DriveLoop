@@ -2,6 +2,6 @@
  {"name": "m1_night_cut_in_left", "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle", "tags": ["motorcycle_cut_in", "left_lane_relation"]},
  {"name": "m2_rainy_night_cut_in", "prompt": "rainy night, a motorcycle cuts in from the left lane near the ego car", "tags": ["motorcycle_cut_in", "left_lane_relation", "rain"]},
  {"name": "m3_lane_change_left_to_ego", "prompt": "night street, a clearly visible motorcycle changes lane from the left into the ego lane", "tags": ["motorcycle_lane_change", "left_lane_relation"]},
- {"name": "m4_intersection_approach", "prompt": "night urban intersection, a motorcycle approaches from the left adjacent lane toward the ego path", "tags": ["motorcycle_approach", "intersection"]},
+ {"name": "m4_cut_in_right", "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle", "tags": ["motorcycle_cut_in", "right_lane_relation"]},
  {"name": "m5_low_visibility_cut_in", "prompt": "foggy night with low visibility, a motorcycle cut-in from the left toward the ego vehicle", "tags": ["motorcycle_cut_in", "low_visibility"]}
 ]}

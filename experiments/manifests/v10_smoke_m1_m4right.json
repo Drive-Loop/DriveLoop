@@ -1,0 +1,4 @@
+{"cases": [
+ {"name": "m1_night_cut_in_left", "prompt": "night urban street, a motorcycle cuts in from the left toward the ego vehicle", "tags": ["motorcycle_cut_in", "left_lane_relation"]},
+ {"name": "m4_cut_in_right", "prompt": "night urban street, a motorcycle cuts in from the right toward the ego vehicle", "tags": ["motorcycle_cut_in", "right_lane_relation"]}
+]}
