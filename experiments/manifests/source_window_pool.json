@@ -1,5 +1,5 @@
 {
-  "note": "Prompt-driven source pool across object AND condition. Objects: motorcycle (candidate162/70/2216 day, candidate1300 night), pedestrian (candidate1409 day), truck (candidate1677 day, candidate1313 night). Lighting ground-truthed from raw nuScenes scene.json (850 scenes, 99 night); night windows come from the val enumeration (cam_all_val). Same-object day/night contrasts: motorcycle 162 vs 1300, truck 1677 vs 1313. Built with the category-neutral pipeline; each carries source_from_baseline_dir. Rain/fog next.",
+  "note": "Prompt-driven source pool across object AND condition. Objects: motorcycle (candidate162/70/2216 day, candidate1300 night), pedestrian (candidate1409 day), truck (candidate1677 day, candidate1313 night). Lighting ground-truthed from raw nuScenes scene.json (850 scenes, 99 night); night windows come from the val enumeration (cam_all_val). Same-object day/night contrasts: motorcycle 162 vs 1300, truck 1677 vs 1313. Built with the category-neutral pipeline; each carries source_from_baseline_dir. Truck now spans three conditions: candidate1677 day, candidate1313 night, candidate2751 rain (all lift via rung-2 rebinding).",
   "candidates": [
     {
       "candidate_id": "candidate1300",
@@ -32,6 +32,22 @@
       "has_hdmap": true,
       "has_actor_identity": true,
       "source_from_baseline_dir": "outputs/driveloop/candidate1313_baseline_official"
+    },
+    {
+      "candidate_id": "candidate2751",
+      "objects": [
+        "truck"
+      ],
+      "motions": [
+        "cut_in",
+        "lane_change"
+      ],
+      "tags": [
+        "rain"
+      ],
+      "has_hdmap": true,
+      "has_actor_identity": true,
+      "source_from_baseline_dir": "outputs/driveloop/candidate2751_baseline_official"
     },
     {
       "candidate_id": "candidate1677",
