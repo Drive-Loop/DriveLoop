@@ -1,6 +1,38 @@
 {
-  "note": "Real source-window pool for prompt-driven selection, widened past the original night motorcycle-cut-in family (candidate70/162/2216). candidate1409 is a pedestrian crossing; candidate1677 is a truck overtake/cut-in; both built with the same category-neutral pipeline (scan -> find_candidate_actor -> identity probe -> runtime subset -> baseline). Ranking separates by requested object: a pedestrian prompt selects candidate1409, a truck prompt candidate1677, a motorcycle prompt a motorcycle window. Each entry carries source_from_baseline_dir so the selected window's binding is read byte-exact from its baseline directory. More conditions (daytime, fog) extend this further.",
+  "note": "Prompt-driven source pool across object AND condition. Objects: motorcycle (candidate162/70/2216 day, candidate1300 night), pedestrian (candidate1409 day), truck (candidate1677 day, candidate1313 night). Lighting ground-truthed from raw nuScenes scene.json (850 scenes, 99 night); night windows come from the val enumeration (cam_all_val). Same-object day/night contrasts: motorcycle 162 vs 1300, truck 1677 vs 1313. Built with the category-neutral pipeline; each carries source_from_baseline_dir. Rain/fog next.",
   "candidates": [
+    {
+      "candidate_id": "candidate1300",
+      "objects": [
+        "motorcycle"
+      ],
+      "motions": [
+        "cut_in",
+        "lane_change"
+      ],
+      "tags": [
+        "night"
+      ],
+      "has_hdmap": true,
+      "has_actor_identity": true,
+      "source_from_baseline_dir": "outputs/driveloop/candidate1300_baseline_official"
+    },
+    {
+      "candidate_id": "candidate1313",
+      "objects": [
+        "truck"
+      ],
+      "motions": [
+        "cut_in",
+        "lane_change"
+      ],
+      "tags": [
+        "night"
+      ],
+      "has_hdmap": true,
+      "has_actor_identity": true,
+      "source_from_baseline_dir": "outputs/driveloop/candidate1313_baseline_official"
+    },
     {
       "candidate_id": "candidate1677",
       "objects": [
@@ -10,7 +42,9 @@
         "cut_in",
         "lane_change"
       ],
-      "tags": [],
+      "tags": [
+        "daytime"
+      ],
       "has_hdmap": true,
       "has_actor_identity": true,
       "source_from_baseline_dir": "outputs/driveloop/candidate1677_baseline_official"
@@ -24,7 +58,7 @@
         "crossing"
       ],
       "tags": [
-        "night"
+        "daytime"
       ],
       "has_hdmap": true,
       "has_actor_identity": true,
@@ -40,7 +74,7 @@
         "lane_change"
       ],
       "tags": [
-        "night"
+        "daytime"
       ],
       "has_hdmap": true,
       "has_actor_identity": true,
@@ -56,7 +90,7 @@
         "lane_change"
       ],
       "tags": [
-        "night"
+        "daytime"
       ],
       "has_hdmap": true,
       "has_actor_identity": true,
@@ -73,7 +107,7 @@
         "lane_change"
       ],
       "tags": [
-        "night"
+        "daytime"
       ],
       "has_hdmap": true,
       "has_actor_identity": true,
