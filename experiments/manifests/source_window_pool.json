@@ -128,6 +128,38 @@
       "has_hdmap": true,
       "has_actor_identity": true,
       "source_from_baseline_dir": "outputs/driveloop/v10w_candidate2216_baseline_official"
+    },
+    {
+      "candidate_id": "candidate28",
+      "objects": [
+        "bus"
+      ],
+      "motions": [
+        "cut_in",
+        "lane_change"
+      ],
+      "tags": [
+        "daytime"
+      ],
+      "has_hdmap": true,
+      "has_actor_identity": true,
+      "source_from_baseline_dir": "outputs/driveloop/candidate28_baseline_official"
+    },
+    {
+      "candidate_id": "candidate41",
+      "objects": [
+        "bicycle"
+      ],
+      "motions": [
+        "cut_in",
+        "lane_change"
+      ],
+      "tags": [
+        "daytime"
+      ],
+      "has_hdmap": true,
+      "has_actor_identity": true,
+      "source_from_baseline_dir": "outputs/driveloop/candidate41_baseline_official"
     }
   ]
 }
