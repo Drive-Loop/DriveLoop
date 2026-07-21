@@ -19,27 +19,36 @@ PERCEPTION_FAILURE = Evaluation(
 )
 
 
-def test_each_round_produces_a_new_prompt():
+def test_first_round_produces_a_new_prompt_then_synthetic_rung_reverts():
     refiner = RuleBasedRefiner()
-    prompt = "night street, a motorcycle changes lane from the left into the ego lane"
-    seen = {prompt}
-    for _ in range(4):
-        refinement = refiner.refine(DriveLoopRequest(prompt=prompt), PERCEPTION_FAILURE)
-        assert refinement.prompt not in seen, "refiner saturated: prompt did not change"
-        seen.add(refinement.prompt)
-        prompt = refinement.prompt
+    original = "night street, a motorcycle changes lane from the left into the ego lane"
+    r1 = refiner.refine(DriveLoopRequest(prompt=original), PERCEPTION_FAILURE)
+    assert r1.prompt != original  # round 1: text refinement engages
+    r2 = refiner.refine(
+        DriveLoopRequest(prompt=r1.prompt, condition=r1.condition), PERCEPTION_FAILURE
+    )
+    # cr9 ablation 2026-07-21: additions suppress the synthetic actor;
+    # the synthetic rung must return the original user prompt.
+    assert r2.prompt == original
+    assert r2.condition["synthetic_trajectory_escalation"]["level"] == 2
+    assert r2.condition["driveloop_original_prompt"] == original
 
 
-def test_escalation_ladder_engages_when_base_additions_exhausted():
+def test_escalation_ladder_engages_when_structural_escalation_disabled():
     refiner = RuleBasedRefiner()
+    refiner.STRUCTURAL_ESCALATION_ENABLED = False
     prompt = "a motorcycle scene"
     for _ in range(2):
         prompt = refiner.refine(DriveLoopRequest(prompt=prompt), PERCEPTION_FAILURE).prompt
-    assert any(e.lower() in prompt.lower() for e in refiner.PERCEPTION_ESCALATION)
+    assert any(
+        e.format(category="motorcycle").lower() in prompt.lower()
+        for e in refiner.PERCEPTION_ESCALATION
+    )
 
 
 def test_no_duplicate_additions_in_prompt():
     refiner = RuleBasedRefiner()
+    refiner.STRUCTURAL_ESCALATION_ENABLED = False
     prompt = "a motorcycle scene"
     for _ in range(3):
         prompt = refiner.refine(DriveLoopRequest(prompt=prompt), PERCEPTION_FAILURE).prompt

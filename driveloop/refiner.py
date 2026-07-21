@@ -107,6 +107,7 @@ class RuleBasedRefiner:
             prompt = prompt.rstrip(".") + ", " + ", ".join(additions) + "."
 
         condition = dict(request.condition)
+        condition.setdefault("driveloop_original_prompt", request.prompt.strip())
 
         alignment_feedback = self._alignment_feedback(evaluation, alignment_additions)
         if alignment_feedback:
@@ -170,6 +171,15 @@ class RuleBasedRefiner:
                     " not proof of visual realization",
                 }
                 notes.append("synthetic_trajectory_escalation_level_%d" % level)
+                # cr9 ablation 2026-07-21 (night motorcycle, 9 m synthetic):
+                # the bare prompt recovers at 4/4 seeds
+                # (0.650/0.395/0.332/0.143) while the additions-refined
+                # prompt scores 0.000. Text amplification suppresses the
+                # synthetic actor, so the synthetic rung reverts to the
+                # original user prompt and relies on the structural
+                # condition alone.
+                prompt = condition.get("driveloop_original_prompt", prompt)
+                notes.append("synthetic_rung_reverts_to_original_prompt")
                 if category in self.SMALL_ACTOR_CATEGORIES:
                     # Distance sweep 2026-07-21: small actors under
                     # degraded conditions become detectable only at
