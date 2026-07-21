@@ -4,28 +4,42 @@ from driveloop.schema import Diagnosis, DriveLoopRequest, Evaluation
 FAILURE = Evaluation(0.1, {}, Diagnosis(False, ["target_object_not_detected"], []))
 
 
-def test_rebinding_triggers_after_structural_escalation():
+def test_synthetic_escalation_triggers_after_structural_escalation():
     refiner = RuleBasedRefiner()
     request = DriveLoopRequest(prompt="a motorcycle changes lane")
     r1 = refiner.refine(request, FAILURE)
-    assert "source_rebinding" not in r1.condition  # level 1: structural escalation first
+    assert "synthetic_trajectory_escalation" not in r1.condition  # level 1 first
     r2 = refiner.refine(DriveLoopRequest(prompt=r1.prompt, condition=r1.condition), FAILURE)
-    assert r2.condition["source_rebinding"]["candidate_offset"] == 1  # level 2: source rebinding
+    assert r2.condition["synthetic_trajectory_escalation"]["level"] == 2
     r3 = refiner.refine(DriveLoopRequest(prompt=r2.prompt, condition=r2.condition), FAILURE)
-    assert r3.condition["source_rebinding"]["candidate_offset"] == 2
+    assert r3.condition["synthetic_trajectory_escalation"]["level"] == 3
 
 
-def test_rebinding_not_added_for_non_perception_failure():
+def test_synthetic_escalation_not_added_below_level_two():
     refiner = RuleBasedRefiner()
     evaluation = Evaluation(0.1, {}, Diagnosis(False, ["low_detector_confidence"], []))
     refinement = refiner.refine(DriveLoopRequest(prompt="a motorcycle scene"), evaluation)
-    assert "source_rebinding" not in refinement.condition
+    assert "synthetic_trajectory_escalation" not in refinement.condition
 
 
-def test_ablation_gate_disables_structural_and_rebinding():
+def test_ablation_gate_disables_structural_and_synthetic_escalation():
     refiner = RuleBasedRefiner()
     refiner.STRUCTURAL_ESCALATION_ENABLED = False
     request = DriveLoopRequest(prompt="a motorcycle changes lane")
     refinement = refiner.refine(request, FAILURE)
     assert "structural_escalation" not in refinement.condition
-    assert "source_rebinding" not in refinement.condition
+    assert "synthetic_trajectory_escalation" not in refinement.condition
+
+
+def test_synthetic_escalation_uses_close_range_for_small_actors():
+    refiner = RuleBasedRefiner()
+    r1 = refiner.refine(DriveLoopRequest(prompt="a motorcycle changes lane"), FAILURE)
+    r2 = refiner.refine(DriveLoopRequest(prompt=r1.prompt, condition=r1.condition), FAILURE)
+    assert r2.condition["structural_escalation"]["longitudinal_base_m"] == 9.0
+
+
+def test_synthetic_escalation_keeps_default_range_for_large_actors():
+    refiner = RuleBasedRefiner()
+    r1 = refiner.refine(DriveLoopRequest(prompt="a truck cuts in from the left"), FAILURE)
+    r2 = refiner.refine(DriveLoopRequest(prompt=r1.prompt, condition=r1.condition), FAILURE)
+    assert "longitudinal_base_m" not in r2.condition["structural_escalation"]

@@ -20,10 +20,31 @@ class RuleBasedRefiner:
     STRUCTURAL_ESCALATION_ENABLED = True
 
     PERCEPTION_ESCALATION = [
-        "the motorcycle rides in the left adjacent lane very close to the ego vehicle, large in the frame",
-        "close range view of the motorcycle with its headlight on, occupying a prominent part of the front-left camera view",
-        "the motorcycle is centered, sharp and high contrast against the road at close distance",
+        "the {category} travels in the left adjacent lane very close to the ego vehicle, large in the frame",
+        "close range view of the {category}, occupying a prominent part of the front-left camera view",
+        "the {category} is centered, sharp and high contrast against the road at close distance",
     ]
+
+    SMALL_ACTOR_CATEGORIES = {"motorcycle", "bicycle", "pedestrian"}
+    SYNTHETIC_CLOSE_RANGE_M = 9.0
+
+    KNOWN_CATEGORIES = [
+        "motorcycle",
+        "pedestrian",
+        "bicycle",
+        "truck",
+        "bus",
+        "car",
+    ]
+
+    def _requested_category(self, prompt: str) -> str:
+        """First known category mentioned in the prompt; the escalation
+        templates must never change the requested object class (the
+        2026-07-21 motorcycle-template leak hijacked the target actor
+        and silently disabled real-track injection)."""
+        text = prompt.lower()
+        found = [(text.find(cat), cat) for cat in self.KNOWN_CATEGORIES if cat in text]
+        return min(found)[1] if found else "target vehicle"
 
     SOURCE_REASONS = {
         "source_selection_unavailable",
@@ -43,6 +64,7 @@ class RuleBasedRefiner:
 
     def refine(self, request: DriveLoopRequest, evaluation: Evaluation) -> Refinement:
         prompt = request.prompt.strip()
+        category = self._requested_category(prompt)
         additions: list[str] = []
         notes = list(evaluation.diagnosis.reasons)
 
@@ -54,8 +76,8 @@ class RuleBasedRefiner:
             elif action == "add explicit traffic actor or maneuver":
                 additions.append("surrounded by vehicles with a safe lane-change interaction")
 
-        alignment_additions = self._alignment_prompt_additions(evaluation)
-        perception_additions = self._perception_prompt_additions(evaluation)
+        alignment_additions = self._alignment_prompt_additions(evaluation, category)
+        perception_additions = self._perception_prompt_additions(evaluation, category)
         additions.extend(alignment_additions)
         additions.extend(perception_additions)
 
@@ -75,7 +97,8 @@ class RuleBasedRefiner:
 
         additions = [a for a in dict.fromkeys(additions) if a.lower() not in prompt.lower()]
         if not additions and (self.PERCEPTION_REASONS & set(evaluation.diagnosis.reasons)):
-            for escalation in self.PERCEPTION_ESCALATION:
+            for template in self.PERCEPTION_ESCALATION:
+                escalation = template.format(category=category)
                 if escalation.lower() not in prompt.lower():
                     additions.append(escalation)
                     notes.append("perception_escalation_applied")
@@ -139,12 +162,25 @@ class RuleBasedRefiner:
             }
             notes.append("generation_escalation_level_%d" % level)
             if level >= 2:
-                condition["source_rebinding"] = {
-                    "candidate_offset": level - 1,
-                    "reason": "structural_escalation_insufficient",
-                    "claim_boundary": "source window shifted; token match refers to offset-zero window",
+                condition["synthetic_trajectory_escalation"] = {
+                    "level": level,
+                    "reason": "real_track_reinforcement_undetected",
+                    "claim_boundary": "deliberate synthetic close-range trajectory"
+                    " conditioning for the requested category;"
+                    " not proof of visual realization",
                 }
-                notes.append("source_rebinding_offset_%d" % (level - 1))
+                notes.append("synthetic_trajectory_escalation_level_%d" % level)
+                if category in self.SMALL_ACTOR_CATEGORIES:
+                    # Distance sweep 2026-07-21: small actors under
+                    # degraded conditions become detectable only at
+                    # close range (night motorcycle 0 -> 0.650 at 9 m,
+                    # dead at 15/20 m); large actors keep the side
+                    # defaults (rain truck recovers at the default
+                    # 20 m and dies at 9-15 m).
+                    condition["structural_escalation"]["longitudinal_base_m"] = (
+                        self.SYNTHETIC_CLOSE_RANGE_M
+                    )
+                    notes.append("synthetic_close_range_small_actor")
 
         return Refinement(
             prompt=prompt,
@@ -152,7 +188,9 @@ class RuleBasedRefiner:
             notes=list(dict.fromkeys(notes)),
         )
 
-    def _alignment_prompt_additions(self, evaluation: Evaluation) -> list[str]:
+    def _alignment_prompt_additions(
+        self, evaluation: Evaluation, category: str = "target vehicle"
+    ) -> list[str]:
         additions: list[str] = []
         for check_name in self._failed_alignment_checks(evaluation):
             normalized = check_name.lower()
@@ -164,15 +202,15 @@ class RuleBasedRefiner:
             ):
                 additions.append("a clearly visible motorcycle or scooter target remains large and unoccluded")
             elif "object_consistency" in normalized or "trackable" in normalized:
-                additions.append("the same target motorcycle remains trackable across frames")
+                additions.append("the same target %s remains trackable across frames" % category)
             elif "cut_in" in normalized or "cut-in" in normalized:
-                additions.append("the motorcycle visibly cuts in from the left toward the ego path")
+                additions.append("the %s visibly cuts in from the left toward the ego path" % category)
             elif check_name == "spatial_relation.left_lane_change":
-                additions.append("the motorcycle performs a visible lane change from the left")
+                additions.append("the %s performs a visible lane change from the left" % category)
             elif "spatial_relation" in normalized:
                 additions.append("the target starts in the left or adjacent lane and moves toward the ego path")
             elif "lateral_displacement" in normalized:
-                additions.append("the target motorcycle shows measurable lateral displacement over time")
+                additions.append("the target %s shows measurable lateral displacement over time" % category)
             elif "hdmap_alignment" in normalized:
                 additions.append("visible lane geometry stays consistent with the intended cut-in path")
             elif check_name == "lighting.daytime":
@@ -182,7 +220,9 @@ class RuleBasedRefiner:
 
         return additions
 
-    def _perception_prompt_additions(self, evaluation: Evaluation) -> list[str]:
+    def _perception_prompt_additions(
+        self, evaluation: Evaluation, category: str = "target vehicle"
+    ) -> list[str]:
         reasons = set(evaluation.diagnosis.reasons)
         additions: list[str] = []
         if {"target_object_not_detected", "low_detection_coverage"} & reasons:
@@ -197,7 +237,9 @@ class RuleBasedRefiner:
             additions.append("the target actor has stable scale and position changes across frames")
         if "target_appears_static" in reasons:
             additions.append(
-                "the target motorcycle is clearly moving, with visible lateral displacement across the frames, not parked and not stationary"
+                "the target %s is clearly moving, with visible lateral"
+                " displacement across the frames, not parked and not"
+                " stationary" % category
             )
         return additions
 
