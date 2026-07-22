@@ -24,7 +24,7 @@ def test_refiner_keeps_prompt_when_alignment_not_measured_only():
 
 
 def test_refiner_adds_text_constraints_for_failed_alignment_checks():
-    request = DriveLoopRequest(prompt="daytime urban road")
+    request = DriveLoopRequest(prompt="daytime urban road with a motorcycle")
     evaluation = Evaluation(
         score=0.0,
         diagnosis=Diagnosis(
@@ -166,7 +166,7 @@ def test_refiner_builds_runtime_control_feedback_for_unsupported_runtime_control
 
 
 def test_refiner_adds_candidate70_semantic_protocol_constraints():
-    request = DriveLoopRequest(prompt="night urban road")
+    request = DriveLoopRequest(prompt="night urban road with a motorcycle")
     evaluation = Evaluation(
         score=0.36,
         diagnosis=Diagnosis(

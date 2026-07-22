@@ -7,7 +7,7 @@ from scripts.run_alignment_feedback_loop_demo import failed_checks_from_alignmen
 def test_alignment_feedback_loop_demo_records_feedback_trace(tmp_path: Path):
     payload = run_demo(
         Namespace(
-            prompt="daytime urban road",
+            prompt="daytime urban road with a motorcycle",
             scenario_id="unit_alignment_feedback_loop",
             output_dir=str(tmp_path),
             target_score=0.8,

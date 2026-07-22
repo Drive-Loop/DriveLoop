@@ -121,6 +121,10 @@ class DriveDreamer2Backend(GenerationBackend):
             else {}
         )
 
+        self._synthetic_trajectory_escalation = bool(
+            isinstance(request.condition, dict)
+            and request.condition.get("synthetic_trajectory_escalation")
+        )
         runtime_sample_selector = self._build_runtime_sample_selector(request)
         source_sample_binding = self._build_source_sample_binding(runtime_sample_selector)
         effective_batch_skip = (
@@ -879,13 +883,19 @@ class DriveDreamer2Backend(GenerationBackend):
         ego_injection_enabled = os.environ.get("DRIVELOOP_EGO_INJECTION") == "1"
         per_frame_append_ego_boxes: list[dict] = []
         if per_frame_append_boxes and ego_injection_enabled:
-            (
-                real_track_entries,
-                real_track_mapping,
-            ) = self._map_real_track_to_ego_entries(
-                per_frame_append_boxes,
-                source_sample_binding,
-            )
+            if getattr(self, "_synthetic_trajectory_escalation", False):
+                real_track_entries, real_track_mapping = [], {
+                    "available": False,
+                    "reason": "synthetic_trajectory_escalation_requested",
+                }
+            else:
+                (
+                    real_track_entries,
+                    real_track_mapping,
+                ) = self._map_real_track_to_ego_entries(
+                    per_frame_append_boxes,
+                    source_sample_binding,
+                )
             if real_track_entries:
                 per_frame_append_ego_boxes = real_track_entries
                 actor_motion_frame_mapping = real_track_mapping

@@ -151,7 +151,7 @@ def test_runner_refines_prompt_from_alignment_diagnostics():
     assert len(result.history) == 2
     assert result.best_evaluation.score == 1.0
     assert "a motorcycle must be visibly present" in result.best_generation.prompt
-    assert "the motorcycle performs a visible lane change from the left" in result.best_generation.prompt
+    assert "the target vehicle performs a visible lane change from the left" in result.best_generation.prompt
 
 def test_runner_carries_alignment_feedback_to_next_backend_request():
     from driveloop.backends.base import GenerationBackend
