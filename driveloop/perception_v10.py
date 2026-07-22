@@ -55,6 +55,9 @@ class SuperclassCompositePerceptionEvaluator(CompositePerceptionVideoEvaluator):
         self._v10_original_labels = set(base_labels)
         return expand_labels(set(base_labels))
 
+    def _direction_label_set(self, category: str) -> set:
+        return expand_labels(super()._direction_label_set(category))
+
     def class_fidelity(
         self,
         view_centers: List,

@@ -200,6 +200,16 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
                 )
         return Evaluation(selected_evaluation.score, metrics, diagnosis)
 
+    def _direction_label_set(self, category: str) -> set:
+        """Label vocabulary for the maneuver-direction probe, aligned
+        with the scoring vocabulary: normalized labels (the raw
+        detector says person, the scorer says pedestrian), widened by
+        the same super-class expansion the subclass scorer uses. The
+        raw-label exact match this replaces silently made direction
+        unmeasurable for pedestrian targets and stricter than the
+        score itself (2026-07-22 direction-densification record)."""
+        return {self._normalize_label(str(category))} if category else set()
+
     def _maneuver_direction_check(self, metadata, centers):
         """Expected pixel motion of the injected actor in the selected
         view: approaching the ego lane means moving toward the image
@@ -220,6 +230,7 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
             return None
         target_actor = surface.get("target_actor") or {}
         category = str(target_actor.get("category") or "").lower()
+        allowed = self._direction_label_set(category)
         observed = []
         for frame_dets in centers:
             if not frame_dets:
@@ -227,7 +238,7 @@ class CompositePerceptionVideoEvaluator(PerceptionVideoEvaluator):
             values = [
                 center
                 for label, center in frame_dets
-                if not category or label == category
+                if not allowed or self._normalize_label(str(label)) in allowed
             ]
             if values:
                 observed.append(sum(values) / len(values))

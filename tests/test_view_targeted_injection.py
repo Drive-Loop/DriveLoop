@@ -169,3 +169,47 @@ def test_target_view_indices_resolution():
     assert evaluator._target_view_indices(metadata) == [0, 1]
     assert evaluator._target_view_indices({}) == []
     assert evaluator._target_view_indices({"dd2_override_candidate_plan": None}) == []
+
+
+def test_direction_check_normalizes_raw_detector_labels():
+    # YOLO reports "person"; the requested category is "pedestrian".
+    evaluator = object.__new__(CompositePerceptionVideoEvaluator)
+    evaluator.layout = CompositeVideoLayout()
+    metadata = {
+        "dd2_override_candidate_plan": {
+            "actor_motion_surface_plan": {
+                "maneuver": "cut_in",
+                "lateral_side": -1.0,
+                "target_cam_types": ["cam_front"],
+                "target_actor": {"category": "pedestrian"},
+            }
+        }
+    }
+    person = lambda x: [("person", x)]
+    ok = evaluator._maneuver_direction_check(
+        metadata, [person(100.0), person(140.0), person(180.0)]
+    )
+    assert ok is not None and ok[2] is True
+
+
+def test_direction_check_uses_superclass_vocabulary_in_v10():
+    from driveloop.perception_v10 import ManeuverViewRestrictedSuperclassEvaluator
+
+    evaluator = object.__new__(ManeuverViewRestrictedSuperclassEvaluator)
+    evaluator.layout = CompositeVideoLayout()
+    metadata = {
+        "dd2_override_candidate_plan": {
+            "actor_motion_surface_plan": {
+                "maneuver": "cut_in",
+                "lateral_side": -1.0,
+                "target_cam_types": ["cam_front"],
+                "target_actor": {"category": "motorcycle"},
+            }
+        }
+    }
+    bikes = [[("bicycle", 100.0)], [("bicycle", 140.0)], [("bicycle", 180.0)]]
+    ok = evaluator._maneuver_direction_check(metadata, bikes)
+    assert ok is not None and ok[2] is True
+    # outside the super-class must still not produce a verdict
+    cars = [[("car", 100.0)], [("car", 140.0)], [("car", 180.0)]]
+    assert evaluator._maneuver_direction_check(metadata, cars) is None
