@@ -55,6 +55,7 @@ def build_subset(
     video_split_rate: int,
     multiview: bool,
     overwrite: bool,
+    margin_windows: int = 0,
 ) -> dict[str, Any]:
     if output_dir.exists():
         if not overwrite:
@@ -87,14 +88,49 @@ def build_subset(
     camera_starts = starts[candidate_index]
 
     video_frame_len = frame_num * hz_factor
+
+    def group_front_record(group):
+        front_index = group[1] if multiview and len(group) > 1 else group[0]
+        return records[front_index]
+
+    # Margin windows come from the source enumeration itself: neighbor
+    # start GROUPS in the same scene whose front frame_idx differs by a
+    # whole window. Each group carries its own per-camera start indices
+    # (index arithmetic across cameras does not hold in the source
+    # layout: the 2026-07-22 pilot lost CAM_BACK_LEFT that way).
+    # Neighbor windows are NOT guaranteed to contain the bound actor;
+    # real-track injection may legitimately fail there and the loop's
+    # fallback provenance records it.
+    base_front = group_front_record(camera_starts)
+    base_scene = str(base_front.get("scene_token"))
+    base_fidx = int(base_front.get("frame_idx", -1))
+
+    margin_groups = {0: camera_starts}
+    if int(margin_windows) > 0:
+        for group in starts:
+            front = group_front_record(group)
+            if str(front.get("scene_token")) != base_scene:
+                continue
+            delta = int(front.get("frame_idx", -1)) - base_fidx
+            if delta == 0 or delta % video_frame_len != 0:
+                continue
+            if abs(delta // video_frame_len) <= int(margin_windows):
+                margin_groups[delta] = group
+    admitted_shifts = sorted(margin_groups)
+
     window_indices = []
-    for start_index in camera_starts:
-        window_indices.extend(start_index + offset for offset in range(video_frame_len))
+    admitted_start_indices = []
+    for shift in admitted_shifts:
+        for start_index in margin_groups[shift]:
+            admitted_start_indices.append(start_index)
+            window_indices.extend(
+                start_index + offset for offset in range(video_frame_len)
+            )
 
     old_to_new = {old_index: new_index for new_index, old_index in enumerate(window_indices)}
     start_old_to_new = {
         old_start: old_to_new[old_start]
-        for old_start in camera_starts
+        for old_start in admitted_start_indices
     }
 
     labels_dir = output_dir / "labels"
@@ -176,6 +212,8 @@ def build_subset(
         "subset_binding": subset_binding,
         "source_candidate_index": candidate_index,
         "source_camera_starts": camera_starts,
+        "margin_windows_requested": int(margin_windows),
+        "margin_shifts_admitted": admitted_shifts,
         "subset_record_count": len(new_records),
         "subset_selected_frame_indices": selected_indices,
         "claim_boundary": {
@@ -200,6 +238,7 @@ def main() -> None:
     parser.add_argument("--frame-num", type=int, default=8)
     parser.add_argument("--hz-factor", type=int, default=3)
     parser.add_argument("--video-split-rate", type=int, default=1)
+    parser.add_argument("--margin-windows", type=int, default=0)
     parser.add_argument("--single-view", action="store_true")
     parser.add_argument("--overwrite", action="store_true")
     args = parser.parse_args()
@@ -216,6 +255,7 @@ def main() -> None:
         video_split_rate=args.video_split_rate,
         multiview=not args.single_view,
         overwrite=args.overwrite,
+        margin_windows=args.margin_windows,
     )
     print(json.dumps({
         "output_dir": report["output_dir"],
