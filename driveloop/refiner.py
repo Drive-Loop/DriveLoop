@@ -1,5 +1,7 @@
 from __future__ import annotations
 
+import os
+
 from driveloop.schema import DriveLoopRequest, Evaluation, Refinement
 
 
@@ -125,7 +127,8 @@ class RuleBasedRefiner:
         if runtime_feedback:
             condition["runtime_control_feedback"] = runtime_feedback
 
-        if self.STRUCTURAL_ESCALATION_ENABLED and (
+        if (self.STRUCTURAL_ESCALATION_ENABLED
+                and os.environ.get("DRIVELOOP_TEXT_ONLY_REFINER") != "1") and (
             {"target_object_not_detected", "low_detection_coverage", "target_appears_static"}
             & set(evaluation.diagnosis.reasons)
         ):

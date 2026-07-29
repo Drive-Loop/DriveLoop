@@ -55,3 +55,13 @@ def test_no_duplicate_additions_in_prompt():
     low = prompt.lower()
     fragment = "the target actor remains large, visible, and unoccluded"
     assert low.count(fragment) == 1
+
+
+def test_text_only_env_flag_disables_structural_escalation(monkeypatch):
+    monkeypatch.setenv("DRIVELOOP_TEXT_ONLY_REFINER", "1")
+    refiner = RuleBasedRefiner()
+    r1 = refiner.refine(
+        DriveLoopRequest(prompt="a truck cuts in from the left"), PERCEPTION_FAILURE
+    )
+    assert "structural_escalation" not in r1.condition
+    assert "synthetic_trajectory_escalation" not in r1.condition
