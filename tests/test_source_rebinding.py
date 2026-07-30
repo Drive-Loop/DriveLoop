@@ -43,3 +43,16 @@ def test_synthetic_escalation_keeps_default_range_for_large_actors():
     r1 = refiner.refine(DriveLoopRequest(prompt="a truck cuts in from the left"), FAILURE)
     r2 = refiner.refine(DriveLoopRequest(prompt=r1.prompt, condition=r1.condition), FAILURE)
     assert "longitudinal_base_m" not in r2.condition["structural_escalation"]
+
+
+def test_disable_synthetic_rung_env_flag(monkeypatch):
+    monkeypatch.setenv("DRIVELOOP_DISABLE_SYNTHETIC_RUNG", "1")
+    refiner = RuleBasedRefiner()
+    r1 = refiner.refine(
+        DriveLoopRequest(prompt="a truck cuts in from the left"), FAILURE
+    )
+    r2 = refiner.refine(
+        DriveLoopRequest(prompt=r1.prompt, condition=r1.condition), FAILURE
+    )
+    assert "synthetic_trajectory_escalation" not in r2.condition
+    assert r2.condition["structural_escalation"]["level"] == 2

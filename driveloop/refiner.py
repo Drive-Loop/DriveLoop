@@ -165,7 +165,8 @@ class RuleBasedRefiner:
                 "claim_boundary": "generation-parameter escalation; not proof of visual realization",
             }
             notes.append("generation_escalation_level_%d" % level)
-            if level >= 2:
+            if (level >= 2 and os.environ.get(
+                    "DRIVELOOP_DISABLE_SYNTHETIC_RUNG") != "1"):
                 condition["synthetic_trajectory_escalation"] = {
                     "level": level,
                     "reason": "real_track_reinforcement_undetected",
